@@ -104,3 +104,186 @@ export const getConsoleMessage = defineTool({
     response.attachConsoleMessage(request.params.msgid);
   },
 });
+
+export const jsConsole = defineTool({
+  name: 'js_console',
+  description: 'Enhanced interactive JavaScript environment with persistent sessions, multi-line script support, and context isolation for advanced debugging and development.',
+  annotations: {
+    category: ToolCategory.DEBUGGING,
+    readOnlyHint: false,
+  },
+  schema: {
+    script: zod
+      .string()
+      .describe(
+        'The JavaScript code to execute. Supports multi-line scripts and maintains context across calls when persist is true.',
+      ),
+    persist: zod
+      .boolean()
+      .default(false)
+      .describe(
+        'Whether to maintain console session context across multiple calls. When true, variables and functions persist between executions.',
+      ),
+    context: zod
+      .enum(['page', 'isolated'])
+      .default('page')
+      .describe(
+        'Execution context: "page" executes in the page context, "isolated" executes in a clean environment without page variables.',
+      ),
+    returnResult: zod
+      .boolean()
+      .default(true)
+      .describe(
+        'Whether to return the result of the script execution. Set to false to execute code for side effects only.',
+      ),
+    sessionId: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional session identifier. When provided with persist=true, maintains context for this specific session.',
+      ),
+  },
+  handler: async (request, response, context) => {
+    const { script, persist, context: execContext, returnResult, sessionId } = request.params;
+
+    try {
+      const page = context.getSelectedPage();
+
+      // Generate or use session ID for persistent context
+      const actualSessionId = sessionId || (persist ? `session_${Date.now()}` : undefined);
+
+      if (persist && actualSessionId) {
+        // For persistent sessions, we need to maintain state in the page context
+        const setupScript = `
+          if (!window.__jsConsoleSessions) {
+            window.__jsConsoleSessions = {};
+          }
+          if (!window.__jsConsoleSessions['${actualSessionId}']) {
+            window.__jsConsoleSessions['${actualSessionId}'] = {};
+          }
+        `;
+
+        await page.evaluate(setupScript);
+
+        // Wrap the user script to execute in the session context
+        const wrappedScript = `
+          (function() {
+            const session = window.__jsConsoleSessions['${actualSessionId}'];
+            with (session) {
+              ${script}
+            }
+          })()
+        `;
+
+        if (returnResult) {
+          const result = await page.evaluate(`(async () => {
+            try {
+              ${wrappedScript}
+            } catch (e) {
+              return { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined };
+            }
+          })()`) as { error?: string; stack?: string } | unknown;
+
+          if (result && typeof result === 'object' && 'error' in result && result.error) {
+            response.appendResponseLine('Script execution error:');
+            response.appendResponseLine('```javascript');
+            response.appendResponseLine(String(result.error));
+            if ('stack' in result && result.stack) {
+              response.appendResponseLine('\nStack trace:');
+              response.appendResponseLine(String(result.stack));
+            }
+            response.appendResponseLine('```');
+          } else {
+            response.appendResponseLine('Script executed successfully:');
+            response.appendResponseLine('```json');
+            response.appendResponseLine(JSON.stringify(result, null, 2));
+            response.appendResponseLine('```');
+          }
+        } else {
+          await page.evaluate(wrappedScript);
+          response.appendResponseLine('Script executed (no return value requested).');
+        }
+
+        if (persist) {
+          response.appendResponseLine(`Session '${actualSessionId}' context preserved for future calls.`);
+        }
+      } else {
+        // Non-persistent execution
+        if (execContext === 'isolated') {
+          // Execute in isolated context (clean environment)
+          const isolatedScript = `
+            (function() {
+              "use strict";
+              ${script}
+            })()
+          `;
+
+          if (returnResult) {
+            const result = await page.evaluate(`(async () => {
+              try {
+                ${isolatedScript}
+              } catch (e) {
+                return { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined };
+              }
+            })()`) as { error?: string; stack?: string } | unknown;
+
+            if (result && typeof result === 'object' && 'error' in result && result.error) {
+              response.appendResponseLine('Script execution error:');
+              response.appendResponseLine('```javascript');
+              response.appendResponseLine(String(result.error));
+              if ('stack' in result && result.stack) {
+                response.appendResponseLine('\nStack trace:');
+                response.appendResponseLine(String(result.stack));
+              }
+              response.appendResponseLine('```');
+            } else {
+              response.appendResponseLine('Script executed successfully:');
+              response.appendResponseLine('```json');
+              response.appendResponseLine(JSON.stringify(result, null, 2));
+              response.appendResponseLine('```');
+            }
+          } else {
+            await page.evaluate(isolatedScript);
+            response.appendResponseLine('Script executed in isolated context (no return value requested).');
+          }
+        } else {
+          // Execute in page context
+          if (returnResult) {
+            const result = await page.evaluate(`(async () => {
+              try {
+                ${script}
+              } catch (e) {
+                return { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined };
+              }
+            })()`) as { error?: string; stack?: string } | unknown;
+
+            if (result && typeof result === 'object' && 'error' in result && result.error) {
+              response.appendResponseLine('Script execution error:');
+              response.appendResponseLine('```javascript');
+              response.appendResponseLine(String(result.error));
+              if ('stack' in result && result.stack) {
+                response.appendResponseLine('\nStack trace:');
+                response.appendResponseLine(String(result.stack));
+              }
+              response.appendResponseLine('```');
+            } else {
+              response.appendResponseLine('Script executed successfully:');
+              response.appendResponseLine('```json');
+              response.appendResponseLine(JSON.stringify(result, null, 2));
+              response.appendResponseLine('```');
+            }
+          } else {
+            await page.evaluate(script);
+            response.appendResponseLine('Script executed in page context (no return value requested).');
+          }
+        }
+      }
+    } catch (e) {
+      const errorText = e instanceof Error ? e.message : JSON.stringify(e);
+      response.appendResponseLine('An error occurred while executing the script:');
+      response.appendResponseLine('```javascript');
+      response.appendResponseLine(errorText);
+      response.appendResponseLine('```');
+    }
+  },
+});

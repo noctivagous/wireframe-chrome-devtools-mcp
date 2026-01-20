@@ -12,6 +12,7 @@ import sinon from 'sinon';
 
 import {
   analyzeInsight,
+  monitorPerformance,
   startTrace,
   stopTrace,
 } from '../../src/tools/performance.js';
@@ -342,6 +343,206 @@ describe('performance', () => {
           response.responseLines.includes(
             `The raw trace data was saved to ${filePath}.`,
           ),
+        );
+      });
+    });
+  });
+
+  describe('monitor_performance', () => {
+    it('starts performance monitoring with default metrics', async () => {
+      await withMcpContext(async (response, context) => {
+        const selectedPage = context.getSelectedPage();
+        const evaluateStub = sinon.stub(selectedPage, 'evaluate').resolves();
+
+        await monitorPerformance.handler(
+          {
+            params: {
+              metrics: ['fps', 'memory'],
+              interval: 1000,
+            },
+          },
+          response,
+          context,
+        );
+
+        assert.ok(
+          response.responseLines
+            .join('\n')
+            .includes('Performance monitoring started'),
+        );
+        sinon.assert.called(evaluateStub);
+      });
+    });
+
+    it('monitors for a specified duration and returns summary', async () => {
+      await withMcpContext(async (response, context) => {
+        const selectedPage = context.getSelectedPage();
+
+        // Mock the monitoring script setup
+        const evaluateStub = sinon.stub(selectedPage, 'evaluate');
+        evaluateStub.onFirstCall().resolves(); // Setup call
+        evaluateStub.onSecondCall().resolves({
+          duration: 2000,
+          measurements: [
+            {
+              timestamp: 1000,
+              relativeTime: 1000,
+              metrics: { fps: 60, memory: { used: 1000000, total: 2000000, limit: 3000000 } }
+            }
+          ],
+          averages: { fps: 60 },
+          peaks: { fps: 60 }
+        }); // Stop call
+
+        const clock = sinon.useFakeTimers();
+        const handlerPromise = monitorPerformance.handler(
+          {
+            params: {
+              metrics: ['fps', 'memory'],
+              duration: 2000,
+              interval: 1000,
+            },
+          },
+          response,
+          context,
+        );
+
+        // Advance time to complete the monitoring
+        await clock.tickAsync(2100);
+        await handlerPromise;
+        clock.restore();
+
+        const responseText = response.responseLines.join('\n');
+        assert.ok(responseText.includes('Performance monitoring completed:'));
+        assert.ok(responseText.includes('"averages"'));
+        assert.ok(responseText.includes('"peaks"'));
+      });
+    });
+
+    it('supports custom performance marks', async () => {
+      await withMcpContext(async (response, context) => {
+        const selectedPage = context.getSelectedPage();
+        const evaluateStub = sinon.stub(selectedPage, 'evaluate').resolves();
+
+        await monitorPerformance.handler(
+          {
+            params: {
+              metrics: ['fps'],
+              interval: 1000,
+              customMarks: [
+                { name: 'start-test', position: 'before-script' },
+                { name: 'end-test', position: 'after-script' }
+              ],
+              script: 'console.log("test");',
+            },
+          },
+          response,
+          context,
+        );
+
+        // Verify that evaluate was called for setting up marks
+        sinon.assert.called(evaluateStub);
+        assert.ok(
+          response.responseLines
+            .join('\n')
+            .includes('Performance monitoring started'),
+        );
+      });
+    });
+
+    it('supports trigger-based monitoring', async () => {
+      await withMcpContext(async (response, context) => {
+        const selectedPage = context.getSelectedPage();
+        const evaluateStub = sinon.stub(selectedPage, 'evaluate').resolves();
+
+        await monitorPerformance.handler(
+          {
+            params: {
+              metrics: ['fps'],
+              interval: 1000,
+              trigger: 'click',
+            },
+          },
+          response,
+          context,
+        );
+
+        assert.ok(
+          response.responseLines
+            .join('\n')
+            .includes('Performance monitoring will start on click event'),
+        );
+      });
+    });
+
+    it('handles different monitoring intervals', async () => {
+      await withMcpContext(async (response, context) => {
+        const selectedPage = context.getSelectedPage();
+        sinon.stub(selectedPage, 'evaluate').resolves();
+
+        await monitorPerformance.handler(
+          {
+            params: {
+              metrics: ['fps'],
+              interval: 500,
+            },
+          },
+          response,
+          context,
+        );
+
+        assert.ok(
+          response.responseLines
+            .join('\n')
+            .includes('every 500ms'),
+        );
+      });
+    });
+
+    it('supports all metric types', async () => {
+      await withMcpContext(async (response, context) => {
+        const selectedPage = context.getSelectedPage();
+        sinon.stub(selectedPage, 'evaluate').resolves();
+
+        await monitorPerformance.handler(
+          {
+            params: {
+              metrics: ['fps', 'memory', 'dom-nodes', 'layout-shifts', 'network-requests'],
+              interval: 1000,
+            },
+          },
+          response,
+          context,
+        );
+
+        assert.ok(
+          response.responseLines
+            .join('\n')
+            .includes('fps, memory, dom-nodes, layout-shifts, network-requests'),
+        );
+      });
+    });
+
+    it('handles errors during monitoring setup', async () => {
+      await withMcpContext(async (response, context) => {
+        const selectedPage = context.getSelectedPage();
+        sinon.stub(selectedPage, 'evaluate').throws(new Error('Setup failed'));
+
+        await monitorPerformance.handler(
+          {
+            params: {
+              metrics: ['fps'],
+              interval: 1000,
+            },
+          },
+          response,
+          context,
+        );
+
+        assert.ok(
+          response.responseLines
+            .join('\n')
+            .includes('An error occurred while setting up performance monitoring'),
         );
       });
     });

@@ -53,6 +53,16 @@ export interface TextSnapshot {
   verbose: boolean;
 }
 
+export type PatchType = 'css' | 'js' | 'dom-manipulation';
+
+export interface PatchRecord {
+  patchId: string;
+  patchType: PatchType;
+  pageId: number;
+  createdAt: number;
+  description?: string;
+}
+
 interface McpContextOptions {
   // Whether the DevTools windows are exposed as pages for debugging of DevTools.
   experimentalDevToolsDebugging: boolean;
@@ -88,6 +98,10 @@ function getExtensionFromMimeType(mimeType: string) {
       return 'jpeg';
     case 'image/webp':
       return 'webp';
+    case 'application/json':
+      return 'json';
+    case 'text/plain':
+      return 'txt';
   }
   throw new Error(`No mapping for Mime type ${mimeType}.`);
 }
@@ -116,6 +130,9 @@ export class McpContext implements Context {
 
   #nextSnapshotId = 1;
   #traceResults: TraceResult[] = [];
+
+  #nextPatchId = 1;
+  #patchRegistry = new Map<string, PatchRecord>();
 
   #locatorClass: typeof Locator;
   #options: McpContextOptions;
@@ -163,6 +180,43 @@ export class McpContext implements Context {
   dispose() {
     this.#networkCollector.dispose();
     this.#consoleCollector.dispose();
+  }
+
+  createPatchId(prefix?: string): string {
+    const id = this.#nextPatchId++;
+    return prefix ? `${prefix}_${id}` : String(id);
+  }
+
+  registerPatch(patch: PatchRecord): void {
+    this.#patchRegistry.set(patch.patchId, patch);
+  }
+
+  getPatch(patchId: string): PatchRecord | undefined {
+    return this.#patchRegistry.get(patchId);
+  }
+
+  unregisterPatch(patchId: string): void {
+    this.#patchRegistry.delete(patchId);
+  }
+
+  listPatches(options?: {pageId?: number}): PatchRecord[] {
+    const patches = Array.from(this.#patchRegistry.values());
+    if (options?.pageId !== undefined) {
+      return patches.filter(p => p.pageId === options.pageId);
+    }
+    return patches;
+  }
+
+  clearPatches(options?: {pageId?: number}): PatchRecord[] {
+    const patches = this.listPatches(options);
+    if (options?.pageId !== undefined) {
+      for (const patch of patches) {
+        this.#patchRegistry.delete(patch.patchId);
+      }
+    } else {
+      this.#patchRegistry.clear();
+    }
+    return patches;
   }
 
   static async from(
@@ -590,22 +644,24 @@ export class McpContext implements Context {
 
   async saveTemporaryFile(
     data: Uint8Array<ArrayBufferLike>,
-    mimeType: 'image/png' | 'image/jpeg' | 'image/webp',
+    mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'application/json' | 'text/plain',
+    baseName?: string,
   ): Promise<{filename: string}> {
     try {
       const dir = await fs.mkdtemp(
         path.join(os.tmpdir(), 'chrome-devtools-mcp-'),
       );
 
+      const extension = getExtensionFromMimeType(mimeType);
       const filename = path.join(
         dir,
-        `screenshot.${getExtensionFromMimeType(mimeType)}`,
+        baseName ? `${baseName}.${extension}` : `file.${extension}`,
       );
       await fs.writeFile(filename, data);
       return {filename};
     } catch (err) {
       this.logger(err);
-      throw new Error('Could not save a screenshot to a file', {cause: err});
+      throw new Error('Could not save a file', {cause: err});
     }
   }
   async saveFile(

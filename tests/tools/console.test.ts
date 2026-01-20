@@ -12,6 +12,7 @@ import {McpResponse} from '../../src/McpResponse.js';
 import {DevTools} from '../../src/third_party/index.js';
 import {
   getConsoleMessage,
+  jsConsole,
   listConsoleMessages,
 } from '../../src/tools/console.js';
 import {serverHooks} from '../server.js';
@@ -226,6 +227,183 @@ describe('console', () => {
             .replaceAll(/localhost:\d+/g, 'hostname:port');
           t.assert.snapshot?.(sanitizedText);
         });
+      });
+    });
+  });
+
+  describe('js_console', () => {
+    it('executes basic JavaScript and returns result', async () => {
+      await withMcpContext(async (response, context) => {
+        await jsConsole.handler(
+          {
+            params: {
+              script: 'return 42;',
+              persist: false,
+              context: 'page',
+              returnResult: true,
+            },
+          },
+          response,
+          context,
+        );
+        const formattedResponse = await response.handle('test', context);
+        const textContent = getTextContent(formattedResponse.content[0]);
+        assert.ok(textContent.includes('Script executed successfully:'));
+        assert.ok(textContent.includes('42'));
+      });
+    });
+
+    it('executes multi-line scripts', async () => {
+      await withMcpContext(async (response, context) => {
+        await jsConsole.handler(
+          {
+            params: {
+              script: `
+                const x = 10;
+                const y = 20;
+                return x + y;
+              `,
+              persist: false,
+              context: 'page',
+              returnResult: true,
+            },
+          },
+          response,
+          context,
+        );
+        const formattedResponse = await response.handle('test', context);
+        const textContent = getTextContent(formattedResponse.content[0]);
+        assert.ok(textContent.includes('Script executed successfully:'));
+        assert.ok(textContent.includes('30'));
+      });
+    });
+
+    it('executes scripts without returning results', async () => {
+      await withMcpContext(async (response, context) => {
+        await jsConsole.handler(
+          {
+            params: {
+              script: 'console.log("test");',
+              persist: false,
+              context: 'page',
+              returnResult: false,
+            },
+          },
+          response,
+          context,
+        );
+        const formattedResponse = await response.handle('test', context);
+        const textContent = getTextContent(formattedResponse.content[0]);
+        assert.ok(textContent.includes('Script executed (no return value requested).'));
+      });
+    });
+
+    it('handles script errors', async () => {
+      await withMcpContext(async (response, context) => {
+        await jsConsole.handler(
+          {
+            params: {
+              script: 'throw new Error("test error");',
+              persist: false,
+              context: 'page',
+              returnResult: true,
+            },
+          },
+          response,
+          context,
+        );
+        const formattedResponse = await response.handle('test', context);
+        const textContent = getTextContent(formattedResponse.content[0]);
+        assert.ok(textContent.includes('Script execution error:'));
+        assert.ok(textContent.includes('test error'));
+      });
+    });
+
+    it('maintains persistent context across calls', async () => {
+      await withMcpContext(async (response, context) => {
+        const sessionId = 'test-session';
+
+        // First call - set a variable
+        await jsConsole.handler(
+          {
+            params: {
+              script: 'myVar = 123;',
+              persist: true,
+              context: 'page',
+              sessionId,
+              returnResult: false,
+            },
+          },
+          response,
+          context,
+        );
+
+        // Second call - access the variable
+        const response2 = new McpResponse();
+        await jsConsole.handler(
+          {
+            params: {
+              script: 'return myVar;',
+              persist: true,
+              context: 'page',
+              sessionId,
+              returnResult: true,
+            },
+          },
+          response2,
+          context,
+        );
+
+        const formattedResponse = await response2.handle('test', context);
+        const textContent = getTextContent(formattedResponse.content[0]);
+        assert.ok(textContent.includes('Script executed successfully:'));
+        assert.ok(textContent.includes('123'));
+      });
+    });
+
+    it('executes in isolated context', async () => {
+      await withMcpContext(async (response, context) => {
+        await jsConsole.handler(
+          {
+            params: {
+              script: 'return typeof window;',
+              persist: false,
+              context: 'isolated',
+              returnResult: true,
+            },
+          },
+          response,
+          context,
+        );
+        const formattedResponse = await response.handle('test', context);
+        const textContent = getTextContent(formattedResponse.content[0]);
+        assert.ok(textContent.includes('Script executed successfully:'));
+        assert.ok(textContent.includes('"undefined"'));
+      });
+    });
+
+    it('accesses page context variables', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = await context.newPage();
+        await page.setContent('<script>window.testVar = "page variable";</script>');
+
+        await jsConsole.handler(
+          {
+            params: {
+              script: 'return window.testVar;',
+              persist: false,
+              context: 'page',
+              returnResult: true,
+            },
+          },
+          response,
+          context,
+        );
+
+        const formattedResponse = await response.handle('test', context);
+        const textContent = getTextContent(formattedResponse.content[0]);
+        assert.ok(textContent.includes('Script executed successfully:'));
+        assert.ok(textContent.includes('page variable'));
       });
     });
   });

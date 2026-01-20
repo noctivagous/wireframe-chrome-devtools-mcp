@@ -6,7 +6,7 @@
 
 import type {McpContext, TextSnapshotNode} from '../McpContext.js';
 import {zod} from '../third_party/index.js';
-import type {ElementHandle} from '../third_party/index.js';
+import type {ElementHandle, Page} from '../third_party/index.js';
 import {parseKey} from '../utils/keyboard.js';
 
 import {ToolCategory} from './categories.js';
@@ -188,7 +188,6 @@ export const fill = defineTool({
   },
   handler: async (request, response, context) => {
     await context.waitForEventsAfterAction(async () => {
-      await context.getSelectedPage().keyboard.type(request.params.value);
       await fillFormElement(
         request.params.uid,
         request.params.value,
@@ -344,3 +343,181 @@ export const pressKey = defineTool({
     response.includeSnapshot();
   },
 });
+
+export const simulateEvent = defineTool({
+  name: 'simulate_event',
+  description: `Simulate user interactions for testing by dispatching DOM events. Supports basic events, complex input sequences, and mouse interactions with coordinates.`,
+  annotations: {
+    category: ToolCategory.INPUT,
+    readOnlyHint: false,
+  },
+  schema: {
+    selector: zod
+      .string()
+      .optional()
+      .describe('CSS selector for the target element. Optional when using coordinates.'),
+    eventType: zod
+      .string()
+      .describe('The type of event to simulate (e.g., "click", "input", "mousedown", "mouseup", "mousemove")'),
+    options: zod
+      .object({
+        bubbles: zod.boolean().optional().default(true).describe('Whether the event bubbles'),
+        cancelable: zod.boolean().optional().default(true).describe('Whether the event can be canceled'),
+        composed: zod.boolean().optional().default(false).describe('Whether the event will trigger listeners outside of a shadow root'),
+      })
+      .optional()
+      .describe('Event options'),
+    value: zod
+      .string()
+      .optional()
+      .describe('Value to set for input events'),
+    sequence: zod
+      .array(zod.string())
+      .optional()
+      .describe('Sequence of events to dispatch in order (e.g., ["focus", "input", "change", "blur"])'),
+    coordinates: zod
+      .object({
+        x: zod.number().describe('X coordinate relative to the element or viewport'),
+        y: zod.number().describe('Y coordinate relative to the element or viewport'),
+      })
+      .optional()
+      .describe('Coordinates for mouse events. If selector is provided, coordinates are relative to the element; otherwise relative to viewport.'),
+    dragTo: zod
+      .object({
+        x: zod.number().describe('X coordinate to drag to'),
+        y: zod.number().describe('Y coordinate to drag to'),
+      })
+      .optional()
+      .describe('Coordinates to drag to (requires mousedown eventType and coordinates)'),
+  },
+  handler: async (request, response, context) => {
+    const { selector, eventType, options = {}, value, sequence, coordinates, dragTo } = request.params;
+
+    if (!selector && !coordinates) {
+      throw new Error('Either selector or coordinates must be provided');
+    }
+
+    const page = context.getSelectedPage();
+
+    await context.waitForEventsAfterAction(async () => {
+      // Handle sequence of events
+      if (sequence && sequence.length > 0) {
+        for (const seqEventType of sequence) {
+          await simulateSingleEvent(page, selector, seqEventType, options, value, coordinates);
+        }
+      } else {
+        await simulateSingleEvent(page, selector, eventType, options, value, coordinates);
+      }
+
+      // Handle drag operations
+      if (dragTo && coordinates && eventType === 'mousedown') {
+        // Perform drag operation
+        await page.mouse.move(coordinates.x, coordinates.y);
+        await page.mouse.down();
+        await page.mouse.move(dragTo.x, dragTo.y);
+        await page.mouse.up();
+      }
+    });
+
+    let description = `Successfully simulated ${eventType} event`;
+    if (sequence && sequence.length > 0) {
+      description += ` with sequence: ${sequence.join(' → ')}`;
+    }
+    if (dragTo) {
+      description += ` and dragged to (${dragTo.x}, ${dragTo.y})`;
+    }
+    if (selector) {
+      description += ` on element: ${selector}`;
+    } else if (coordinates) {
+      description += ` at coordinates (${coordinates.x}, ${coordinates.y})`;
+    }
+
+    response.appendResponseLine(description);
+    response.includeSnapshot();
+  },
+});
+
+async function simulateSingleEvent(
+  page: Page,
+  selector: string | undefined,
+  eventType: string,
+  options: { bubbles?: boolean; cancelable?: boolean; composed?: boolean },
+  value?: string,
+  coordinates?: { x: number; y: number },
+) {
+  const eventOptions = {
+    bubbles: options.bubbles ?? true,
+    cancelable: options.cancelable ?? true,
+    composed: options.composed ?? false,
+  };
+
+  if (selector) {
+    // Simulate event on element found by selector
+    await page.evaluate(
+      (params: {
+        selector: string;
+        eventType: string;
+        eventOptions: { bubbles: boolean; cancelable: boolean; composed: boolean };
+        value?: string;
+        coordinates?: { x: number; y: number };
+      }) => {
+        const { selector, eventType, eventOptions, value, coordinates } = params;
+        const element = document.querySelector(selector);
+        if (!element) {
+          throw new Error(`Element not found: ${selector}`);
+        }
+
+        let event: Event;
+        if (coordinates) {
+          // Create mouse event with coordinates relative to element
+          const rect = element.getBoundingClientRect();
+          event = new MouseEvent(eventType, {
+            ...eventOptions,
+            clientX: rect.left + coordinates.x,
+            clientY: rect.top + coordinates.y,
+            screenX: window.screenX + rect.left + coordinates.x,
+            screenY: window.screenY + rect.top + coordinates.y,
+          });
+        } else if (eventType === 'input' && value !== undefined) {
+          // Handle input events with value setting
+          event = new Event(eventType, eventOptions);
+          (element as HTMLInputElement).value = value;
+        } else {
+          // Standard DOM event
+          event = new Event(eventType, eventOptions);
+        }
+
+        element.dispatchEvent(event);
+      },
+      { selector, eventType, eventOptions, value, coordinates },
+    );
+  } else if (coordinates) {
+    // Simulate event at viewport coordinates
+    await page.evaluate(
+      (params: {
+        eventType: string;
+        eventOptions: { bubbles: boolean; cancelable: boolean; composed: boolean };
+        value?: string;
+        coordinates: { x: number; y: number };
+      }) => {
+        const { eventType, eventOptions, value, coordinates } = params;
+        let event: Event;
+        if (eventType.startsWith('mouse') || eventType === 'click') {
+          event = new MouseEvent(eventType, {
+            ...eventOptions,
+            clientX: coordinates.x,
+            clientY: coordinates.y,
+            screenX: window.screenX + coordinates.x,
+            screenY: window.screenY + coordinates.y,
+          });
+          document.elementFromPoint(coordinates.x, coordinates.y)?.dispatchEvent(event);
+        } else {
+          // For non-mouse events at coordinates, dispatch on document
+          event = new Event(eventType, eventOptions);
+          document.dispatchEvent(event);
+        }
+      },
+      { eventType, eventOptions, value, coordinates },
+    );
+  }
+}

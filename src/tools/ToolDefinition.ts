@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {TextSnapshotNode, GeolocationOptions} from '../McpContext.js';
+import type {TextSnapshotNode, GeolocationOptions, PatchRecord} from '../McpContext.js';
 import {zod} from '../third_party/index.js';
 import type {Dialog, ElementHandle, Page} from '../third_party/index.js';
 import type {TraceResult} from '../trace-processing/parse.js';
@@ -107,7 +107,8 @@ export type Context = Readonly<{
   setGeolocation(geolocation: GeolocationOptions | null): void;
   saveTemporaryFile(
     data: Uint8Array<ArrayBufferLike>,
-    mimeType: 'image/png' | 'image/jpeg' | 'image/webp',
+    mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'application/json' | 'text/plain',
+    baseName?: string,
   ): Promise<{filename: string}>;
   saveFile(
     data: Uint8Array<ArrayBufferLike>,
@@ -125,6 +126,12 @@ export type Context = Readonly<{
    */
   resolveCdpElementId(cdpBackendNodeId: number): string | undefined;
   installExtension(path: string): Promise<string>;
+  createPatchId(prefix?: string): string;
+  registerPatch(patch: PatchRecord): void;
+  getPatch(patchId: string): PatchRecord | undefined;
+  unregisterPatch(patchId: string): void;
+  listPatches(options?: {pageId?: number}): PatchRecord[];
+  clearPatches(options?: {pageId?: number}): PatchRecord[];
 }>;
 
 export function defineTool<Schema extends zod.ZodRawShape>(

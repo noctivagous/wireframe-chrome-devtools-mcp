@@ -18,6 +18,7 @@ import {
   uploadFile,
   pressKey,
   clickAt,
+  simulateEvent,
 } from '../../src/tools/input.js';
 import {parseKey} from '../../src/utils/keyboard.js';
 import {serverHooks} from '../server.js';
@@ -625,6 +626,216 @@ describe('input', () => {
           'uShift',
           'uControl',
         ]);
+      });
+    });
+  });
+
+  describe('simulate_event', () => {
+    it('simulates a basic click event', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(
+          html`<button onclick="this.innerText = 'clicked';">test</button>`,
+        );
+        await context.createTextSnapshot();
+        await simulateEvent.handler(
+          {
+            params: {
+              selector: 'button',
+              eventType: 'click',
+              options: { bubbles: true, cancelable: true, composed: false },
+            },
+          },
+          response,
+          context,
+        );
+        assert.strictEqual(
+          response.responseLines[0],
+          'Successfully simulated click event on element: button',
+        );
+        assert.ok(response.includeSnapshot);
+        assert.ok(await page.$('text/clicked'));
+      });
+    });
+
+    it('simulates an input event with value', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(
+          html`<input type="text" onchange="this.setAttribute('data-changed', 'true')" />`,
+        );
+        await context.createTextSnapshot();
+        await simulateEvent.handler(
+          {
+            params: {
+              selector: 'input',
+              eventType: 'input',
+              value: 'test value',
+            },
+          },
+          response,
+          context,
+        );
+        assert.strictEqual(
+          response.responseLines[0],
+          'Successfully simulated input event on element: input',
+        );
+        assert.ok(response.includeSnapshot);
+        const inputValue = await page.evaluate(
+          () => document.querySelector('input')!.value,
+        );
+        assert.strictEqual(inputValue, 'test value');
+      });
+    });
+
+    it('simulates an event sequence', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(
+          html`<input type="text" />`,
+        );
+        await context.createTextSnapshot();
+
+        // Track events
+        await page.evaluate(() => {
+          const input = document.querySelector('input')!;
+          const events: string[] = [];
+          input.addEventListener('focus', () => events.push('focus'));
+          input.addEventListener('input', () => events.push('input'));
+          input.addEventListener('change', () => events.push('change'));
+          input.addEventListener('blur', () => events.push('blur'));
+          (window as any).events = events;
+        });
+
+        await simulateEvent.handler(
+          {
+            params: {
+              selector: 'input',
+              eventType: 'input', // This will be ignored in favor of sequence
+              value: 'test sequence',
+              sequence: ['focus', 'input', 'change', 'blur'],
+            },
+          },
+          response,
+          context,
+        );
+
+        assert.strictEqual(
+          response.responseLines[0],
+          'Successfully simulated input event with sequence: focus → input → change → blur on element: input',
+        );
+        assert.ok(response.includeSnapshot);
+
+        const events = await page.evaluate(() => (window as any).events);
+        assert.deepStrictEqual(events, ['focus', 'input', 'change', 'blur']);
+
+        const inputValue = await page.evaluate(
+          () => document.querySelector('input')!.value,
+        );
+        assert.strictEqual(inputValue, 'test sequence');
+      });
+    });
+
+    it('simulates mouse event at coordinates', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(
+          html`<div
+            style="width: 100px; height: 100px; background: red;"
+            onclick="this.innerText = 'coord-clicked'"
+          ></div>`,
+        );
+        await context.createTextSnapshot();
+        await simulateEvent.handler(
+          {
+            params: {
+              eventType: 'click',
+              coordinates: { x: 50, y: 50 },
+            },
+          },
+          response,
+          context,
+        );
+        assert.strictEqual(
+          response.responseLines[0],
+          'Successfully simulated click event at coordinates (50, 50)',
+        );
+        assert.ok(response.includeSnapshot);
+        assert.ok(await page.$('text/coord-clicked'));
+      });
+    });
+
+    it('simulates drag operation with coordinates', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(
+          html`<div
+            style="width: 100px; height: 100px; background: red; position: absolute; left: 0; top: 0;"
+            onmousedown="this.innerText = 'drag-start'"
+            onmouseup="this.innerText = 'drag-end'"
+          ></div>`,
+        );
+        await context.createTextSnapshot();
+        await simulateEvent.handler(
+          {
+            params: {
+              selector: 'div',
+              eventType: 'mousedown',
+              coordinates: { x: 10, y: 10 },
+              dragTo: { x: 50, y: 50 },
+            },
+          },
+          response,
+          context,
+        );
+        assert.strictEqual(
+          response.responseLines[0],
+          'Successfully simulated mousedown event and dragged to (50, 50) on element: div',
+        );
+        assert.ok(response.includeSnapshot);
+      });
+    });
+
+    it('throws error when neither selector nor coordinates provided', async () => {
+      await withMcpContext(async (response, context) => {
+        await assert.rejects(
+          simulateEvent.handler(
+            {
+              params: {
+                eventType: 'click',
+              },
+            },
+            response,
+            context,
+          ),
+          {
+            message: 'Either selector or coordinates must be provided',
+          },
+        );
+      });
+    });
+
+    it('throws error when selector does not match element', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(html`<div>content</div>`);
+        await context.createTextSnapshot();
+
+        await assert.rejects(
+          simulateEvent.handler(
+            {
+              params: {
+                selector: '.nonexistent',
+                eventType: 'click',
+              },
+            },
+            response,
+            context,
+          ),
+          {
+            message: 'Element not found: .nonexistent',
+          },
+        );
       });
     });
   });

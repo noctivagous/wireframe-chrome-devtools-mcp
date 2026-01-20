@@ -230,8 +230,9 @@ export function stabilizeResponseOutput(text: unknown) {
   const userAgentRegEx = /user-agent:.*\n/g;
   output = output.replaceAll(userAgentRegEx, 'user-agent:<user-agent>\n');
 
-  const chUaRegEx = /sec-ch-ua:"Chromium";v="\d{3}"/g;
-  output = output.replaceAll(chUaRegEx, 'sec-ch-ua:"Chromium";v="<version>"');
+  // Normalize sec-ch-ua across Chromium versions (brands + ordering vary a lot).
+  const chUaLineRegEx = /sec-ch-ua:.*\n/g;
+  output = output.replaceAll(chUaLineRegEx, 'sec-ch-ua:"Chromium";v="<version>"\n');
 
   // sec-ch-ua-platform:"Linux"
   const chUaPlatformRegEx = /sec-ch-ua-platform:"[a-zA-Z]*"/g;
@@ -242,6 +243,45 @@ export function stabilizeResponseOutput(text: unknown) {
 
   const acceptLanguageRegEx = /accept-language:.*\n/g;
   output = output.replaceAll(acceptLanguageRegEx, 'accept-language:<lang>\n');
+
+  // Make header ordering stable across Chromium versions by sorting header list items
+  // within the "Request Headers" and "Response Headers" sections.
+  //
+  // This is intentionally narrow to avoid perturbing unrelated snapshots.
+  const lines = output.split('\n');
+  const sortHeaderSection = (sectionTitle: string) => {
+    const startIdx = lines.findIndex(l => l.trim() === sectionTitle);
+    if (startIdx === -1) {
+      return;
+    }
+    const headerLines: string[] = [];
+    let i = startIdx + 1;
+    for (; i < lines.length; i++) {
+      const l = lines[i] ?? '';
+      if (l.startsWith('### ')) {
+        break;
+      }
+      if (l.startsWith('- ')) {
+        headerLines.push(l);
+      }
+    }
+    if (!headerLines.length) {
+      return;
+    }
+    headerLines.sort((a, b) => a.localeCompare(b));
+
+    // Replace the block's -lines with the sorted ones, preserving any non-header lines.
+    let h = 0;
+    for (let j = startIdx + 1; j < i; j++) {
+      if ((lines[j] ?? '').startsWith('- ')) {
+        lines[j] = headerLines[h++]!;
+      }
+    }
+  };
+
+  sortHeaderSection('### Request Headers');
+  sortHeaderSection('### Response Headers');
+  output = lines.join('\n');
 
   return output;
 }

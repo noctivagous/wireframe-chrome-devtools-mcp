@@ -183,6 +183,310 @@ export const analyzeInsight = defineTool({
   },
 });
 
+export const monitorPerformance = defineTool({
+  name: 'monitor_performance',
+  description: 'Real-time performance monitoring with metrics like FPS, memory usage, and DOM node count. Supports duration-based monitoring and trigger-based monitoring.',
+  annotations: {
+    category: ToolCategory.PERFORMANCE,
+    readOnlyHint: true,
+  },
+  schema: {
+    metrics: zod
+      .array(
+        zod.enum(['fps', 'memory', 'dom-nodes', 'layout-shifts', 'network-requests'])
+      )
+      .default(['fps', 'memory', 'dom-nodes'])
+      .describe(
+        'Performance metrics to monitor. Available: fps, memory, dom-nodes, layout-shifts, network-requests.',
+      ),
+    duration: zod
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        'Duration in milliseconds to monitor performance. If not specified, monitors until manually stopped.',
+      ),
+    trigger: zod
+      .enum(['scroll', 'click', 'navigation', 'input'])
+      .optional()
+      .describe(
+        'Event that triggers the start of monitoring. If specified, monitoring begins when this event occurs.',
+      ),
+    interval: zod
+      .number()
+      .int()
+      .min(100)
+      .max(10000)
+      .optional()
+      .describe(
+        'Interval in milliseconds between performance measurements. Default: 1000ms.',
+      ),
+    customMarks: zod
+      .array(
+        zod.object({
+          name: zod.string().describe('Name of the performance mark'),
+          position: zod.enum(['before-script', 'after-script']).describe('When to place the mark relative to script execution'),
+        })
+      )
+      .optional()
+      .describe(
+        'Custom performance marks to record during monitoring.',
+      ),
+    script: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional JavaScript code to execute during monitoring. Performance marks will be placed around this script.',
+      ),
+  },
+  handler: async (request, response, context) => {
+    const { metrics, duration, trigger, interval, customMarks, script } = request.params;
+    const page = context.getSelectedPage();
+
+    try {
+      // Setup performance monitoring script
+      const monitoringScript = `
+        (function() {
+          if (window.__performanceMonitor) {
+            window.__performanceMonitor.stop();
+          }
+
+          const monitor = {
+            isRunning: false,
+            measurements: [],
+            startTime: null,
+            intervalId: null,
+            marks: [],
+
+            start() {
+              if (this.isRunning) return;
+              this.isRunning = true;
+              this.startTime = performance.now();
+              this.measurements = [];
+
+              this.intervalId = setInterval(() => {
+                this.takeMeasurement();
+              }, ${interval});
+
+              console.log('Performance monitoring started');
+            },
+
+            stop() {
+              if (!this.isRunning) return;
+              this.isRunning = false;
+
+              if (this.intervalId) {
+                clearInterval(this.intervalId);
+                this.intervalId = null;
+              }
+
+              this.takeMeasurement(); // Final measurement
+              console.log('Performance monitoring stopped');
+              return this.getSummary();
+            },
+
+            takeMeasurement() {
+              const now = performance.now();
+              const measurement = {
+                timestamp: now,
+                relativeTime: now - this.startTime,
+                metrics: {}
+              };
+
+              ${metrics.includes('fps') ? `
+              // FPS calculation using requestAnimationFrame
+              if (!this.lastFrameTime) {
+                this.lastFrameTime = now;
+                this.frameCount = 0;
+              }
+              this.frameCount++;
+              if (now - this.lastFrameTime >= 1000) {
+                measurement.metrics.fps = Math.round((this.frameCount * 1000) / (now - this.lastFrameTime));
+                this.frameCount = 0;
+                this.lastFrameTime = now;
+              }` : ''}
+
+              ${metrics.includes('memory') ? `
+              if (performance.memory) {
+                measurement.metrics.memory = {
+                  used: performance.memory.usedJSHeapSize,
+                  total: performance.memory.totalJSHeapSize,
+                  limit: performance.memory.jsHeapSizeLimit
+                };
+              }` : ''}
+
+              ${metrics.includes('dom-nodes') ? `
+              measurement.metrics.domNodes = document.getElementsByTagName('*').length;` : ''}
+
+              ${metrics.includes('layout-shifts') ? `
+              if (!this.cumulativeLayoutShift) {
+                this.cumulativeLayoutShift = 0;
+                const observer = new PerformanceObserver((list) => {
+                  for (const entry of list.getEntries()) {
+                    if (!entry.hadRecentInput) {
+                      this.cumulativeLayoutShift += entry.value;
+                    }
+                  }
+                });
+                observer.observe({entryTypes: ['layout-shift']});
+              }
+              measurement.metrics.layoutShifts = this.cumulativeLayoutShift;` : ''}
+
+              ${metrics.includes('network-requests') ? `
+              if (!this.networkObserver) {
+                this.networkRequests = { sent: 0, received: 0, failed: 0 };
+                this.networkObserver = new PerformanceObserver((list) => {
+                  for (const entry of list.getEntries()) {
+                    if (entry.entryType === 'resource') {
+                      this.networkRequests.received++;
+                    }
+                  }
+                });
+                this.networkObserver.observe({entryTypes: ['resource']});
+              }
+              measurement.metrics.networkRequests = { ...this.networkRequests };` : ''}
+
+              this.measurements.push(measurement);
+            },
+
+            addMark(name) {
+              performance.mark(name);
+              this.marks.push({
+                name,
+                timestamp: performance.now()
+              });
+            },
+
+            getSummary() {
+              const endTime = performance.now();
+              const duration = endTime - this.startTime;
+
+              const summary = {
+                duration,
+                measurements: this.measurements,
+                marks: this.marks,
+                averages: {},
+                peaks: {}
+              };
+
+              // Calculate averages and peaks
+              const metricKeys = ['fps', 'domNodes', 'layoutShifts'];
+              const memoryKeys = ['used', 'total', 'limit'];
+
+              metricKeys.forEach(key => {
+                const values = this.measurements
+                  .map(m => m.metrics[key])
+                  .filter(v => v !== undefined);
+
+                if (values.length > 0) {
+                  summary.averages[key] = values.reduce((a, b) => a + b, 0) / values.length;
+                  summary.peaks[key] = Math.max(...values);
+                }
+              });
+
+              if (this.measurements.some(m => m.metrics.memory)) {
+                summary.averages.memory = {};
+                summary.peaks.memory = {};
+
+                memoryKeys.forEach(key => {
+                  const values = this.measurements
+                    .map(m => m.metrics.memory?.[key])
+                    .filter(v => v !== undefined);
+
+                  if (values.length > 0) {
+                    summary.averages.memory[key] = values.reduce((a, b) => a + b, 0) / values.length;
+                    summary.peaks.memory[key] = Math.max(...values);
+                  }
+                });
+              }
+
+              return summary;
+            }
+          };
+
+          window.__performanceMonitor = monitor;
+          return monitor;
+        })()
+      `;
+
+      // Inject monitoring script
+      await page.evaluate(monitoringScript);
+
+      // Setup event triggers if specified
+      if (trigger) {
+        const triggerScript = `
+          (function() {
+            const triggerHandler = () => {
+              if (window.__performanceMonitor && !window.__performanceMonitor.isRunning) {
+                window.__performanceMonitor.start();
+              }
+            };
+
+            document.addEventListener('${trigger}', triggerHandler, { once: true });
+          })()
+        `;
+        await page.evaluate(triggerScript);
+        response.appendResponseLine(`Performance monitoring will start on ${trigger} event.`);
+      }
+
+      // Add custom performance marks if specified
+      if (customMarks && customMarks.length > 0) {
+        for (const mark of customMarks) {
+          if (mark.position === 'before-script') {
+            await page.evaluate(`window.__performanceMonitor.addMark('${mark.name}')`);
+          }
+        }
+      }
+
+      // Execute custom script if provided
+      if (script) {
+        await page.evaluate(script);
+      }
+
+      // Add marks after script execution
+      if (customMarks && customMarks.length > 0) {
+        for (const mark of customMarks) {
+          if (mark.position === 'after-script') {
+            await page.evaluate(`window.__performanceMonitor.addMark('${mark.name}')`);
+          }
+        }
+      }
+
+      // Start monitoring
+      if (!trigger) {
+        await page.evaluate('window.__performanceMonitor.start()');
+        response.appendResponseLine('Performance monitoring started.');
+      }
+
+      // Handle duration-based monitoring
+      if (duration) {
+        await new Promise(resolve => setTimeout(resolve, duration));
+
+        const summary = await page.evaluate('window.__performanceMonitor.stop()');
+
+        response.appendResponseLine('Performance monitoring completed:');
+        response.appendResponseLine('```json');
+        response.appendResponseLine(JSON.stringify(summary, null, 2));
+        response.appendResponseLine('```');
+
+        // Cleanup
+        await page.evaluate('delete window.__performanceMonitor');
+      } else if (!trigger) {
+        response.appendResponseLine(`Monitoring for ${metrics.join(', ')} metrics every ${interval}ms.`);
+        response.appendResponseLine('Use monitor_performance again with duration to stop and get results.');
+      }
+
+    } catch (e) {
+      const errorText = e instanceof Error ? e.message : JSON.stringify(e);
+      response.appendResponseLine('An error occurred while setting up performance monitoring:');
+      response.appendResponseLine('```javascript');
+      response.appendResponseLine(errorText);
+      response.appendResponseLine('```');
+    }
+  },
+});
+
 async function stopTracingAndAppendOutput(
   page: Page,
   response: Response,
