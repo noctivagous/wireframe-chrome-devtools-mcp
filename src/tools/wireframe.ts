@@ -551,7 +551,7 @@ async function captureWireframeSnapshot(
       await getViewportAndScroll(page);
     const visualViewport = await page.evaluate(() => {
       const vv = (window as any).visualViewport;
-      if (!vv) return undefined;
+      if (!vv) {return undefined;}
       return {
         scale: Number(vv.scale ?? 1),
         offsetLeft: Number(vv.offsetLeft ?? 0),
@@ -1005,7 +1005,7 @@ async function captureWireframeSnapshot(
 
       for (const el of elements) {
         const sid = el.stableId;
-        if (!sid) continue;
+        if (!sid) {continue;}
         if (el.rect.right > viewRight + 1) {
           overflowXOffenders.push({
             stableId: sid,
@@ -1046,22 +1046,22 @@ async function captureWireframeSnapshot(
       }
 
       const keyFor = (el: any): string | undefined => {
-        if (typeof el?.stableId === 'string' && el.stableId) return el.stableId;
-        if (typeof el?.id === 'string' && el.id) return `id:${el.id}`;
+        if (typeof el?.stableId === 'string' && el.stableId) {return el.stableId;}
+        if (typeof el?.id === 'string' && el.id) {return `id:${el.id}`;}
         const b = el?.ref?.backendNodeId;
-        if (typeof b === 'number') return `backend:${b}`;
+        if (typeof b === 'number') {return `backend:${b}`;}
         return undefined;
       };
 
       const prevByKey = new Map<string, any>();
       for (const el of previous?.elements ?? []) {
         const k = keyFor(el);
-        if (k && !prevByKey.has(k)) prevByKey.set(k, el);
+        if (k && !prevByKey.has(k)) {prevByKey.set(k, el);}
       }
       const curByKey = new Map<string, any>();
       for (const el of output.elements) {
         const k = keyFor(el);
-        if (k && !curByKey.has(k)) curByKey.set(k, el);
+        if (k && !curByKey.has(k)) {curByKey.set(k, el);}
       }
 
       const changedElements: NonNullable<WireframeSnapshotOutput['diff']>['changedElements'] = [];
@@ -1390,11 +1390,11 @@ function renderSvgWireframe(
         : '#000000';
 
   const keyFor = (el: WireframeSnapshotOutput['elements'][number] | undefined): string | undefined => {
-    if (!el) return undefined;
-    if (typeof el.stableId === 'string' && el.stableId) return el.stableId;
-    if (typeof el.id === 'string' && el.id) return `id:${el.id}`;
+    if (!el) {return undefined;}
+    if (typeof el.stableId === 'string' && el.stableId) {return el.stableId;}
+    if (typeof el.id === 'string' && el.id) {return `id:${el.id}`;}
     const b = el.ref?.backendNodeId;
-    if (typeof b === 'number') return `backend:${b}`;
+    if (typeof b === 'number') {return `backend:${b}`;}
     return undefined;
   };
 

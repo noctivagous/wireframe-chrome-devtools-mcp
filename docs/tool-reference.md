@@ -30,19 +30,27 @@
 - **[Network](#network)** (2 tools)
   - [`get_network_request`](#get_network_request)
   - [`list_network_requests`](#list_network_requests)
-- **[Debugging](#debugging)** (16 tools)
+- **[Debugging](#debugging)** (24 tools)
   - [`analyze_js`](#analyze_js)
+  - [`begin_edit_session`](#begin_edit_session)
+  - [`clear_edit_session`](#clear_edit_session)
+  - [`commit_edit_session_to_files`](#commit_edit_session_to_files)
   - [`evaluate_script`](#evaluate_script)
+  - [`export_edit_session`](#export_edit_session)
   - [`get_console_message`](#get_console_message)
+  - [`get_edit_session`](#get_edit_session)
   - [`insert_css`](#insert_css)
   - [`insert_css_preview`](#insert_css_preview)
   - [`insert_js`](#insert_js)
+  - [`insert_js_preview`](#insert_js_preview)
   - [`inspect_state`](#inspect_state)
   - [`js_console`](#js_console)
   - [`list_console_messages`](#list_console_messages)
+  - [`list_edit_sessions`](#list_edit_sessions)
   - [`manipulate_dom`](#manipulate_dom)
   - [`rollback_all`](#rollback_all)
   - [`rollback_patch`](#rollback_patch)
+  - [`set_active_edit_session`](#set_active_edit_session)
   - [`svg_snapshot`](#svg_snapshot)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
@@ -341,6 +349,42 @@
 
 ---
 
+### `begin_edit_session`
+
+**Description:** Start (and optionally activate) an edit session used to buffer live-in-Chromium edits during an interactive workflow.
+
+This is designed to keep the loop fast (apply changes in the Chromium instance) and defer filesystem writes until an explicit export/commit step.
+
+**Parameters:**
+
+- **label** (string) _(optional)_: Optional label for the session (e.g., "multi-column feed experiment").
+- **setActive** (boolean) _(optional)_: If true, make this the active session for subsequent recorded changes.
+
+---
+
+### `clear_edit_session`
+
+**Description:** Delete an edit session from memory (clears the active session if it matches).
+
+**Parameters:**
+
+- **sessionId** (string) _(optional)_: Session id to clear. If omitted, clears the active session.
+
+---
+
+### `commit_edit_session_to_files`
+
+**Description:** Best-effort commit of recorded changes into local files.
+
+This intentionally runs as an explicit end-of-session step to avoid editor lag during iteration. Currently supports appending recorded CSS/JS snippets to files referenced by targetFilePath (recorded via recordToSession-enabled tools).
+
+**Parameters:**
+
+- **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would happen.
+- **sessionId** (string) _(optional)_: Optional session id. If omitted, commits the active session.
+
+---
+
 ### `evaluate_script`
 
 **Description:** Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON
@@ -362,6 +406,17 @@ Example with arguments: `(el) => {
 
 ---
 
+### `export_edit_session`
+
+**Description:** Export an edit session to a JSON file. This is the recommended way to batch filesystem writes: keep edits live in Chromium during iteration, then export once at the end.
+
+**Parameters:**
+
+- **filePath** (string) _(optional)_: Optional output path. If omitted, writes to a temporary file.
+- **sessionId** (string) _(optional)_: Optional session id. If omitted, exports the active session.
+
+---
+
 ### `get_console_message`
 
 **Description:** Gets a console message by its ID. You can get all messages by calling [`list_console_messages`](#list_console_messages).
@@ -369,6 +424,16 @@ Example with arguments: `(el) => {
 **Parameters:**
 
 - **msgid** (number) **(required)**: The msgid of a console message on the page from the listed console messages
+
+---
+
+### `get_edit_session`
+
+**Description:** Get a specific edit session (or the active session if sessionId is omitted).
+
+**Parameters:**
+
+- **sessionId** (string) _(optional)_: Optional session id. If omitted, returns the active session.
 
 ---
 
@@ -380,8 +445,11 @@ Example with arguments: `(el) => {
 
 - **cssText** (string) **(required)**: CSS text to insert into the page.
 - **description** (string) _(optional)_: Optional human description to store in the patch registry.
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
 - **patchId** (string) _(optional)_: Optional patch id. If omitted, the server generates a stable patch id.
+- **recordToSession** (boolean) _(optional)_: If true, record this change into an edit session journal so it can be exported/committed later (useful to keep live iteration fast and delay filesystem writes).
 - **replaceExisting** (boolean) _(optional)_: If true, replaces an existing patch with the same patchId. If false, insertion is a no-op if patchId exists.
+- **targetFilePath** (string) _(optional)_: Optional hint for later commit: which local file this CSS should be rolled into at end-of-session.
 
 ---
 
@@ -393,6 +461,7 @@ Example with arguments: `(el) => {
 
 - **Auto-rollback by default**: Changes are automatically rolled back after capturing snapshots (`autoRollback` defaults to `true`), making this safe for temporary CSS experimentation without affecting the live page state.
 - **Multiple values for A/B testing**: Pass an array of different values to `values` (e.g., `["16px", "24px", "32px"]`) to quickly compare how different CSS values affect layout, with each value generating a separate wireframe snapshot for comparison.
+- **Fast interactive workflow (recommended)**: Use `[`begin_edit_session`](#begin_edit_session)`, then run `[`insert_css_preview`](#insert_css_preview)` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, run `[`export_edit_session`](#export_edit_session)` or `[`commit_edit_session_to_files`](#commit_edit_session_to_files)` once at the end to avoid editor/filesystem lag during iteration.
 
 **Parameters:**
 
@@ -400,11 +469,15 @@ Example with arguments: `(el) => {
 - **selector** (string) **(required)**: CSS selector to target elements.
 - **values** (array) **(required)**: Array of CSS values to test. Each value will be applied and visually previewed.
 - **autoRollback** (boolean) _(optional)_: If true, automatically rolls back CSS changes after capturing snapshots.
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
 - **filePath** (string) _(optional)_: Optional path to save detailed results. If not provided, results are returned in the response.
 - **highlightChanges** (boolean) _(optional)_: If true, highlights changed elements in the visual snapshots.
+- **recordToSession** (boolean) _(optional)_: If true, record this preview run into an edit session journal (useful to keep iteration fast and defer filesystem writes).
 - **responsiveBreakpoints** (array) _(optional)_: Optional responsive breakpoints to test. Will resize viewport and capture snapshots for each.
+- **selectedValueIndex** (integer) _(optional)_: Optional index (0-based) indicating which value should be recorded as the "chosen" snippet when recordToSession=true. If omitted, the last value is recorded.
 - **showDimensions** (boolean) _(optional)_: If true, shows width×height dimensions on elements in the wireframe.
 - **showVisual** (boolean) _(optional)_: If true, automatically generates SVG wireframe snapshots for visual feedback.
+- **targetFilePath** (string) _(optional)_: Optional hint for later commit: which local file the chosen CSS should be rolled into at end-of-session.
 
 ---
 
@@ -416,8 +489,44 @@ Example with arguments: `(el) => {
 
 - **jsText** (string) **(required)**: JavaScript text to insert into the page.
 - **description** (string) _(optional)_: Optional human description to store in the patch registry.
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
 - **patchId** (string) _(optional)_: Optional patch id. If omitted, the server generates a stable patch id.
+- **recordToSession** (boolean) _(optional)_: If true, record this change into an edit session journal so it can be exported/committed later (useful to keep live iteration fast and delay filesystem writes).
 - **replaceExisting** (boolean) _(optional)_: If true, replaces an existing patch with the same patchId. Note: replacement may re-execute the script.
+- **targetFilePath** (string) _(optional)_: Optional hint for later commit: which local file this JS should be rolled into at end-of-session.
+
+---
+
+### `insert_js_preview`
+
+**Description:** Insert JavaScript changes and automatically generate visual wireframe feedback wrapped in JSON. Supports testing multiple script variants, responsive breakpoints, and before/after comparisons.
+
+**Guidance:**
+
+- **Rollback caveat**: `autoRollback` removes the injected `&lt;script&gt;` tag, but it cannot reliably undo side-effects (e.g., DOM mutations, timers, event listeners). Treat this as best-effort cleanup for exploration.
+- **Multiple variants for A/B testing**: Pass multiple entries to `scripts` to compare outcomes; each variant generates its own wireframe snapshot.
+- **Fast interactive workflow (recommended)**: Use `[`begin_edit_session`](#begin_edit_session)`, then run `[`insert_js_preview`](#insert_js_preview)` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, run `[`export_edit_session`](#export_edit_session)` or `[`commit_edit_session_to_files`](#commit_edit_session_to_files)` once at the end.
+
+**Parameters:**
+
+- **scripts** (array) **(required)**: Array of JavaScript snippets to test. Each entry is injected as a &lt;script&gt; tag and then snapshotted.
+- **autoRollback** (boolean) _(optional)_: If true, automatically removes injected &lt;script&gt; tags after capturing snapshots (does not reliably undo side-effects).
+- **computedStylePreset** (enum: "layout", "typography", "paint", "standard", "debug") _(optional)_: Computed style preset to use when includeComputedStyles=true. If omitted, [`wireframe_snapshot`](#wireframe_snapshot) defaults apply.
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
+- **filePath** (string) _(optional)_: Optional path to save detailed results. If not provided, results are returned in the response.
+- **highlightChanges** (boolean) _(optional)_: If true, highlights changed elements in the visual snapshots (best-effort).
+- **includeComputedStyles** (boolean) _(optional)_: If true, include computed styles in the snapshot payload (larger output).
+- **includeDescendants** (boolean) _(optional)_: If true, include matching elements’ descendants as well (within scopeSelector if provided).
+- **maxElements** (integer) _(optional)_: Maximum number of elements to include in snapshots (legacy alias for maxTotal).
+- **recordToSession** (boolean) _(optional)_: If true, record this preview run into an edit session journal (useful to keep iteration fast and defer filesystem writes).
+- **responsiveBreakpoints** (array) _(optional)_: Optional responsive breakpoints to test. Will resize viewport and capture snapshots for each.
+- **scopeSelector** (string) _(optional)_: Optional scope root selector; when used with selectors, matching is resolved within this subtree.
+- **selectedScriptIndex** (integer) _(optional)_: Optional index (0-based) indicating which script should be recorded as the "chosen" snippet when recordToSession=true. If omitted, the last script is recorded.
+- **selectors** (array) _(optional)_: Optional selectors to snapshot/highlight. If omitted, the snapshot covers the whole page (subject to maxElements cap).
+- **showDimensions** (boolean) _(optional)_: If true, shows width×height dimensions on elements in the wireframe.
+- **showVisual** (boolean) _(optional)_: If true, automatically generates SVG wireframe snapshots for visual feedback.
+- **targetFilePath** (string) _(optional)_: Optional hint for later commit: which local file the chosen JS should be rolled into at end-of-session.
+- **waitAfterMs** (integer) _(optional)_: Optional delay (ms) after injecting a script before capturing snapshots (useful if the script triggers async DOM updates).
 
 ---
 
@@ -479,6 +588,14 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 
 ---
 
+### `list_edit_sessions`
+
+**Description:** List edit sessions currently held in memory by this MCP server process.
+
+**Parameters:** None
+
+---
+
 ### `manipulate_dom`
 
 **Description:** Perform DOM manipulations on web pages including setting styles, adding/removing classes, inserting/removing elements, and batch operations.
@@ -488,11 +605,13 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 - **action** (enum: "set-style", "add-class", "remove-class", "remove-element", "insert-html") _(optional)_: Single DOM manipulation action to perform.
 - **className** (string) _(optional)_: CSS class name for add-class/remove-class actions.
 - **description** (string) _(optional)_: Optional human description for the patch registry.
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
 - **html** (string) _(optional)_: HTML content to insert for insert-html action.
 - **operations** (array) _(optional)_: Array of DOM operations to perform in batch.
 - **patchId** (string) _(optional)_: Optional patch id for rollback. If omitted, generates a stable patch id.
 - **position** (enum: "beforebegin", "afterbegin", "beforeend", "afterend") _(optional)_: Position for insert-html action relative to the selected element. Defaults to "beforeend".
 - **properties** (unknown) _(optional)_: CSS properties and values for set-style action. E.g., {"margin-bottom": "32px", "padding": "16px"}
+- **recordToSession** (boolean) _(optional)_: If true, record this change into an edit session journal so it can be exported/committed later (useful to keep live iteration fast and delay filesystem writes).
 - **selector** (string) _(optional)_: CSS selector to target elements for the action.
 
 ---
@@ -503,7 +622,9 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 
 **Parameters:**
 
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
 - **includeRegistryOnly** (boolean) _(optional)_: If true, only clears the server-side registry for the current page without touching the DOM.
+- **recordToSession** (boolean) _(optional)_: If true, record this rollback-all action into an edit session journal.
 
 ---
 
@@ -514,6 +635,18 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 **Parameters:**
 
 - **patchId** (string) **(required)**: Patch id previously returned by [`insert_css`](#insert_css)/[`insert_js`](#insert_js).
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
+- **recordToSession** (boolean) _(optional)_: If true, record this rollback action into an edit session journal.
+
+---
+
+### `set_active_edit_session`
+
+**Description:** Set (or clear) the active edit session used by recordToSession-enabled tools.
+
+**Parameters:**
+
+- **sessionId** (unknown) **(required)**: Session id to activate. Use null to clear the active session.
 
 ---
 

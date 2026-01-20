@@ -63,6 +63,44 @@ export interface PatchRecord {
   description?: string;
 }
 
+export type EditChangeType =
+  | 'insert_css'
+  | 'insert_js'
+  | 'insert_js_preview'
+  | 'insert_css_preview'
+  | 'manipulate_dom'
+  | 'rollback_patch'
+  | 'rollback_all';
+
+export interface EditChangeRecord {
+  changeId: string;
+  type: EditChangeType;
+  pageId: number;
+  createdAt: number;
+  patchId?: string;
+  description?: string;
+  /**
+   * Optional hint for later commit/export steps. For example, a CSS change can
+   * be mapped to a source file path to append/merge at the end of a session.
+   */
+  targetFilePath?: string;
+  payload: unknown;
+}
+
+export interface EditSession {
+  sessionId: string;
+  createdAt: number;
+  label?: string;
+  changes: EditChangeRecord[];
+}
+
+export interface EditSessionSummary {
+  sessionId: string;
+  createdAt: number;
+  label?: string;
+  changeCount: number;
+}
+
 interface McpContextOptions {
   // Whether the DevTools windows are exposed as pages for debugging of DevTools.
   experimentalDevToolsDebugging: boolean;
@@ -134,6 +172,11 @@ export class McpContext implements Context {
   #nextPatchId = 1;
   #patchRegistry = new Map<string, PatchRecord>();
 
+  #nextEditSessionId = 1;
+  #nextEditChangeId = 1;
+  #activeEditSessionId: string | null = null;
+  #editSessions = new Map<string, EditSession>();
+
   #locatorClass: typeof Locator;
   #options: McpContextOptions;
 
@@ -185,6 +228,83 @@ export class McpContext implements Context {
   createPatchId(prefix?: string): string {
     const id = this.#nextPatchId++;
     return prefix ? `${prefix}_${id}` : String(id);
+  }
+
+  createEditSession(options?: {label?: string; setActive?: boolean}): EditSession {
+    const sessionId = `edit_${this.#nextEditSessionId++}`;
+    const session: EditSession = {
+      sessionId,
+      createdAt: Date.now(),
+      label: options?.label,
+      changes: [],
+    };
+    this.#editSessions.set(sessionId, session);
+    if (options?.setActive ?? true) {
+      this.#activeEditSessionId = sessionId;
+    }
+    return session;
+  }
+
+  setActiveEditSession(sessionId: string | null): void {
+    if (sessionId === null) {
+      this.#activeEditSessionId = null;
+      return;
+    }
+    if (!this.#editSessions.has(sessionId)) {
+      throw new Error(`No such edit session: ${sessionId}`);
+    }
+    this.#activeEditSessionId = sessionId;
+  }
+
+  getActiveEditSessionId(): string | null {
+    return this.#activeEditSessionId;
+  }
+
+  listEditSessions(): EditSessionSummary[] {
+    return Array.from(this.#editSessions.values()).map(s => ({
+      sessionId: s.sessionId,
+      createdAt: s.createdAt,
+      label: s.label,
+      changeCount: s.changes.length,
+    }));
+  }
+
+  getEditSession(sessionId: string): EditSession {
+    const session = this.#editSessions.get(sessionId);
+    if (!session) {
+      throw new Error(`No such edit session: ${sessionId}`);
+    }
+    return session;
+  }
+
+  clearEditSession(sessionId: string): EditSession | undefined {
+    const existing = this.#editSessions.get(sessionId);
+    this.#editSessions.delete(sessionId);
+    if (this.#activeEditSessionId === sessionId) {
+      this.#activeEditSessionId = null;
+    }
+    return existing;
+  }
+
+  appendEditChange(
+    change: Omit<EditChangeRecord, 'changeId'> & {changeId?: string},
+    options?: {sessionId?: string; autoCreate?: boolean},
+  ): {sessionId: string; changeId: string} | null {
+    let sessionId = options?.sessionId ?? this.#activeEditSessionId ?? null;
+    if (!sessionId) {
+      if (options?.autoCreate) {
+        sessionId = this.createEditSession({setActive: true}).sessionId;
+      } else {
+        return null;
+      }
+    }
+    const session = this.getEditSession(sessionId);
+    const changeId = change.changeId ?? `change_${this.#nextEditChangeId++}`;
+    session.changes.push({
+      ...change,
+      changeId,
+    });
+    return {sessionId, changeId};
   }
 
   registerPatch(patch: PatchRecord): void {

@@ -8,6 +8,7 @@ import {zod} from '../third_party/index.js';
 
 import {ToolCategory} from './categories.js';
 import {defineTool} from './ToolDefinition.js';
+import type {renderSvgWireframe} from './wireframe.js';
 
 const PATCH_ID_ATTR = 'data-mcp-patch-id';
 const PATCH_OWNER_ATTR = 'data-mcp-patch-owner';
@@ -17,6 +18,8 @@ const PATCH_OWNER_VALUE = 'wireframe-chrome-devtools-mcp';
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
 }
+
+type WireframeSnapshotOutput = Parameters<typeof renderSvgWireframe>[0];
 
 export const insertCss = defineTool({
   name: 'insert_css',
@@ -45,6 +48,26 @@ export const insertCss = defineTool({
       .string()
       .optional()
       .describe('Optional human description to store in the patch registry.'),
+
+    // Optional change journaling (buffer edits during interactive sessions; commit/export later).
+    recordToSession: zod
+      .boolean()
+      .optional()
+      .describe(
+        'If true, record this change into an edit session journal so it can be exported/committed later (useful to keep live iteration fast and delay filesystem writes).',
+      ),
+    editSessionId: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).',
+      ),
+    targetFilePath: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional hint for later commit: which local file this CSS should be rolled into at end-of-session.',
+      ),
   },
   handler: async (request, response, context) => {
     const page = context.getSelectedPage();
@@ -103,6 +126,24 @@ export const insertCss = defineTool({
       description: request.params.description,
     });
 
+    if (request.params.recordToSession) {
+      context.appendEditChange(
+        {
+          type: 'insert_css',
+          pageId,
+          createdAt: Date.now(),
+          patchId,
+          description: request.params.description,
+          targetFilePath: request.params.targetFilePath,
+          payload: {
+            cssText: request.params.cssText,
+            replaceExisting: request.params.replaceExisting ?? false,
+          },
+        },
+        {sessionId: request.params.editSessionId, autoCreate: true},
+      );
+    }
+
     response.appendResponseLine('```json');
     response.appendResponseLine(
       JSON.stringify(
@@ -145,6 +186,26 @@ export const insertJs = defineTool({
       .string()
       .optional()
       .describe('Optional human description to store in the patch registry.'),
+
+    // Optional change journaling (buffer edits during interactive sessions; commit/export later).
+    recordToSession: zod
+      .boolean()
+      .optional()
+      .describe(
+        'If true, record this change into an edit session journal so it can be exported/committed later (useful to keep live iteration fast and delay filesystem writes).',
+      ),
+    editSessionId: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).',
+      ),
+    targetFilePath: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional hint for later commit: which local file this JS should be rolled into at end-of-session.',
+      ),
   },
   handler: async (request, response, context) => {
     const page = context.getSelectedPage();
@@ -203,6 +264,24 @@ export const insertJs = defineTool({
       description: request.params.description,
     });
 
+    if (request.params.recordToSession) {
+      context.appendEditChange(
+        {
+          type: 'insert_js',
+          pageId,
+          createdAt: Date.now(),
+          patchId,
+          description: request.params.description,
+          targetFilePath: request.params.targetFilePath,
+          payload: {
+            jsText: request.params.jsText,
+            replaceExisting: request.params.replaceExisting ?? false,
+          },
+        },
+        {sessionId: request.params.editSessionId, autoCreate: true},
+      );
+    }
+
     response.appendResponseLine('```json');
     response.appendResponseLine(
       JSON.stringify(
@@ -230,6 +309,18 @@ export const rollbackPatch = defineTool({
     patchId: zod
       .string()
       .describe('Patch id previously returned by insert_css/insert_js.'),
+
+    // Optional change journaling.
+    recordToSession: zod
+      .boolean()
+      .optional()
+      .describe('If true, record this rollback action into an edit session journal.'),
+    editSessionId: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).',
+      ),
   },
   handler: async (request, response, context) => {
     const page = context.getSelectedPage();
@@ -253,6 +344,19 @@ export const rollbackPatch = defineTool({
     // Always unregister even if the element isn't present (idempotent rollback).
     context.unregisterPatch(patchId);
 
+    if (request.params.recordToSession) {
+      context.appendEditChange(
+        {
+          type: 'rollback_patch',
+          pageId,
+          createdAt: Date.now(),
+          patchId,
+          payload: {patchId},
+        },
+        {sessionId: request.params.editSessionId, autoCreate: true},
+      );
+    }
+
     response.appendResponseLine('```json');
     response.appendResponseLine(
       JSON.stringify(
@@ -274,7 +378,8 @@ export const insertCssPreview = defineTool({
     'Insert CSS changes and automatically generate visual wireframe feedback wrapped in JSON. Supports testing multiple values, responsive breakpoints, and before/after comparisons.\n\n' +
     '**Guidance:**\n\n' +
     '- **Auto-rollback by default**: Changes are automatically rolled back after capturing snapshots (`autoRollback` defaults to `true`), making this safe for temporary CSS experimentation without affecting the live page state.\n' +
-    '- **Multiple values for A/B testing**: Pass an array of different values to `values` (e.g., `["16px", "24px", "32px"]`) to quickly compare how different CSS values affect layout, with each value generating a separate wireframe snapshot for comparison.',
+    '- **Multiple values for A/B testing**: Pass an array of different values to `values` (e.g., `["16px", "24px", "32px"]`) to quickly compare how different CSS values affect layout, with each value generating a separate wireframe snapshot for comparison.\n' +
+    '- **Fast interactive workflow (recommended)**: Use `begin_edit_session`, then run `insert_css_preview` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, run `export_edit_session` or `commit_edit_session_to_files` once at the end to avoid editor/filesystem lag during iteration.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -287,6 +392,14 @@ export const insertCssPreview = defineTool({
       .array(zod.string())
       .min(1)
       .describe('Array of CSS values to test. Each value will be applied and visually previewed.'),
+    selectedValueIndex: zod
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe(
+        'Optional index (0-based) indicating which value should be recorded as the "chosen" snippet when recordToSession=true. If omitted, the last value is recorded.',
+      ),
 
     // Visual options
     showVisual: zod
@@ -327,15 +440,53 @@ export const insertCssPreview = defineTool({
       .default(true)
       .optional()
       .describe('If true, automatically rolls back CSS changes after capturing snapshots.'),
+
+    // Optional change journaling (buffer edits during interactive sessions; commit/export later).
+    recordToSession: zod
+      .boolean()
+      .optional()
+      .describe(
+        'If true, record this preview run into an edit session journal (useful to keep iteration fast and defer filesystem writes).',
+      ),
+    editSessionId: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).',
+      ),
+    targetFilePath: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional hint for later commit: which local file the chosen CSS should be rolled into at end-of-session.',
+      ),
   },
   handler: async (request, response, context) => {
     const page = context.getSelectedPage();
     const pageId = context.getPageId(page) ?? 0;
-    const { selector, property, values, showVisual, highlightChanges, showDimensions, responsiveBreakpoints, filePath, autoRollback } = request.params;
+    const {
+      selector,
+      property,
+      values,
+      selectedValueIndex,
+      showVisual,
+      highlightChanges,
+      showDimensions,
+      responsiveBreakpoints,
+      filePath,
+      autoRollback,
+    } = request.params;
 
     // Store original viewport for restoration
     const originalViewport = await page.viewport();
-    const originalUrl = page.url();
+    if (
+      selectedValueIndex !== undefined &&
+      (selectedValueIndex < 0 || selectedValueIndex >= values.length)
+    ) {
+      throw new Error(
+        `selectedValueIndex out of range: got ${selectedValueIndex}, values.length=${values.length}`,
+      );
+    }
 
     const results: Array<{
       value: string;
@@ -364,7 +515,7 @@ export const insertCssPreview = defineTool({
 
     try {
       // Take initial snapshot if we need to show changes
-      let initialSnapshot: any = null;
+      let initialSnapshot: WireframeSnapshotOutput | null = null;
       if (showVisual && highlightChanges) {
         // Import wireframe functionality dynamically to avoid circular dependencies
         const { captureWireframeSnapshot } = await import('./wireframe.js');
@@ -382,6 +533,7 @@ export const insertCssPreview = defineTool({
       }
 
       // Test each value
+      const insertedPatchIds: string[] = [];
       for (let i = 0; i < values.length; i++) {
         const value = values[i];
         const cssText = `${selector} { ${property}: ${value} !important; }`;
@@ -420,11 +572,12 @@ export const insertCssPreview = defineTool({
           description: `CSS Preview: ${selector} { ${property}: ${value} }`,
         });
 
-        const result: any = {
+        const result: (typeof results)[number] = {
           value,
           cssText,
           patchId: insertResult.patchId,
         };
+        insertedPatchIds.push(insertResult.patchId);
 
         // Generate visual snapshot if requested
         if (showVisual) {
@@ -449,7 +602,7 @@ export const insertCssPreview = defineTool({
             strokeWidth: 1,
             fillOpacity: 0.08,
             highlightChanged: highlightChanges ?? true,
-            previous: initialSnapshot,
+            previous: initialSnapshot ?? undefined,
           });
 
           const viewport = await page.viewport();
@@ -534,7 +687,7 @@ export const insertCssPreview = defineTool({
 
         results.push(result);
 
-        // Auto-rollback if requested (except for the last value if not auto-rolling back)
+        // Auto-rollback if requested (except for the last value; the last patch is handled below).
         if (autoRollback && i < values.length - 1) {
           await page.evaluate(({patchId, PATCH_ID_ATTR}) => {
             const candidates = Array.from(document.querySelectorAll(`[${PATCH_ID_ATTR}]`)) as HTMLElement[];
@@ -548,6 +701,20 @@ export const insertCssPreview = defineTool({
         }
       }
 
+      // If autoRollback=true, also remove the last applied patch to match the documented semantics.
+      if (autoRollback && insertedPatchIds.length > 0) {
+        const lastPatchId = insertedPatchIds[insertedPatchIds.length - 1];
+        await page.evaluate(({patchId, PATCH_ID_ATTR}) => {
+          const candidates = Array.from(document.querySelectorAll(`[${PATCH_ID_ATTR}]`)) as HTMLElement[];
+          for (const el of candidates) {
+            if (el.getAttribute(PATCH_ID_ATTR) === patchId) {
+              el.remove();
+            }
+          }
+        }, { patchId: lastPatchId, PATCH_ID_ATTR });
+        context.unregisterPatch(lastPatchId);
+      }
+
       // Restore original viewport
       if (originalViewport) {
         await page.setViewport(originalViewport);
@@ -557,12 +724,18 @@ export const insertCssPreview = defineTool({
       response.appendResponseLine(`Tested ${values.length} CSS values for \`${selector} { ${property}: ... }\``);
 
       // Return full results as JSON
+      const recordedValueIndex =
+        selectedValueIndex !== undefined ? selectedValueIndex : values.length - 1;
+      const recorded = results[recordedValueIndex];
       const result = {
         selector,
         property,
         testedValues: values.length,
         results,
         autoRolledBack: autoRollback,
+        recordedValueIndex,
+        recordedValue: recorded?.value,
+        recordedCssText: recorded?.cssText,
       };
 
       response.appendResponseLine('```json');
@@ -585,12 +758,505 @@ export const insertCssPreview = defineTool({
         response.appendResponseLine(`\nSaved detailed results to ${filePath}`);
       }
 
+      if (request.params.recordToSession) {
+        const recordedValueIndex =
+          selectedValueIndex !== undefined
+            ? selectedValueIndex
+            : Math.max(0, values.length - 1);
+        const recorded = results[recordedValueIndex];
+        context.appendEditChange(
+          {
+            type: 'insert_css_preview',
+            pageId,
+            createdAt: Date.now(),
+            description: `CSS Preview: ${selector} { ${property}: [${values.join(', ')}] }`,
+            targetFilePath: request.params.targetFilePath,
+            payload: {
+              selector,
+              property,
+              values,
+              selectedValueIndex: recordedValueIndex,
+              selectedValue: recorded?.value,
+              cssText: recorded?.cssText,
+              results: results.map(r => ({
+                value: r.value,
+                cssText: r.cssText,
+                patchId: r.patchId,
+              })),
+              autoRollback,
+            },
+          },
+          {sessionId: request.params.editSessionId, autoCreate: true},
+        );
+      }
+
     } catch (error) {
       // Restore viewport on error
       if (originalViewport) {
         try {
           await page.setViewport(originalViewport);
-        } catch (e) {
+        } catch (_e) {
+          // Ignore viewport restoration errors
+        }
+      }
+      throw error;
+    }
+  },
+});
+
+export const insertJsPreview = defineTool({
+  name: 'insert_js_preview',
+  description:
+    'Insert JavaScript changes and automatically generate visual wireframe feedback wrapped in JSON. Supports testing multiple script variants, responsive breakpoints, and before/after comparisons.\n\n' +
+    '**Guidance:**\n\n' +
+    '- **Rollback caveat**: `autoRollback` removes the injected `<script>` tag, but it cannot reliably undo side-effects (e.g., DOM mutations, timers, event listeners). Treat this as best-effort cleanup for exploration.\n' +
+    '- **Multiple variants for A/B testing**: Pass multiple entries to `scripts` to compare outcomes; each variant generates its own wireframe snapshot.\n' +
+    '- **Fast interactive workflow (recommended)**: Use `begin_edit_session`, then run `insert_js_preview` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, run `export_edit_session` or `commit_edit_session_to_files` once at the end.',
+  annotations: {
+    category: ToolCategory.DEBUGGING,
+    readOnlyHint: false,
+  },
+  schema: {
+    // JS payload
+    scripts: zod
+      .array(zod.string())
+      .min(1)
+      .describe(
+        'Array of JavaScript snippets to test. Each entry is injected as a <script> tag and then snapshotted.',
+      ),
+    selectedScriptIndex: zod
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe(
+        'Optional index (0-based) indicating which script should be recorded as the "chosen" snippet when recordToSession=true. If omitted, the last script is recorded.',
+      ),
+    waitAfterMs: zod
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .default(0)
+      .describe(
+        'Optional delay (ms) after injecting a script before capturing snapshots (useful if the script triggers async DOM updates).',
+      ),
+
+    // Snapshot targeting (mirrors wireframe_snapshot basics)
+    selectors: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        'Optional selectors to snapshot/highlight. If omitted, the snapshot covers the whole page (subject to maxElements cap).',
+      ),
+    scopeSelector: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional scope root selector; when used with selectors, matching is resolved within this subtree.',
+      ),
+    includeDescendants: zod
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        'If true, include matching elements’ descendants as well (within scopeSelector if provided).',
+      ),
+    maxElements: zod
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .default(50)
+      .describe('Maximum number of elements to include in snapshots (legacy alias for maxTotal).'),
+    includeComputedStyles: zod
+      .boolean()
+      .optional()
+      .default(false)
+      .describe('If true, include computed styles in the snapshot payload (larger output).'),
+    computedStylePreset: zod
+      .enum(['layout', 'typography', 'paint', 'standard', 'debug'])
+      .optional()
+      .describe(
+        'Computed style preset to use when includeComputedStyles=true. If omitted, wireframe_snapshot defaults apply.',
+      ),
+
+    // Visual options
+    showVisual: zod
+      .boolean()
+      .default(true)
+      .optional()
+      .describe(
+        'If true, automatically generates SVG wireframe snapshots for visual feedback.',
+      ),
+    highlightChanges: zod
+      .boolean()
+      .default(true)
+      .optional()
+      .describe(
+        'If true, highlights changed elements in the visual snapshots (best-effort).',
+      ),
+    showDimensions: zod
+      .boolean()
+      .default(true)
+      .optional()
+      .describe('If true, shows width×height dimensions on elements in the wireframe.'),
+
+    // Responsive testing
+    responsiveBreakpoints: zod
+      .array(
+        zod.object({
+          name: zod
+            .string()
+            .describe('Name for this breakpoint (e.g., "mobile", "tablet", "desktop").'),
+          width: zod.number().int().positive().describe('Viewport width in pixels.'),
+          height: zod.number().int().positive().describe('Viewport height in pixels.'),
+        }),
+      )
+      .optional()
+      .describe(
+        'Optional responsive breakpoints to test. Will resize viewport and capture snapshots for each.',
+      ),
+
+    // Output options
+    filePath: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional path to save detailed results. If not provided, results are returned in the response.',
+      ),
+
+    // Rollback options
+    autoRollback: zod
+      .boolean()
+      .default(true)
+      .optional()
+      .describe(
+        'If true, automatically removes injected <script> tags after capturing snapshots (does not reliably undo side-effects).',
+      ),
+
+    // Optional change journaling (buffer edits during interactive sessions; commit/export later).
+    recordToSession: zod
+      .boolean()
+      .optional()
+      .describe(
+        'If true, record this preview run into an edit session journal (useful to keep iteration fast and defer filesystem writes).',
+      ),
+    editSessionId: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).',
+      ),
+    targetFilePath: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional hint for later commit: which local file the chosen JS should be rolled into at end-of-session.',
+      ),
+  },
+  handler: async (request, response, context) => {
+    const page = context.getSelectedPage();
+    const pageId = context.getPageId(page) ?? 0;
+    const {
+      scripts,
+      selectedScriptIndex,
+      waitAfterMs,
+      selectors,
+      scopeSelector,
+      includeDescendants,
+      maxElements,
+      includeComputedStyles,
+      computedStylePreset,
+      showVisual,
+      highlightChanges,
+      showDimensions,
+      responsiveBreakpoints,
+      filePath,
+      autoRollback,
+    } = request.params;
+
+    // Store original viewport for restoration
+    const originalViewport = await page.viewport();
+    if (
+      selectedScriptIndex !== undefined &&
+      (selectedScriptIndex < 0 || selectedScriptIndex >= scripts.length)
+    ) {
+      throw new Error(
+        `selectedScriptIndex out of range: got ${selectedScriptIndex}, scripts.length=${scripts.length}`,
+      );
+    }
+
+    const results: Array<{
+      jsText: string;
+      patchId: string;
+      visualSnapshot?: {
+        svg: string;
+        dimensions: {width: number; height: number};
+      };
+      responsiveSnapshots?: Array<{
+        breakpoint: string;
+        width: number;
+        height: number;
+        visualSnapshot: {
+          svg: string;
+          dimensions: {width: number; height: number};
+        };
+      }>;
+    }> = [];
+
+    try {
+      // Take initial snapshot if we need to show changes
+      let initialSnapshot: WireframeSnapshotOutput | null = null;
+      if (showVisual && highlightChanges) {
+        const {captureWireframeSnapshot} = await import('./wireframe.js');
+        const {output} = await captureWireframeSnapshot(
+          {
+            params: {
+              selectors,
+              scopeSelector,
+              includeDescendants,
+              maxElements,
+              includeComputedStyles,
+              computedStylePreset,
+              coordinateSpace: 'viewport',
+            },
+          },
+          context,
+        );
+        initialSnapshot = output;
+      }
+
+      const insertedPatchIds: string[] = [];
+      for (let i = 0; i < scripts.length; i++) {
+        const jsText = scripts[i];
+        const patchId = context.createPatchId(`js-preview-${i}`);
+
+        const insertResult = await page.evaluate(
+          ({patchId, jsText, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE}) => {
+            const el = document.createElement('script');
+            el.setAttribute(PATCH_ID_ATTR, patchId);
+            el.setAttribute(PATCH_OWNER_ATTR, PATCH_OWNER_VALUE);
+            el.setAttribute(PATCH_KIND_ATTR, 'js');
+            el.text = jsText;
+            (document.head ?? document.documentElement).appendChild(el);
+            return {patchId, inserted: true};
+          },
+          {
+            patchId,
+            jsText,
+            PATCH_ID_ATTR,
+            PATCH_OWNER_ATTR,
+            PATCH_KIND_ATTR,
+            PATCH_OWNER_VALUE,
+          },
+        );
+
+        context.registerPatch({
+          patchId,
+          patchType: 'js',
+          pageId,
+          createdAt: Date.now(),
+          description: `JS Preview: variant ${i + 1}/${scripts.length}`,
+        });
+        insertedPatchIds.push(insertResult.patchId);
+
+        if (waitAfterMs && waitAfterMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, waitAfterMs));
+        }
+
+        const result: (typeof results)[number] = {
+          jsText,
+          patchId: insertResult.patchId,
+        };
+
+        if (showVisual) {
+          const {captureWireframeSnapshot, renderSvgWireframe} = await import('./wireframe.js');
+          const {output: currentSnapshot} = await captureWireframeSnapshot(
+            {
+              params: {
+                selectors,
+                scopeSelector,
+                includeDescendants,
+                maxElements,
+                includeComputedStyles,
+                computedStylePreset,
+                coordinateSpace: 'viewport',
+              },
+            },
+            context,
+          );
+
+          const svg = renderSvgWireframe(currentSnapshot, {
+            scale: 1,
+            background: 'transparent',
+            showLabels: true,
+            showDimensions: showDimensions ?? true,
+            showSpacing: true,
+            strokeWidth: 1,
+            fillOpacity: 0.08,
+            highlightChanged: highlightChanges ?? true,
+            previous: initialSnapshot ?? undefined,
+          });
+
+          const viewport = await page.viewport();
+          result.visualSnapshot = {
+            svg,
+            dimensions: {
+              width: viewport?.width || 1200,
+              height: viewport?.height || 800,
+            },
+          };
+        }
+
+        // Test responsive breakpoints if provided
+        if (responsiveBreakpoints && responsiveBreakpoints.length > 0) {
+          result.responsiveSnapshots = [];
+          for (const breakpoint of responsiveBreakpoints) {
+            await page.setViewport({
+              width: breakpoint.width,
+              height: breakpoint.height,
+            });
+
+            const {captureWireframeSnapshot, renderSvgWireframe} = await import('./wireframe.js');
+            const {output: responsiveSnapshot} = await captureWireframeSnapshot(
+              {
+                params: {
+                  selectors,
+                  scopeSelector,
+                  includeDescendants,
+                  maxElements,
+                  includeComputedStyles,
+                  computedStylePreset,
+                  coordinateSpace: 'viewport',
+                },
+              },
+              context,
+            );
+
+            const svg = renderSvgWireframe(responsiveSnapshot, {
+              scale: 1,
+              background: 'transparent',
+              showLabels: true,
+              showDimensions: showDimensions ?? true,
+              showSpacing: true,
+              strokeWidth: 1,
+              fillOpacity: 0.08,
+              highlightChanged: false,
+              previous: undefined,
+            });
+
+            result.responsiveSnapshots.push({
+              breakpoint: breakpoint.name,
+              width: breakpoint.width,
+              height: breakpoint.height,
+              visualSnapshot: {
+                svg,
+                dimensions: {width: breakpoint.width, height: breakpoint.height},
+              },
+            });
+          }
+        }
+
+        results.push(result);
+
+        // Auto-rollback if requested (except for the last script; the last patch is handled below).
+        if (autoRollback && i < scripts.length - 1) {
+          await page.evaluate(({patchId, PATCH_ID_ATTR}) => {
+            const candidates = Array.from(document.querySelectorAll(`[${PATCH_ID_ATTR}]`)) as HTMLElement[];
+            for (const el of candidates) {
+              if (el.getAttribute(PATCH_ID_ATTR) === patchId) {
+                el.remove();
+              }
+            }
+          }, {patchId, PATCH_ID_ATTR});
+          context.unregisterPatch(patchId);
+        }
+      }
+
+      // If autoRollback=true, also remove the last applied patch.
+      if (autoRollback && insertedPatchIds.length > 0) {
+        const lastPatchId = insertedPatchIds[insertedPatchIds.length - 1];
+        await page.evaluate(({patchId, PATCH_ID_ATTR}) => {
+          const candidates = Array.from(document.querySelectorAll(`[${PATCH_ID_ATTR}]`)) as HTMLElement[];
+          for (const el of candidates) {
+            if (el.getAttribute(PATCH_ID_ATTR) === patchId) {
+              el.remove();
+            }
+          }
+        }, {patchId: lastPatchId, PATCH_ID_ATTR});
+        context.unregisterPatch(lastPatchId);
+      }
+
+      // Restore original viewport
+      if (originalViewport) {
+        await page.setViewport(originalViewport);
+      }
+
+      const recordedScriptIndex =
+        selectedScriptIndex !== undefined
+          ? selectedScriptIndex
+          : scripts.length - 1;
+      const recorded = results[recordedScriptIndex];
+
+      response.appendResponseLine(`Tested ${scripts.length} JS variants`);
+      const out = {
+        testedScripts: scripts.length,
+        results,
+        autoRolledBack: autoRollback,
+        recordedScriptIndex,
+        recordedJsText: recorded?.jsText,
+      };
+
+      response.appendResponseLine('```json');
+      response.appendResponseLine(JSON.stringify(out, null, 2));
+      response.appendResponseLine('```');
+
+      if (filePath) {
+        const summary = {
+          timestamp: new Date().toISOString(),
+          testedScripts: scripts.length,
+          results,
+        };
+        await context.saveFile(
+          new TextEncoder().encode(JSON.stringify(summary, null, 2)),
+          filePath,
+        );
+        response.appendResponseLine(`\nSaved detailed results to ${filePath}`);
+      }
+
+      if (request.params.recordToSession) {
+        const recordedScriptIndex =
+          selectedScriptIndex !== undefined
+            ? selectedScriptIndex
+            : Math.max(0, scripts.length - 1);
+        const recorded = results[recordedScriptIndex];
+        context.appendEditChange(
+          {
+            type: 'insert_js_preview',
+            pageId,
+            createdAt: Date.now(),
+            description: `JS Preview: [${scripts.length} variants]`,
+            targetFilePath: request.params.targetFilePath,
+            payload: {
+              selectedScriptIndex: recordedScriptIndex,
+              jsText: recorded?.jsText,
+              results: results.map(r => ({
+                jsText: r.jsText,
+                patchId: r.patchId,
+              })),
+              autoRollback,
+            },
+          },
+          {sessionId: request.params.editSessionId, autoCreate: true},
+        );
+      }
+    } catch (error) {
+      // Restore viewport on error
+      if (originalViewport) {
+        try {
+          await page.setViewport(originalViewport);
+        } catch (_e) {
           // Ignore viewport restoration errors
         }
       }
@@ -663,6 +1329,20 @@ export const manipulateDom = defineTool({
       .string()
       .optional()
       .describe('Optional human description for the patch registry.'),
+
+    // Optional change journaling (buffer edits during interactive sessions; commit/export later).
+    recordToSession: zod
+      .boolean()
+      .optional()
+      .describe(
+        'If true, record this change into an edit session journal so it can be exported/committed later (useful to keep live iteration fast and delay filesystem writes).',
+      ),
+    editSessionId: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).',
+      ),
   },
   handler: async (request, response, context) => {
     const page = context.getSelectedPage();
@@ -720,7 +1400,23 @@ export const manipulateDom = defineTool({
     const patchId = requestedPatchId ?? context.createPatchId('dom-manipulate');
 
     // Execute DOM manipulations
-    const result = await page.evaluate(
+    type DomManipulationOpResult = {
+      selector: string;
+      found: boolean;
+      action: string;
+      success?: boolean;
+      message?: string;
+      elementIndex?: number;
+    };
+    type DomManipulationEvalResult = {
+      patchId: string;
+      success: boolean;
+      operations: DomManipulationOpResult[];
+      executedOperations: unknown[];
+      error?: string;
+    };
+
+    const result: DomManipulationEvalResult = await page.evaluate(
       ({operations, patchId, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE}) => {
         const results = [];
         const executedOperations = [];
@@ -845,16 +1541,32 @@ export const manipulateDom = defineTool({
         createdAt: Date.now(),
         description: description || `DOM manipulation: ${domOperations.map(op => `${op.action} on ${op.selector}`).join(', ')}`,
       });
+
+      if (request.params.recordToSession) {
+        context.appendEditChange(
+          {
+            type: 'manipulate_dom',
+            pageId,
+            createdAt: Date.now(),
+            patchId,
+            description: description || `DOM manipulation: ${domOperations.map(op => `${op.action} on ${op.selector}`).join(', ')}`,
+            payload: {
+              operations: domOperations,
+            },
+          },
+          {sessionId: request.params.editSessionId, autoCreate: true},
+        );
+      }
     }
 
     // Format response
-    const successfulOps = result.operations.filter((op: any) => op.success).length;
+    const successfulOps = result.operations.filter(op => op.success === true).length;
     const totalOps = result.operations.length;
 
     response.appendResponseLine(`DOM manipulation completed: ${successfulOps}/${totalOps} operations successful`);
 
-    if (result.operations.some((op: any) => !op.found)) {
-      const notFound = result.operations.filter((op: any) => !op.found);
+    if (result.operations.some(op => op.found === false)) {
+      const notFound = result.operations.filter(op => op.found === false);
       response.appendResponseLine(`\n⚠️  Warning: ${notFound.length} selector(s) matched no elements:`);
       for (const op of notFound) {
         response.appendResponseLine(`  - "${op.selector}"`);
@@ -896,6 +1608,18 @@ export const rollbackAll = defineTool({
       .describe(
         'If true, only clears the server-side registry for the current page without touching the DOM.',
       ),
+
+    // Optional change journaling.
+    recordToSession: zod
+      .boolean()
+      .optional()
+      .describe('If true, record this rollback-all action into an edit session journal.'),
+    editSessionId: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).',
+      ),
   },
   handler: async (request, response, context) => {
     const page = context.getSelectedPage();
@@ -921,6 +1645,23 @@ export const rollbackAll = defineTool({
 
     const cleared = context.clearPatches({pageId}).map(p => p.patchId);
     const all = unique([...removedFromDom, ...cleared]);
+
+    if (request.params.recordToSession) {
+      context.appendEditChange(
+        {
+          type: 'rollback_all',
+          pageId,
+          createdAt: Date.now(),
+          payload: {
+            includeRegistryOnly: request.params.includeRegistryOnly ?? false,
+            removedPatchIds: all,
+            removedFromDomPatchIds: removedFromDom,
+            clearedRegistryPatchIds: cleared,
+          },
+        },
+        {sessionId: request.params.editSessionId, autoCreate: true},
+      );
+    }
 
     response.appendResponseLine('```json');
     response.appendResponseLine(

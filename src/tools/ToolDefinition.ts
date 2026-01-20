@@ -4,7 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {TextSnapshotNode, GeolocationOptions, PatchRecord} from '../McpContext.js';
+import type {
+  TextSnapshotNode,
+  GeolocationOptions,
+  PatchRecord,
+  EditChangeRecord,
+  EditSession,
+  EditSessionSummary,
+} from '../McpContext.js';
 import {zod} from '../third_party/index.js';
 import type {Dialog, ElementHandle, Page} from '../third_party/index.js';
 import type {TraceResult} from '../trace-processing/parse.js';
@@ -132,6 +139,18 @@ export type Context = Readonly<{
   unregisterPatch(patchId: string): void;
   listPatches(options?: {pageId?: number}): PatchRecord[];
   clearPatches(options?: {pageId?: number}): PatchRecord[];
+
+  // Edit session / change journal (for buffering live-in-Chromium edits and committing later).
+  createEditSession(options?: {label?: string; setActive?: boolean}): EditSession;
+  setActiveEditSession(sessionId: string | null): void;
+  getActiveEditSessionId(): string | null;
+  listEditSessions(): EditSessionSummary[];
+  getEditSession(sessionId: string): EditSession;
+  clearEditSession(sessionId: string): EditSession | undefined;
+  appendEditChange(
+    change: Omit<EditChangeRecord, 'changeId'> & {changeId?: string},
+    options?: {sessionId?: string; autoCreate?: boolean},
+  ): {sessionId: string; changeId: string} | null;
 }>;
 
 export function defineTool<Schema extends zod.ZodRawShape>(
