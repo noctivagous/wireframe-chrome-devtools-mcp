@@ -26,30 +26,61 @@ These tools excel at detecting layout problems that are difficult to identify th
 Beyond wireframe-only analysis, the long-term goal is provide a **progressive “debugging → editing → refactoring” spectrum** that keeps the feedback loop fast (see changes instantly in Chromium), allowing you to choose which functions and overall process you need. You may want to just use a few tools to fix a problem, or refactor an entire codebase in the browser. The project should allow you to “graduate” changes back into the codebase as clean diffs when you’re ready.
 
 - **Level 0 — Pure debugging/preview (no repo writes)**: Make temporary CSS/JS/DOM changes in-browser, capture evidence (wireframes/snapshots), and rollback by default.
-- **Level 1 — Journal + export (still no repo writes)**: Record the exact sequence of live edits into an edit session, then export/share it as a reproducible change log + evidence bundle.
+- **Level 1 — Journal + export (still no repo writes)**: Record the exact sequence of live edits into an edit session, then export/share it as a reproducible change log (optionally as a “package folder” with a Markdown summary).
 - **Level 2 — Targeted commits (scoped diffs back to the repo)**: Select the final “chosen” edits and apply them as small, reviewable patches to specific files—without forcing a full refactor workflow.
 - **Level 3 — Deep refactors (multi-file, clean diffs)**: Opt-in refactor mode where you can iterate/verify in-browser and then generate/apply a structured, conflict-aware refactor plan across many files.
 
 This is aimed at reducing the friction of “edit files → reload → re-check layout/behavior” by enabling rapid in-browser iteration first, then turning the final, validated changes into minimal, reviewable filesystem diffs.
 
 
+From one perspective, the web browser is a JIT code execution environment carrying a very large
+set of components and APIs that the JIT JavaScript code can access. It's just 
+that people are all writing code for this JIT environment outside of it, 
+saving changes to disk before loading and reloading them in the web browser.  
+The world is not harnessing the JIT conditions available for the software development phase
+by using the web browser as the place where software is assembled.
+The software development and code generation can take place inside the JIT environment,
+especially with AI, as long as there is a bridge back to the file system
+or AI code editor that stores the files.  
+
+To accommodate existing processes, the MCP server tools will not just become a place for live
+editing and software development inside the browser before the products
+of that effort are committed and saved to disk.  The wireframe-chromedevtools
+MCP server can serve the needs of present-day, conventional work that begins on
+the file system, allowing users to utilize individual mcp tools like wireframe_snapshot
+and svg_snapshot that can fix layout issues in a web page, previewing them live before
+applying the fixes.  Going up a level is watching the AI construct a page, 
+gui components, and and write sections of the app while the software developer is
+also workgin in the code editor. The level above this is a future live chat
+window placed inside the browser produced by the mcp server and allows 
+the user to make changes inside web the page by chatting there.  Eventually,
+going along with this will be the ability of the AI to seek out
+resources, like images and fonts, which means it will make 
+software development happen inside the web browser window
+that adds external libraries on the fly.  Then when the user approves
+of the current session, all changes can be committed from what is 
+shown in the web browser to the filesystem and the chat session
+ended.
 
 ### Additional Debugging Tools
 
 This branch includes several advanced debugging and development tools not present in the base `chrome-devtools-mcp`:
 
-#### **Edit Session Management** (7 tools)
+#### **Edit Session Management** (9 tools)
 Interactive workflow tools for buffering live browser edits during experimentation, with optional filesystem commit:
 
 - **Example prompts:**
   - “Live-edit this page: add a small UI control panel (toggle + slider) that changes the layout live, record the final version to an edit session, then roll the chosen CSS/JS into files via `commit_edit_session_to_files`.”
 
-- Typical usage is: `begin_edit_session` → run one or more tools with `recordToSession: true` → review via `get_edit_session` → finish by either exporting (`export_edit_session`) or committing (`commit_edit_session_to_files`) the selected snippets, then `clear_edit_session` when done. This keeps iteration fast in Chromium and makes “write to disk” an explicit end-of-session step.
+- Typical usage is: `begin_edit_session` → run one or more tools with `recordToSession: true` → review via `get_edit_session` → finish by exporting (`export_edit_session` / `export_edit_session_package`) and/or summarizing (`summarize_edit_session`), or committing (`commit_edit_session_to_files`) the selected snippets, then `clear_edit_session` when done. This keeps iteration fast in Chromium and makes “write to disk” an explicit end-of-session step.
 
 - **`begin_edit_session`**: Start a new edit session to buffer CSS/JS changes during iteration
 - **`list_edit_sessions`** / **`get_edit_session`**: View active or specific edit sessions
 - **`set_active_edit_session`**: Switch between multiple concurrent edit sessions
+- **`capture_evidence_bundle`**: Capture an evidence bundle (wireframe JSON/SVG, snapshot, optional screenshot) and optionally record artifact paths into the active edit session
 - **`export_edit_session`**: Export session changes to JSON for later review
+- **`export_edit_session_package`**: Export a small “package folder” (session JSON + Markdown summary)
+- **`summarize_edit_session`**: Produce a human-readable Markdown summary (optionally saved to disk)
 - **`commit_edit_session_to_files`**: Commit recorded changes directly to local CSS/JS files
 - **`clear_edit_session`**: Clean up completed edit sessions
 
@@ -436,13 +467,15 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 - **Network** (2 tools)
   - [`get_network_request`](docs/tool-reference.md#get_network_request)
   - [`list_network_requests`](docs/tool-reference.md#list_network_requests)
-- **Debugging** (24 tools)
+- **Debugging** (27 tools)
   - [`analyze_js`](docs/tool-reference.md#analyze_js)
   - [`begin_edit_session`](docs/tool-reference.md#begin_edit_session)
+  - [`capture_evidence_bundle`](docs/tool-reference.md#capture_evidence_bundle)
   - [`clear_edit_session`](docs/tool-reference.md#clear_edit_session)
   - [`commit_edit_session_to_files`](docs/tool-reference.md#commit_edit_session_to_files)
   - [`evaluate_script`](docs/tool-reference.md#evaluate_script)
   - [`export_edit_session`](docs/tool-reference.md#export_edit_session)
+  - [`export_edit_session_package`](docs/tool-reference.md#export_edit_session_package)
   - [`get_console_message`](docs/tool-reference.md#get_console_message)
   - [`get_edit_session`](docs/tool-reference.md#get_edit_session)
   - [`insert_css`](docs/tool-reference.md#insert_css)
@@ -457,6 +490,7 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`rollback_all`](docs/tool-reference.md#rollback_all)
   - [`rollback_patch`](docs/tool-reference.md#rollback_patch)
   - [`set_active_edit_session`](docs/tool-reference.md#set_active_edit_session)
+  - [`summarize_edit_session`](docs/tool-reference.md#summarize_edit_session)
   - [`svg_snapshot`](docs/tool-reference.md#svg_snapshot)
   - [`take_screenshot`](docs/tool-reference.md#take_screenshot)
   - [`take_snapshot`](docs/tool-reference.md#take_snapshot)
