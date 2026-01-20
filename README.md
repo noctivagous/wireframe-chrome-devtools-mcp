@@ -2,20 +2,90 @@
 
 
 
-`wireframe-chrome-devtools-mcp` is a branch of Google's `chrome-devtools-mcp` that lets your coding agent (such as Gemini, Claude, Cursor or Copilot) control and inspect a live Chrome browser. It acts as a Model-Context-Protocol
-(MCP) server, giving your AI coding assistant access to the full power of
-Chrome DevTools for reliable automation, in-depth debugging, and performance analysis.
+`wireframe-chrome-devtools-mcp` is a branch of Google's `chrome-devtools-mcp` (that lets your coding agent (such as Gemini, Claude, Cursor or Copilot) control and inspect a live Chrome browser.) It acts as a Model-Context-Protocol
+(MCP) server, giving your AI coding assistant access to the full power of Chrome DevTools for reliable automation, in-depth debugging, and performance analysis.
 
-## Branch Focus: Wireframe Debugging Tools
 
-This branch specializes in advanced layout debugging capabilities through dedicated wireframe tools. Unlike traditional screenshots, which require complex image processing to detect overlaps, gaps, and layout issues, our wireframe tools provide precise structural analysis directly from the browser's rendering engine.
+## Beginning Branch Focus: Wireframe Debugging Tools
+
+First, this branch specializes in advanced layout debugging capabilities through dedicated wireframe tools. Unlike traditional screenshots, which require complex image processing to detect overlaps, gaps, and layout issues, our wireframe tools provide precise structural analysis directly from the browser's rendering engine.
 
 ### Key Wireframe Features
 
 - **`wireframe_snapshot`**: Captures compact, deterministic wireframe data for overlap/gap analysis
 - **`svg_snapshot`**: Generates visual SVG wireframes with layout debugging overlays
 
-These tools excel at detecting layout problems that are difficult to identify through image processing of regular screenshots. Other tools in this branch are included experimentally and may be subject to change.
+- **Example prompt:**
+  - “Use `svg_snapshot` and `wireframe_snapshot` for the main content area and fix what’s overlapping or overflowing.”
+
+
+These tools excel at detecting layout problems that are difficult to identify through image processing of regular screenshots.
+
+### Goals of The Branch Beyond Wireframe Features
+
+Beyond wireframe-only analysis, the long-term goal is provide a **progressive “debugging → editing → refactoring” spectrum** that keeps the feedback loop fast (see changes instantly in Chromium), allowing you to choose which functions and overall process you need. You may want to just use a few tools to fix a problem, or refactor an entire codebase in the browser. The project should allow you to “graduate” changes back into the codebase as clean diffs when you’re ready.
+
+- **Level 0 — Pure debugging/preview (no repo writes)**: Make temporary CSS/JS/DOM changes in-browser, capture evidence (wireframes/snapshots), and rollback by default.
+- **Level 1 — Journal + export (still no repo writes)**: Record the exact sequence of live edits into an edit session, then export/share it as a reproducible change log + evidence bundle.
+- **Level 2 — Targeted commits (scoped diffs back to the repo)**: Select the final “chosen” edits and apply them as small, reviewable patches to specific files—without forcing a full refactor workflow.
+- **Level 3 — Deep refactors (multi-file, clean diffs)**: Opt-in refactor mode where you can iterate/verify in-browser and then generate/apply a structured, conflict-aware refactor plan across many files.
+
+This is aimed at reducing the friction of “edit files → reload → re-check layout/behavior” by enabling rapid in-browser iteration first, then turning the final, validated changes into minimal, reviewable filesystem diffs.
+
+
+
+### Additional Debugging Tools
+
+This branch includes several advanced debugging and development tools not present in the base `chrome-devtools-mcp`:
+
+#### **Edit Session Management** (7 tools)
+Interactive workflow tools for buffering live browser edits during experimentation, with optional filesystem commit:
+
+- **Example prompts:**
+  - “Live-edit this page: add a small UI control panel (toggle + slider) that changes the layout live, record the final version to an edit session, then roll the chosen CSS/JS into files via `commit_edit_session_to_files`.”
+
+- Typical usage is: `begin_edit_session` → run one or more tools with `recordToSession: true` → review via `get_edit_session` → finish by either exporting (`export_edit_session`) or committing (`commit_edit_session_to_files`) the selected snippets, then `clear_edit_session` when done. This keeps iteration fast in Chromium and makes “write to disk” an explicit end-of-session step.
+
+- **`begin_edit_session`**: Start a new edit session to buffer CSS/JS changes during iteration
+- **`list_edit_sessions`** / **`get_edit_session`**: View active or specific edit sessions
+- **`set_active_edit_session`**: Switch between multiple concurrent edit sessions
+- **`export_edit_session`**: Export session changes to JSON for later review
+- **`commit_edit_session_to_files`**: Commit recorded changes directly to local CSS/JS files
+- **`clear_edit_session`**: Clean up completed edit sessions
+
+#### **DOM Manipulation** (6 tools)
+Live CSS and JavaScript injection with rollback capabilities:
+
+- **Example prompts:**
+  - “Preview three `gap` values for this grid and show me wireframe evidence for each (A/B test).”
+  - “Inject temporary CSS to outline all clickable elements, then roll it back.”
+  - “Insert a small script to label every `article` with its index so I can debug ordering.”
+  - “Fix this specific overlap: the header is covering the first card. Identify the overlapping elements, preview 2–3 candidate fixes (padding-top vs sticky offset vs z-index), and keep the best one.”
+  - “Prototype a ‘Settings’ button and a floating panel UI directly on this page (DOM + CSS + minimal JS), then export/commit the result when it looks right.”
+
+- These tools are best used as a safe “what if?” loop: preview a change, capture evidence (`svg_snapshot` / `wireframe_snapshot`), and either roll it back immediately (default for preview tools) or keep it applied and later `rollback_patch`/`rollback_all`. Example uses include A/B testing spacing/typography values, temporarily adding debug outlines, or injecting a small script to annotate the DOM.
+
+- **`insert_css`** / **`insert_js`**: Inject CSS or JavaScript with patch tracking for easy rollback
+- **`insert_css_preview`** / **`insert_js_preview`**: Test multiple CSS/JS variants with automatic visual feedback and rollback
+- **`manipulate_dom`**: Perform DOM operations (styles, classes, HTML insertion/removal) with batch support
+- **`rollback_patch`** / **`rollback_all`**: Selective or complete rollback of injected changes
+
+#### **State Inspection** (2 tools)
+Advanced inspection of browser state and application internals:
+
+- **Example prompts:**
+  - “Inspect `localStorage` for auth/session keys and show me anything token-like.”
+  - “Inspect React component props/state for the feed container and tell me what drives its rendering.”
+  - “Find suspicious globals on `window` (debug flags, feature toggles) and report their values.”
+
+- A common workflow is: use `inspect_state` to find the relevant state (e.g. a token in `localStorage`, a suspicious global, or React props/state on a component), then use `evaluate_script` / `analyze_js` to validate hypotheses and narrow down where a bug or performance issue is coming from.
+
+- **`inspect_state`**: Examine browser storage, global variables, and framework component state (React, Vue, Angular, Svelte)
+- **`analyze_js`**: Static analysis of JavaScript code with performance and security insights
+
+These additional tools enable powerful interactive debugging workflows, allowing you to experiment with CSS/JS changes in the live browser while maintaining full control over when and how changes are committed to your codebase.
+
+
 
 ## [Tool reference](./docs/tool-reference.md) | [Changelog](./CHANGELOG.md) | [Contributing](./CONTRIBUTING.md) | [Troubleshooting](./docs/troubleshooting.md) | [Design Principles](./docs/design-principles.md)
 
