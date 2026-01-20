@@ -1,0 +1,56 @@
+Reflow Plain Text To Do
+
+- issue: sometimes words are conjoined (the space
+between them deleted) after reflow.
+
+- modes: absolute cutoff flow feature, edge-protruding,
+justified (hyphenated cutoffs), justified (adds spaces). 
+for edge-protruding: flow width number as number with 
+tolerance level added instead of absolute
+cutoff.  So,  if the tolerance is 5 and the
+char. width is 40, it will allow words that
+fit inside 45 characters.  so if there is a word
+that is 5 char long it will be allowed but
+1 + space + 3 char will be taken to the next line.
+
+- slider for char. width sits on text area, knob is
+triangle pointing downward, and point of triangle
+lines up with right margin.
+
+- text reflowed as soon as it is pasted in.
+
+- text reflowed at end of slider move event.
+
+- Feature: "left margin" slider:  (default: 0 char.)
+
+- Feature: "Frame": all edges unicode blocks with character margin.
+Left column of solid blocks.  inner margin: 1 char. (default)
+frame type: [solid blocks, singe line, double line]
+
+- Feature: Right and left edge gradients (either side) 
+using unicode blocks. gap: 1 character (default).
+left margin from edge gradient: 1 char. default.
+
+---
+
+
+
+ - operation-stack-based, so that the raw, original text is
+ stored separately and the operations are executed one after another.
+ it makes it so that multiple changes can be experimented with.
+
+ - make margins not a slider control but sliding controls at the
+ top of the text area in a separate canvas control aligned with it,
+ with combined rule.  it has left and right margin lines and they
+ draw them inside the text area.
+
+ - feature (for justified): 
+ block shadow: [grayscale level] [depth] [direction] [distance from text]
+
+ - feature (for justified):
+ corner brackets: [topleft [], topright [], bottomright [], bottomleft [] ]
+ style: [cross | right-angle]
+ distance from text: [1 def.]
+ 
+ - left margin solid block. [width: 1 - 10 char.]  [grayscale level]
+   

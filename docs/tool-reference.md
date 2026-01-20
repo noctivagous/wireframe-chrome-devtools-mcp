@@ -299,6 +299,11 @@
 
 **Description:** Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel.
 
+**Guidance:**
+
+- **Saving request/response bodies to disk**: Use `requestFilePath` and `responseFilePath` to save large request/response bodies directly to files instead of returning them inline. This is useful for binary content, large JSON payloads, or when you want to preserve exact formatting.
+- **Currently selected request**: When `reqid` is omitted, returns details for whichever request is currently highlighted/selected in the DevTools Network panel. If nothing is selected, the tool returns a short message instead of a request.
+
 **Parameters:**
 
 - **reqid** (number) _(optional)_: The reqid of the network request. If omitted returns the currently selected request in the DevTools Network panel.
@@ -384,6 +389,11 @@ Example with arguments: `(el) => {
 
 **Description:** Insert CSS changes and automatically generate visual wireframe feedback wrapped in JSON. Supports testing multiple values, responsive breakpoints, and before/after comparisons.
 
+**Guidance:**
+
+- **Auto-rollback by default**: Changes are automatically rolled back after capturing snapshots (`autoRollback` defaults to `true`), making this safe for temporary CSS experimentation without affecting the live page state.
+- **Multiple values for A/B testing**: Pass an array of different values to `values` (e.g., `["16px", "24px", "32px"]`) to quickly compare how different CSS values affect layout, with each value generating a separate wireframe snapshot for comparison.
+
 **Parameters:**
 
 - **property** (string) **(required)**: CSS property to modify (e.g., "margin-bottom", "gap", "padding").
@@ -415,6 +425,20 @@ Example with arguments: `(el) => {
 
 **Description:** Inspect application state including browser storage, global variables, and framework-specific component state.
 Supports filtering by patterns and framework-specific inspection for React, Vue, Angular, and Svelte components.
+
+**Examples:**
+
+- **Browser storage**: `targets: ["localStorage", "sessionStorage"]`, `filter: "user*"`, `maxItems: 50`
+- **Global variables**: `targets: ["global-variables"]`, `filter: "window.app*"`, `includeValues: true`
+- **React components**: `targets: ["framework-components"]`, `framework: "react"`, `componentSelector: ".todo-list"`, `inspect: ["props", "state"]`
+- **Vue components**: `targets: ["framework-components"]`, `framework: "vue"`, `componentSelector: "[data-vue]"`, `inspect: ["data", "computed"]`
+- **Angular components**: `targets: ["framework-components"]`, `framework: "angular"`, `componentSelector: "app-todo-list"`, `inspect: ["props", "methods"]`
+- **Svelte components**: `targets: ["framework-components"]`, `framework: "svelte"`, `componentSelector: ".svelte-component"`, `inspect: ["props", "state"]`
+
+**Guidance:**
+
+- **componentSelector expectations**: This tool runs `document.querySelectorAll(componentSelector)` and inspects the matched elements. For React it looks for React fiber fields on the element (`__reactFiber$...`). For Angular it checks for `__ngContext__`. For Vue it checks for `__vue__` (Vue 2-style). For Svelte it checks for element keys that start with `$$`. Results are best-effort and may vary by framework version/build mode.
+- **Typical filter patterns**: `filter` supports `*` (any substring) and `?` (single character), and is applied case-insensitively to storage keys and global variable names (not framework component inspection). Examples: `"user*"`, `"*token*"`, `"app.*"`, `"debug?flag"`.
 
 **Parameters:**
 
@@ -501,6 +525,7 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 
 - **background** (enum: "transparent", "white", "black") _(optional)_: Background [`fill`](#fill) for the SVG canvas.
 - **compareWith** (string) _(optional)_: Optional previous wireframe JSON (from [`wireframe_snapshot`](#wireframe_snapshot)) to compare against. When provided with highlightChanged=true, changed rects are highlighted.
+- **computedStylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Computed style whitelist preset used when computedStyleWhitelist is not provided.
 - **computedStyleWhitelist** (array) _(optional)_: Override computed style whitelist. If provided, stylePreset is ignored.
 - **coordinateSpace** (enum: "viewport", "document") _(optional)_: Coordinate space for rendering: viewport (scroll-adjusted) or document (absolute page coordinates, viewBox set to current viewport window).
 - **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the SVG output to instead of attaching it to the response.
@@ -508,15 +533,25 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 - **highlightChanged** (boolean) _(optional)_: If true, highlights elements whose rect changed compared to compareWith.
 - **includeComputedStyles** (boolean) _(optional)_: If true, includes a whitelist of computed styles for each element via DOMSnapshot.captureSnapshot (also used for optional diff/analysis).
 - **includeDescendants** (boolean) _(optional)_: When used with selectors, includes matching elements’ descendants as well (within scopeSelector if provided).
-- **maxElements** (integer) _(optional)_: Maximum number of elements to render (after filtering).
+- **includeLayoutAssertions** (boolean) _(optional)_: If true, adds a small derived layoutAssertions section (e.g., overflow offenders).
+- **includePseudoElements** (boolean) _(optional)_: If true, includes pseudo-element nodes (e.g. ::before/::after) when present in the DOMSnapshot.
+- **includeShadowDom** (boolean) _(optional)_: If true, attempts to include and query into open shadow roots under the scope root (best-effort).
+- **includeTextSnippets** (boolean) _(optional)_: If true, includes best-effort textSnippet fields when available in the snapshot (bounded).
+- **maxDepth** (integer) _(optional)_: Limit traversal depth (0 means only the scope root itself when scopeSelector is provided).
+- **maxElements** (integer) _(optional)_: Legacy alias for maxTotal. Prefer maxTotal.
+- **maxPerSelector** (integer) _(optional)_: When multiple selectors are provided, cap the number of matches per selector (best-effort).
+- **maxTotal** (integer) _(optional)_: Maximum number of elements to render (after filtering).
 - **scale** (number) _(optional)_: Scale factor applied to the output SVG dimensions.
 - **scopeSelector** (string) _(optional)_: Optional CSS selector that constrains results to elements within this scope element.
+- **scrollToSelector** (string) _(optional)_: Optional CSS selector to scroll into view before capture.
+- **scrollToY** (number) _(optional)_: Optional Y scroll position to set before capture (document coordinates).
 - **selectors** (array) _(optional)_: Optional CSS selectors. When provided, the snapshot is filtered to these elements (not their descendants unless includeDescendants is true).
 - **showDimensions** (boolean) _(optional)_: If true, draws width×height labels for each box.
 - **showLabels** (boolean) _(optional)_: If true, draws tag/id/class labels in the top-left of each box.
 - **showSpacing** (boolean) _(optional)_: If true, visualizes margins, padding, and gaps between elements.
 - **strokeWidth** (number) _(optional)_: Stroke width for element rectangles.
-- **stylePreset** (enum: "minimal", "standard", "debug") _(optional)_: Computed style whitelist preset used when computedStyleWhitelist is not provided.
+- **stylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Deprecated alias for computedStylePreset. Prefer computedStylePreset.
+- **textSnippetMaxLength** (integer) _(optional)_: Maximum length for textSnippet when includeTextSnippets is true.
 
 ---
 
@@ -551,16 +586,35 @@ in the DevTools Elements panel (if any).
 
 **Description:** Capture a compact, deterministic wireframe snapshot of the currently selected page using CDP DOMSnapshot.captureSnapshot. Returns element rects (and optionally a small set of computed styles) suitable for overlap/gap analysis.
 
+**Guidance:**
+
+- **selectors vs scopeSelector**: Use `selectors` to filter down to specific elements (or element groups). Use `scopeSelector` to constrain results to a subtree (descendants of a container). They can be combined: `selectors` are resolved within the `scopeSelector` root.
+- **maxTotal truncation**: `maxTotal` is applied after all filters. The snapshot is returned in a deterministic order and sets `truncated: true` when the cap is hit. If you’re debugging a component subtree, prefer narrowing with `scopeSelector` and increasing `maxTotal`.
+- **Computed styles (computedStylePreset / computedStyleWhitelist)**: These only apply when `includeComputedStyles: true`. Use `computedStylePreset: "layout"` for UI/layout debugging; use `"debug"` when you also need extra diagnostics; use `computedStyleWhitelist` for an explicit list.
+
 **Parameters:**
 
+- **compareWith** (string) _(optional)_: Optional previous wireframe JSON (from [`wireframe_snapshot`](#wireframe_snapshot)) to compare against. Adds diff metadata to the output.
+- **computedStylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Computed style whitelist preset used when computedStyleWhitelist is not provided.
 - **computedStyleWhitelist** (array) _(optional)_: Override computed style whitelist. If provided, stylePreset is ignored.
 - **coordinateSpace** (enum: "viewport", "document") _(optional)_: Coordinate space for returned rects: viewport (scroll-adjusted) or document (page coordinates).
 - **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the JSON output to instead of returning it inline.
 - **includeComputedStyles** (boolean) _(optional)_: If true, includes a whitelist of computed styles for each element via DOMSnapshot.captureSnapshot.
 - **includeDescendants** (boolean) _(optional)_: When used with selectors, includes matching elements’ descendants as well (within scopeSelector if provided).
-- **maxElements** (integer) _(optional)_: Maximum number of elements to return (after filtering).
+- **includeDiff** (boolean) _(optional)_: If true, includes diff metadata (changed/added/removed). Defaults to true when compareWith is provided.
+- **includeLayoutAssertions** (boolean) _(optional)_: If true, adds a small derived layoutAssertions section (e.g., overflow offenders).
+- **includePseudoElements** (boolean) _(optional)_: If true, includes pseudo-element nodes (e.g. ::before/::after) when present in the DOMSnapshot.
+- **includeShadowDom** (boolean) _(optional)_: If true, attempts to include and query into open shadow roots under the scope root (best-effort).
+- **includeTextSnippets** (boolean) _(optional)_: If true, includes best-effort textSnippet fields when available in the snapshot (bounded).
+- **maxDepth** (integer) _(optional)_: Limit traversal depth (0 means only the scope root itself when scopeSelector is provided).
+- **maxElements** (integer) _(optional)_: Legacy alias for maxTotal. Prefer maxTotal.
+- **maxPerSelector** (integer) _(optional)_: When multiple selectors are provided, cap the number of matches per selector (best-effort).
+- **maxTotal** (integer) _(optional)_: Maximum number of elements to return (after filtering).
 - **scopeSelector** (string) _(optional)_: Optional CSS selector that constrains results to elements within this scope element.
+- **scrollToSelector** (string) _(optional)_: Optional CSS selector to scroll into view before capture.
+- **scrollToY** (number) _(optional)_: Optional Y scroll position to set before capture (document coordinates).
 - **selectors** (array) _(optional)_: Optional CSS selectors. When provided, the snapshot is filtered to these elements (not their descendants unless includeDescendants is true).
-- **stylePreset** (enum: "minimal", "standard", "debug") _(optional)_: Computed style whitelist preset used when computedStyleWhitelist is not provided.
+- **stylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Deprecated alias for computedStylePreset. Prefer computedStylePreset.
+- **textSnippetMaxLength** (integer) _(optional)_: Maximum length for textSnippet when includeTextSnippets is true.
 
 ---

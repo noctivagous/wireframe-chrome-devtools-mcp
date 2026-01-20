@@ -22,7 +22,17 @@ type FrameworkInspectType = zod.infer<typeof FrameworkInspectTypeSchema>;
 export const inspectState = defineTool({
   name: 'inspect_state',
   description: `Inspect application state including browser storage, global variables, and framework-specific component state.
-Supports filtering by patterns and framework-specific inspection for React, Vue, Angular, and Svelte components.`,
+Supports filtering by patterns and framework-specific inspection for React, Vue, Angular, and Svelte components.\n\n` +
+    `**Examples:**\n\n` +
+    `- **Browser storage**: \`targets: ["localStorage", "sessionStorage"]\`, \`filter: "user*"\`, \`maxItems: 50\`\n` +
+    `- **Global variables**: \`targets: ["global-variables"]\`, \`filter: "window.app*"\`, \`includeValues: true\`\n` +
+    `- **React components**: \`targets: ["framework-components"]\`, \`framework: "react"\`, \`componentSelector: ".todo-list"\`, \`inspect: ["props", "state"]\`\n` +
+    `- **Vue components**: \`targets: ["framework-components"]\`, \`framework: "vue"\`, \`componentSelector: "[data-vue]"\`, \`inspect: ["data", "computed"]\`\n` +
+    `- **Angular components**: \`targets: ["framework-components"]\`, \`framework: "angular"\`, \`componentSelector: "app-todo-list"\`, \`inspect: ["props", "methods"]\`\n` +
+    `- **Svelte components**: \`targets: ["framework-components"]\`, \`framework: "svelte"\`, \`componentSelector: ".svelte-component"\`, \`inspect: ["props", "state"]\`\n\n` +
+    `**Guidance:**\n\n` +
+    `- **componentSelector expectations**: This tool runs \`document.querySelectorAll(componentSelector)\` and inspects the matched elements. For React it looks for React fiber fields on the element (\`__reactFiber$...\`). For Angular it checks for \`__ngContext__\`. For Vue it checks for \`__vue__\` (Vue 2-style). For Svelte it checks for element keys that start with \`$$\`. Results are best-effort and may vary by framework version/build mode.\n` +
+    `- **Typical filter patterns**: \`filter\` supports \`*\` (any substring) and \`?\` (single character), and is applied case-insensitively to storage keys and global variable names (not framework component inspection). Examples: \`"user*"\`, \`"*token*"\`, \`"app.*"\`, \`"debug?flag"\`.`,
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: true,

@@ -271,7 +271,10 @@ export const rollbackPatch = defineTool({
 export const insertCssPreview = defineTool({
   name: 'insert_css_preview',
   description:
-    'Insert CSS changes and automatically generate visual wireframe feedback wrapped in JSON. Supports testing multiple values, responsive breakpoints, and before/after comparisons.',
+    'Insert CSS changes and automatically generate visual wireframe feedback wrapped in JSON. Supports testing multiple values, responsive breakpoints, and before/after comparisons.\n\n' +
+    '**Guidance:**\n\n' +
+    '- **Auto-rollback by default**: Changes are automatically rolled back after capturing snapshots (`autoRollback` defaults to `true`), making this safe for temporary CSS experimentation without affecting the live page state.\n' +
+    '- **Multiple values for A/B testing**: Pass an array of different values to `values` (e.g., `["16px", "24px", "32px"]`) to quickly compare how different CSS values affect layout, with each value generating a separate wireframe snapshot for comparison.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,

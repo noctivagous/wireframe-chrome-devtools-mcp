@@ -88,7 +88,10 @@ export const listNetworkRequests = defineTool({
 
 export const getNetworkRequest = defineTool({
   name: 'get_network_request',
-  description: `Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel.`,
+  description: `Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel.\n\n` +
+    `**Guidance:**\n\n` +
+    `- **Saving request/response bodies to disk**: Use \`requestFilePath\` and \`responseFilePath\` to save large request/response bodies directly to files instead of returning them inline. This is useful for binary content, large JSON payloads, or when you want to preserve exact formatting.\n` +
+    `- **Currently selected request**: When \`reqid\` is omitted, returns details for whichever request is currently highlighted/selected in the DevTools Network panel. If nothing is selected, the tool returns a short message instead of a request.`,
   annotations: {
     category: ToolCategory.NETWORK,
     readOnlyHint: false,

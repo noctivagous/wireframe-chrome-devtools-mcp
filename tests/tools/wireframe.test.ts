@@ -25,7 +25,7 @@ describe('wireframe', () => {
         await wireframeSnapshot.handler({params: {}}, response, context);
 
         const text = response.responseLines.join('\n');
-        assert.ok(text.includes('"schemaVersion": 1'));
+        assert.ok(text.includes('"schemaVersion": 2'));
         assert.ok(text.includes('"elements"'));
       });
     });

@@ -43,6 +43,13 @@ This document outlines proposed enhancements to the current Wireframe Chrome Dev
 - [ ] Integration with TodoTracker-specific workflows
 - [ ] Performance optimization of the tools themselves
 
+**Phase 5: Interactive Development Environment - Live Chat Integration**
+- [ ] `inject_chatbox` - Insert interactive chat interface into page
+- [ ] `chat_assisted_editing` - AI-guided page modifications via chat
+- [ ] Real-time visual feedback during chat-driven changes
+- [ ] Contextual tool suggestions based on page elements
+- [ ] Chat history and change tracking for collaborative development
+
 ## Development Roadmap & Priority Plan
 
 ### Phase 1: Foundation - Visual Wireframe Generation (`svg_snapshot`)
@@ -100,6 +107,21 @@ This document outlines proposed enhancements to the current Wireframe Chrome Dev
 
 **Expected Outcome:** Seamless, efficient development workflows
 
+### Phase 5: Interactive Development Environment - Live Chat Integration
+**Priority: MEDIUM** - Revolutionary workflow enhancement
+
+**Why this phase?** Takes tool integration to the next level by embedding AI assistance directly into the development environment.
+
+**Implementation Steps:**
+1. `inject_chatbox` - Create and inject an interactive chat interface into the target page
+2. `chat_assisted_editing` - AI interprets natural language requests and executes appropriate tools
+3. Real-time visual feedback integration with existing wireframe tools
+4. Contextual tool suggestions based on hovered/focused page elements
+5. Chat history persistence and collaborative development features
+6. Multi-modal input support (text, voice, screen selection)
+
+**Expected Outcome:** Conversational development - describe changes in plain English and see them applied instantly
+
 ### Success Metrics:
 - **Time Savings**: CSS changes prototyped in seconds instead of minutes
 - **Visual Accuracy**: No more guessing about spacing/layout
@@ -110,6 +132,7 @@ This document outlines proposed enhancements to the current Wireframe Chrome Dev
 - Phase 2 depends on Phase 1 completion
 - Phase 3 can be developed in parallel with Phase 1
 - Phase 4 depends on Phase 1-3 completion
+- Phase 5 depends on Phase 1-3 completion (leverages all existing tools)
 
 ## 1. CSS Injection Tool
 
@@ -576,6 +599,191 @@ inspect_state({
   inspect: ["props", "state", "hooks"]
 })
 ```
+
+## 7. Interactive Development Environment - Live Chat Integration (Phase 5)
+
+### Vision: Conversational Web Development
+
+**The ultimate workflow enhancement**: Instead of switching between browser, dev tools, and chat interface, embed AI assistance directly into the page being developed. Users can describe changes conversationally and see them applied in real-time.
+
+### Core Tools
+
+#### 1. Chatbox Injection Tool (`inject_chatbox`)
+
+**Purpose**: Insert an interactive chat interface directly into the web page being developed.
+
+```javascript
+inject_chatbox({
+  position: "bottom-right|floating|sidebar",  // Where to place the chatbox
+  theme: "auto|light|dark",                   // Visual theme
+  size: "compact|normal|expanded",            // Chatbox dimensions
+  features: ["voice-input", "element-picker", "history"], // Enabled features
+  persist: true                               // Keep chatbox across page navigations
+})
+```
+
+**What it injects:**
+- A floating chat widget with text input
+- Voice input capabilities
+- Element picker tool (click elements to reference them in chat)
+- Mini wireframe viewer for visual context
+- Chat history with undo/redo capabilities
+
+#### 2. Chat-Assisted Editing Tool (`chat_assisted_editing`)
+
+**Purpose**: AI interprets natural language requests and executes appropriate development tools automatically.
+
+**Example Workflow:**
+
+```javascript
+// User types in chatbox: "Make the todo items have more spacing between them"
+chat_assisted_editing({
+  request: "Make the todo items have more spacing between them",
+  context: {
+    selectedElement: ".todo-item",  // From element picker
+    currentSpacing: "8px"           // Auto-detected from computed styles
+  },
+  autoExecute: true,  // Automatically apply changes
+  preview: true       // Show visual preview before applying
+})
+```
+
+**AI Response Flow:**
+1. **Parse Request**: Understand user's intent ("increase spacing between todo items")
+2. **Identify Elements**: Use wireframe_snapshot to find relevant elements
+3. **Suggest Changes**: Propose CSS modifications using insert_css_preview
+4. **Show Preview**: Display visual diff using svg_snapshot
+5. **Apply Changes**: Execute manipulate_dom or insert_css with rollback capability
+
+### Advanced Features
+
+#### Contextual Tool Suggestions
+
+The chatbox analyzes the current page state and suggests relevant tools:
+
+```javascript
+// When hovering over a todo item:
+contextual_suggestions({
+  element: ".todo-item",
+  suggestions: [
+    "Change background color",
+    "Add hover effects",
+    "Modify spacing",
+    "Add animation"
+  ]
+})
+```
+
+#### Multi-Modal Input
+
+**Text Input:**
+```
+"Add a red border to all completed todos"
+```
+
+**Voice Input:**
+```
+"Make the header bigger and center it"
+```
+
+**Element Selection + Text:**
+- Click on an element → "Make this element blue"
+- Select multiple elements → "Align these to the left"
+
+#### Real-Time Collaboration
+
+**Chat History & Undo:**
+```javascript
+chat_history({
+  action: "undo",  // Undo last change
+  steps: 3         // Undo last 3 changes
+})
+
+chat_history({
+  export: true,    // Export chat session for sharing
+  format: "markdown|json"
+})
+```
+
+### Integration with Existing Tools
+
+**Seamless Tool Chaining:**
+1. User requests: *"Add more space between the todo sections"*
+2. AI executes: `wireframe_snapshot()` to analyze current layout
+3. AI executes: `insert_css_preview()` with multiple spacing options
+4. AI shows: `svg_snapshot()` comparison of before/after
+5. User approves: Changes applied permanently
+
+**Visual Feedback Integration:**
+- Chat responses include embedded SVG wireframes
+- Real-time updates as changes are applied
+- Change highlighting and measurement overlays
+
+### Example Full Workflow
+
+```javascript
+// 1. Inject the chatbox
+await inject_chatbox({
+  position: "floating",
+  features: ["element-picker", "voice-input", "history"]
+});
+
+// 2. User interacts via chat:
+// "Make the todo list more visually appealing"
+
+chat_assisted_editing({
+  request: "Make the todo list more visually appealing",
+  context: await wireframe_snapshot({ scope: ".todo-list" }),
+  suggestions: [
+    "Add subtle shadows to todo items",
+    "Improve color contrast",
+    "Add smooth hover transitions",
+    "Better spacing between elements"
+  ]
+});
+
+// 3. AI executes multiple tools automatically:
+await insert_css_preview({
+  selector: ".todo-item",
+  property: "box-shadow",
+  values: ["0 2px 4px rgba(0,0,0,0.1)", "0 4px 8px rgba(0,0,0,0.15)"]
+});
+
+await insert_css_preview({
+  selector: ".todo-item:hover",
+  property: "transform",
+  values: ["translateY(-2px)", "scale(1.02)"]
+});
+
+// 4. Show results with visual feedback
+const result = await svg_snapshot({
+  compareWith: initialSnapshot,
+  highlightChanges: true,
+  showSpacing: true
+});
+```
+
+### Benefits
+
+**Revolutionary Workflow:**
+- **Conversational Development**: Describe changes in plain English
+- **Immediate Feedback**: See changes applied instantly with visual confirmation
+- **Context Awareness**: AI understands page structure and suggests relevant modifications
+- **Error Prevention**: Visual previews prevent layout mistakes
+- **Collaborative**: Share chat sessions and change histories with team members
+
+**Technical Advantages:**
+- **No Context Switching**: Development happens in one interface
+- **Visual Context**: Always see the actual page being modified
+- **Rollback Safety**: All changes tracked with easy undo
+- **Multi-Modal Input**: Support for text, voice, and visual element selection
+
+**Learning & Discovery:**
+- **Tool Discovery**: AI suggests appropriate tools based on context
+- **Best Practices**: AI can recommend accessibility and performance improvements
+- **Pattern Recognition**: Learns from user's preferences and common modifications
+
+This represents the ultimate integration of AI assistance into web development - moving from separate tools to a truly conversational development experience.
 
 ## Integration Benefits
 

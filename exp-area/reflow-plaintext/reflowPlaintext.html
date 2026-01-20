@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Text Reflower – Smart Word Wrap</title>
+<style>
+    body {
+        margin: 0;
+        padding: 20px;
+        font-family: system-ui, sans-serif;
+        background: #0d1117;
+        color: #c9d1d9;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        box-sizing: border-box;
+    }
+
+    .header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+    }
+
+    .slider-container {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: 1;
+        min-width: 260px;
+    }
+
+    .control-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 16px;
+        width: 100%;
+    }
+
+    .control-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid #30363d;
+        background: #0f1623;
+        border-radius: 10px;
+        flex: 1 1 auto;
+        min-width: 260px;
+    }
+
+    .control-group label {
+        color: #8b949e;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    select, input[type="number"] {
+        background: #161b22;
+        color: #c9d1d9;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font: inherit;
+        outline: none;
+    }
+
+    input[type="number"] {
+        width: 80px;
+    }
+
+    .checkbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        user-select: none;
+        color: #c9d1d9;
+        font-size: 0.95rem;
+    }
+
+    input[type="range"] {
+        flex: 1;
+        height: 8px;
+        background: #30363d;
+        border-radius: 4px;
+        outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        background: #58a6ff;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid #0d1117;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        background: #58a6ff;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid #0d1117;
+    }
+
+    .width-display {
+        font-weight: bold;
+        min-width: 60px;
+        text-align: center;
+        color: #58a6ff;
+    }
+
+    button {
+        padding: 10px 20px;
+        background: #238636;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+    button:hover {
+        background: #2ea043;
+    }
+
+    .editor-wrap {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 260px;
+    }
+
+    textarea {
+        height: 100%;
+        min-height: 260px;
+        resize: none;
+        padding: 16px;
+        font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+        font-size: 15px;
+        line-height: 1.45;
+        background: #161b22;
+        color: #c9d1d9;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        width: 100%;
+        box-sizing: border-box;
+        white-space: pre;
+        overflow-x: auto;
+    }
+
+    /* “Columns” slider sits on top of the textarea, with a triangle knob */
+    .overlay-slider {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        top: 8px;
+        height: 28px;
+        z-index: 3;
+        pointer-events: none; /* let clicks go to textarea, except the thumb */
+    }
+
+    .overlay-slider input[type="range"] {
+        width: 100%;
+        height: 28px;
+        background: transparent;
+        pointer-events: auto;
+    }
+
+    .overlay-slider input[type="range"]::-webkit-slider-runnable-track {
+        height: 2px;
+        background: rgba(139,148,158,0.35);
+        border-radius: 999px;
+    }
+
+    .overlay-slider input[type="range"]::-webkit-slider-thumb {
+        appearance: none;
+        width: 0;
+        height: 0;
+        margin-top: -6px; /* centers on track */
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-top: 16px solid #58a6ff;
+        cursor: pointer;
+        filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.7));
+    }
+
+    .overlay-slider input[type="range"]::-moz-range-track {
+        height: 2px;
+        background: rgba(139,148,158,0.35);
+        border-radius: 999px;
+    }
+
+    .overlay-slider input[type="range"]::-moz-range-thumb {
+        width: 0;
+        height: 0;
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-top: 16px solid #58a6ff;
+        cursor: pointer;
+    }
+
+    .margin-guide {
+        position: absolute;
+        top: 16px;
+        bottom: 16px;
+        width: 1px;
+        background: rgba(88,166,255,0.35);
+        z-index: 2;
+        pointer-events: none;
+    }
+
+    .info {
+        font-size: 0.9rem;
+        color: #8b949e;
+    }
+
+    /* GUI Display Fixes */
+    .control-group {
+        min-height: 45px;
+    }
+
+    .editor-wrap {
+        display: flex;
+    }
+
+    textarea {
+        height: auto;
+        flex: 1 1 auto;
+    }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div class="control-row">
+        <div class="control-group">
+            <label for="mode">Mode</label>
+            <select id="mode">
+                <option value="cutoff">Absolute cutoff</option>
+                <option value="edgeProtruding">Edge-protruding</option>
+                <option value="justifyHyphenCut">Justified (hyphenated cutoffs)</option>
+                <option value="justifySpaces">Justified (adds spaces)</option>
+            </select>
+
+            <label for="tolerance" title="Only used for Edge-protruding mode">Tolerance</label>
+            <input id="tolerance" type="number" min="0" max="30" value="5" />
+        </div>
+
+        <div class="control-group">
+            <label for="leftMargin">Left margin</label>
+            <input type="range" id="leftMargin" min="0" max="20" value="0">
+            <span class="width-display" id="leftMarginValue">0</span>
+
+            <span class="info" style="margin-left:auto;">Ctrl+Enter / Paste / Slider release reflows</span>
+        </div>
+
+        <div class="control-group">
+            <label for="frame">Frame</label>
+            <select id="frame">
+                <option value="none">None</option>
+                <option value="solid">Solid blocks</option>
+                <option value="single">Single line</option>
+                <option value="double">Double line</option>
+            </select>
+
+            <label for="innerPadding">Inner margin</label>
+            <input id="innerPadding" type="number" min="0" max="8" value="1" />
+
+            <label class="checkbox" title="Adds unicode gradient columns on both sides">
+                <input id="gradients" type="checkbox" />
+                Edge gradients
+            </label>
+        </div>
+
+        <div class="control-group" style="justify-content:space-between;">
+            <div class="slider-container" style="margin:0; padding:0; border:none; background:transparent; min-width: 220px;">
+                <label for="width">Columns</label>
+                <input type="range" id="width" min="20" max="120" value="80">
+                <span class="width-display" id="widthValue">80</span>
+            </div>
+            <button onclick="reflow()">Reflow Now</button>
+        </div>
+    </div>
+</div>
+
+<div class="editor-wrap">
+    <div class="overlay-slider" id="overlaySliderWrap" aria-hidden="true">
+        <input type="range" id="widthOverlay" min="20" max="120" value="80">
+    </div>
+    <div class="margin-guide" id="marginGuide"></div>
+    <textarea id="editor" spellcheck="false" placeholder="Paste or type your text here...
+You can reflow multiple times with different widths!"></textarea>
+</div>
+
+<script>
+const editor = document.getElementById('editor');
+const widthSlider = document.getElementById('width');
+const widthOverlay = document.getElementById('widthOverlay');
+const widthDisplay = document.getElementById('widthValue');
+const leftMarginSlider = document.getElementById('leftMargin');
+const leftMarginDisplay = document.getElementById('leftMarginValue');
+const modeSelect = document.getElementById('mode');
+const toleranceInput = document.getElementById('tolerance');
+const frameSelect = document.getElementById('frame');
+const innerPaddingInput = document.getElementById('innerPadding');
+const gradientsCheckbox = document.getElementById('gradients');
+const marginGuide = document.getElementById('marginGuide');
+const overlaySliderWrap = document.getElementById('overlaySliderWrap');
+
+function updateWidthDisplay() {
+    widthDisplay.textContent = widthSlider.value;
+    if (widthOverlay) widthOverlay.value = widthSlider.value;
+    updateMarginGuide();
+}
+
+function updateLeftMarginDisplay() {
+    leftMarginDisplay.textContent = leftMarginSlider.value;
+    updateMarginGuide();
+}
+
+function clampInt(value, fallback, min, max) {
+    const n = Number.parseInt(String(value), 10);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
+}
+
+function getCharWidthPx() {
+    // Measure monospace char width to place the visual right-margin guide.
+    const probe = document.createElement('span');
+    probe.textContent = '0000000000';
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    probe.style.whiteSpace = 'pre';
+    probe.style.fontFamily = getComputedStyle(editor).fontFamily;
+    probe.style.fontSize = getComputedStyle(editor).fontSize;
+    document.body.appendChild(probe);
+    const w = probe.getBoundingClientRect().width / 10;
+    document.body.removeChild(probe);
+    return w || 8;
+}
+
+let cachedCharWidthPx = null;
+function updateMarginGuide() {
+    if (!marginGuide) return;
+    if (cachedCharWidthPx == null) cachedCharWidthPx = getCharWidthPx();
+    const width = clampInt(widthSlider.value, 80, 10, 999);
+    const leftMargin = clampInt(leftMarginSlider.value, 0, 0, 999);
+    const style = getComputedStyle(editor);
+    const paddingLeft = Number.parseFloat(style.paddingLeft) || 16;
+    const x = paddingLeft + (width + leftMargin) * cachedCharWidthPx;
+    marginGuide.style.left = `${x}px`;
+
+    // Keep the overlay slider's 0-column origin aligned to the left margin.
+    // This makes the triangle knob visually line up with the right margin guide.
+    if (overlaySliderWrap) {
+        const overlayLeft = paddingLeft + (leftMargin * cachedCharWidthPx);
+        overlaySliderWrap.style.left = `${overlayLeft}px`;
+        overlaySliderWrap.style.right = `${Number.parseFloat(getComputedStyle(editor).paddingRight) || 16}px`;
+    }
+}
+
+widthSlider.addEventListener('input', updateWidthDisplay);
+widthOverlay.addEventListener('input', (e) => {
+    widthSlider.value = widthOverlay.value;
+    updateWidthDisplay();
+});
+leftMarginSlider.addEventListener('input', updateLeftMarginDisplay);
+
+updateWidthDisplay(); // init
+updateLeftMarginDisplay(); // init
+window.addEventListener('resize', () => {
+    cachedCharWidthPx = null;
+    updateMarginGuide();
+});
+
+function normalizeParagraphText(para) {
+    // Handle CRLF, and undo common line-wrap hyphenation: "con-\njoined" -> "conjoined"
+    let s = para.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    s = s.replace(/-\n(?=\S)/g, '');      // remove hyphen + newline inside a word
+    s = s.replace(/\n+/g, ' ');          // remaining line breaks become spaces
+    s = s.replace(/\s+/g, ' ').trim();   // collapse whitespace
+    return s;
+}
+
+function tokenize(content) {
+    // Regex tokenization avoids accidental empty tokens and helps prevent “conjoined words”
+    const tokens = content.match(/\S+/g);
+    return tokens ? tokens : [];
+}
+
+function wrapCutoff(words, width) {
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+        if (!line) {
+            line = w;
+            continue;
+        }
+        if (line.length + 1 + w.length <= width) {
+            line += ' ' + w;
+        } else {
+            lines.push(line);
+            line = w;
+        }
+    }
+    if (line) lines.push(line);
+    return lines;
+}
+
+function wrapEdgeProtruding(words, width, tolerance) {
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+        if (!line) {
+            line = w;
+            continue;
+        }
+        const nextLen = line.length + 1 + w.length;
+        if (nextLen <= width) {
+            line += ' ' + w;
+            continue;
+        }
+        // Allow ONE word to protrude beyond width, up to width+tolerance, then force a break.
+        if (tolerance > 0 && line.length <= width && nextLen <= width + tolerance) {
+            line += ' ' + w;
+            lines.push(line);
+            line = '';
+            continue;
+        }
+        lines.push(line);
+        line = w;
+    }
+    if (line) lines.push(line);
+    return lines;
+}
+
+function wrapHyphenCut(words, width) {
+    const lines = [];
+    let line = '';
+    const queue = [...words];
+
+    while (queue.length > 0) {
+        let w = queue.shift();
+        if (!w) continue;
+
+        if (!line) {
+            // If a single word is longer than width, hard-hyphenate it across lines.
+            while (w.length > width) {
+                const cut = Math.max(1, width - 1);
+                lines.push(w.slice(0, cut) + '-');
+                w = w.slice(cut);
+            }
+            line = w;
+            continue;
+        }
+
+        const spaceLeft = width - line.length - 1;
+        if (spaceLeft >= w.length) {
+            line += ' ' + w;
+            continue;
+        }
+
+        // Try to hyphen-cut the word to fill the line if there is room for at least "x-".
+        if (spaceLeft >= 2) {
+            const cut = Math.max(1, spaceLeft - 1);
+            lines.push(line + ' ' + w.slice(0, cut) + '-');
+            const rest = w.slice(cut);
+            line = '';
+            if (rest) queue.unshift(rest);
+            continue;
+        }
+
+        lines.push(line);
+        line = '';
+        queue.unshift(w);
+    }
+
+    if (line) lines.push(line);
+    return lines;
+}
+
+function justifyLine(line, width) {
+    if (line.length >= width) return line;
+    const parts = line.split(' ');
+    if (parts.length <= 1) return line; // can't spread
+
+    const letters = parts.reduce((sum, p) => sum + p.length, 0);
+    const gaps = parts.length - 1;
+    const neededSpaces = width - letters;
+    const base = Math.floor(neededSpaces / gaps);
+    let extra = neededSpaces % gaps;
+
+    let out = '';
+    for (let i = 0; i < parts.length; i++) {
+        out += parts[i];
+        if (i < gaps) {
+            out += ' '.repeat(base + (extra > 0 ? 1 : 0));
+            if (extra > 0) extra -= 1;
+        }
+    }
+    return out;
+}
+
+function applyLeftMargin(lines, leftMargin) {
+    if (leftMargin <= 0) return lines;
+    const pad = ' '.repeat(leftMargin);
+    return lines.map(l => pad + l);
+}
+
+function applyEdgeGradients(lines, { enabled, gap = 1, leftOffset = 1, gradientWidth = 4 }) {
+    if (!enabled) return lines;
+    const shades = ['█', '▓', '▒', '░'];
+    const w = Math.max(1, Math.min(6, gradientWidth));
+    const left = shades.slice(0, w).join('');
+    const right = shades.slice(0, w).reverse().join('');
+    const g = ' '.repeat(Math.max(0, gap));
+    const o = ' '.repeat(Math.max(0, leftOffset));
+    return lines.map(l => `${left}${g}${o}${l}${g}${right}`);
+}
+
+function applyFrame(lines, frameType, innerPadding) {
+    if (frameType === 'none') return lines;
+    const pad = Math.max(0, innerPadding);
+    const contentWidth = lines.reduce((m, l) => Math.max(m, l.length), 0);
+    const innerWidth = contentWidth + pad * 2;
+
+    let chars;
+    if (frameType === 'single') {
+        chars = { tl: '┌', tr: '┐', bl: '└', br: '┘', h: '─', v: '│' };
+    } else if (frameType === 'double') {
+        chars = { tl: '╔', tr: '╗', bl: '╚', br: '╝', h: '═', v: '║' };
+    } else {
+        chars = { tl: '█', tr: '█', bl: '█', br: '█', h: '█', v: '█' };
+    }
+
+    const top = chars.tl + chars.h.repeat(innerWidth) + chars.tr;
+    const bottom = chars.bl + chars.h.repeat(innerWidth) + chars.br;
+    const leftPad = ' '.repeat(pad);
+    const rightPad = ' '.repeat(pad);
+
+    const framed = [top];
+    for (const l of lines) {
+        const body = leftPad + l.padEnd(contentWidth, ' ') + rightPad;
+        framed.push(chars.v + body + chars.v);
+    }
+    framed.push(bottom);
+    return framed;
+}
+
+function reflowText(text, settings) {
+    const normalized = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const rawParas = normalized.split(/\n\s*\n/);
+
+    const outParas = [];
+    for (const p of rawParas) {
+        if (p.trim() === '') {
+            outParas.push('');
+            continue;
+        }
+
+        const content = normalizeParagraphText(p);
+        const words = tokenize(content);
+
+        let lines;
+        if (settings.mode === 'edgeProtruding') {
+            lines = wrapEdgeProtruding(words, settings.width, settings.tolerance);
+        } else if (settings.mode === 'justifyHyphenCut') {
+            lines = wrapHyphenCut(words, settings.width);
+            // Justify all but the last line of the paragraph
+            lines = lines.map((l, idx) => idx === lines.length - 1 ? l : justifyLine(l, settings.width));
+        } else if (settings.mode === 'justifySpaces') {
+            lines = wrapCutoff(words, settings.width);
+            lines = lines.map((l, idx) => idx === lines.length - 1 ? l : justifyLine(l, settings.width));
+        } else {
+            lines = wrapCutoff(words, settings.width);
+        }
+
+        lines = applyLeftMargin(lines, settings.leftMargin);
+        outParas.push(lines.join('\n'));
+    }
+
+    let outText = outParas.join('\n\n');
+    let outLines = outText.split('\n');
+
+    outLines = applyEdgeGradients(outLines, settings.gradients);
+    outLines = applyFrame(outLines, settings.frame, settings.innerPadding);
+
+    return outLines.join('\n');
+}
+
+function getSettings() {
+    return {
+        mode: modeSelect.value,
+        width: clampInt(widthSlider.value, 80, 10, 999),
+        tolerance: clampInt(toleranceInput.value, 5, 0, 999),
+        leftMargin: clampInt(leftMarginSlider.value, 0, 0, 999),
+        frame: frameSelect.value,
+        innerPadding: clampInt(innerPaddingInput.value, 1, 0, 20),
+        gradients: {
+            enabled: !!gradientsCheckbox.checked,
+            gap: 1,
+            leftOffset: 1,
+            gradientWidth: 4
+        }
+    };
+}
+
+function reflow() {
+    const settings = getSettings();
+    if (!settings.width || settings.width < 10) return;
+    editor.value = reflowText(editor.value, settings);
+}
+
+function autoReflow() {
+    // Non-invasive: do it at the end of the event loop so paste/slider updates are applied first.
+    requestAnimationFrame(() => reflow());
+}
+
+// Ctrl+Enter shortcut
+editor.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        reflow();
+    }
+});
+
+// Reflow as soon as text is pasted in.
+editor.addEventListener('paste', () => autoReflow());
+
+// Reflow at the end of slider move event (on release).
+widthSlider.addEventListener('change', () => autoReflow());
+widthOverlay.addEventListener('change', () => autoReflow());
+leftMarginSlider.addEventListener('change', () => autoReflow());
+
+// Keep controls in sync and reflow when mode options change.
+modeSelect.addEventListener('change', () => autoReflow());
+toleranceInput.addEventListener('change', () => autoReflow());
+frameSelect.addEventListener('change', () => autoReflow());
+innerPaddingInput.addEventListener('change', () => autoReflow());
+gradientsCheckbox.addEventListener('change', () => autoReflow());
+</script>
+
+</body>
+</html>
