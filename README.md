@@ -1,11 +1,21 @@
-# Chrome DevTools MCP
+# Wireframe Chrome DevTools MCP (Noctivagous)
 
-[![npm chrome-devtools-mcp package](https://img.shields.io/npm/v/chrome-devtools-mcp.svg)](https://npmjs.org/package/chrome-devtools-mcp)
 
-`chrome-devtools-mcp` lets your coding agent (such as Gemini, Claude, Cursor or Copilot)
-control and inspect a live Chrome browser. It acts as a Model-Context-Protocol
+
+`wireframe-chrome-devtools-mcp` is a branch of Google's `chrome-devtools-mcp` that lets your coding agent (such as Gemini, Claude, Cursor or Copilot) control and inspect a live Chrome browser. It acts as a Model-Context-Protocol
 (MCP) server, giving your AI coding assistant access to the full power of
 Chrome DevTools for reliable automation, in-depth debugging, and performance analysis.
+
+## Branch Focus: Wireframe Debugging Tools
+
+This branch specializes in advanced layout debugging capabilities through dedicated wireframe tools. Unlike traditional screenshots, which require complex image processing to detect overlaps, gaps, and layout issues, our wireframe tools provide precise structural analysis directly from the browser's rendering engine.
+
+### Key Wireframe Features
+
+- **`wireframe_snapshot`**: Captures compact, deterministic wireframe data for overlap/gap analysis
+- **`svg_snapshot`**: Generates visual SVG wireframes with layout debugging overlays
+
+These tools excel at detecting layout problems that are difficult to identify through image processing of regular screenshots. Other tools in this branch are included experimentally and may be subject to change.
 
 ## [Tool reference](./docs/tool-reference.md) | [Changelog](./CHANGELOG.md) | [Contributing](./CONTRIBUTING.md) | [Troubleshooting](./docs/troubleshooting.md) | [Design Principles](./docs/design-principles.md)
 
