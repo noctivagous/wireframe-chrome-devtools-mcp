@@ -782,32 +782,18 @@ function applyEdgeGradients(lines, { enabled, gap = 1, leftOffset = 1, gradientW
     return lines.map(l => `${left}${g}${o}${l}${g}${right}`);
 }
 
-function applyFrame(lines, frameType, innerPadding) {
+function applyFrame(lines, frameType, innerPadding, width, leftMargin) {
     if (frameType === 'none') return lines;
     const pad = Math.max(0, innerPadding);
 
-    // Find the bounding box of the text (min left, max right)
-    let minLeft = Infinity;
-    let maxRight = 0;
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed) {
-            const leftSpaces = line.length - line.trimStart().length;
-            const rightPos = leftSpaces + trimmed.length;
-            minLeft = Math.min(minLeft, leftSpaces);
-            maxRight = Math.max(maxRight, rightPos);
-        }
-    }
+    // Use margin lines and text boundaries as reference for edges
+    // Left edge: left margin position (already applied to lines, so relative position 0)
+    // Right edge: left margin + width position (so relative position width)
+    // Top edge: first line of text (index 0)
+    // Bottom edge: last line of text (index lines.length - 1)
 
-    // If no text found, fall back to original behavior
-    if (minLeft === Infinity) {
-        minLeft = 0;
-        maxRight = lines.reduce((m, l) => Math.max(m, l.length), 0);
-    }
-
-    // Calculate frame dimensions with inner padding
-    const frameLeft = Math.max(0, minLeft - pad);
-    const frameRight = maxRight + pad;
+    const frameLeft = Math.max(0, leftMargin - pad);
+    const frameRight = (leftMargin + width) + pad;
     const frameWidth = frameRight - frameLeft;
 
     let chars;
@@ -888,7 +874,7 @@ function reflowText(text, settings) {
     let outLines = outText.split('\n');
 
     outLines = applyEdgeGradients(outLines, settings.gradients);
-    outLines = applyFrame(outLines, settings.frame, settings.innerPadding);
+    outLines = applyFrame(outLines, settings.frame, settings.innerPadding, settings.width, settings.leftMargin);
 
     return outLines.join('\n');
 }
