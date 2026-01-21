@@ -10,6 +10,8 @@ export enum ToolCategory {
   EMULATION = 'emulation',
   PERFORMANCE = 'performance',
   NETWORK = 'network',
+  SNAPSHOT = 'snapshot',
+  EDIT_SESSION = 'edit_session',
   DEBUGGING = 'debugging',
   EXTENSIONS = 'extensions',
 }
@@ -20,6 +22,8 @@ export const labels = {
   [ToolCategory.EMULATION]: 'Emulation',
   [ToolCategory.PERFORMANCE]: 'Performance',
   [ToolCategory.NETWORK]: 'Network',
+  [ToolCategory.SNAPSHOT]: 'Snapshot',
+  [ToolCategory.EDIT_SESSION]: 'Edit Session',
   [ToolCategory.DEBUGGING]: 'Debugging',
   [ToolCategory.EXTENSIONS]: 'Extensions',
 };

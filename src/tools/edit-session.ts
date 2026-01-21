@@ -131,7 +131,7 @@ export const beginEditSession = defineTool({
     'This is designed to keep the loop fast (apply changes in the Chromium instance) and defer filesystem writes until an explicit export/commit step.\n\n' +
     '**Important contract:** starting an edit session does **not** write repo/source files. File writes only happen if you explicitly call commit/apply tools (e.g. `apply_commit_plan`, `commit_edit_session_to_files`, `apply_unified_diff`).',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: false,
   },
   schema: {
@@ -153,7 +153,7 @@ export const listEditSessions = defineTool({
   name: 'list_edit_sessions',
   description: 'List edit sessions currently held in memory by this MCP server process.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: true,
   },
   schema: {},
@@ -168,7 +168,7 @@ export const getEditSession = defineTool({
   name: 'get_edit_session',
   description: 'Get a specific edit session (or the active session if sessionId is omitted).',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: true,
   },
   schema: {
@@ -186,7 +186,7 @@ export const setActiveEditSession = defineTool({
   name: 'set_active_edit_session',
   description: 'Set (or clear) the active edit session used by recordToSession-enabled tools.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: false,
   },
   schema: {
@@ -207,7 +207,7 @@ export const clearEditSession = defineTool({
   name: 'clear_edit_session',
   description: 'Delete an edit session from memory (clears the active session if it matches).',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: false,
   },
   schema: {
@@ -233,7 +233,7 @@ export const exportEditSession = defineTool({
   description:
     'Export an edit session to a JSON file. This is the recommended way to batch filesystem writes: keep edits live in Chromium during iteration, then export once at the end.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: true,
   },
   schema: {
@@ -269,7 +269,7 @@ export const summarizeEditSession = defineTool({
   description:
     'Summarize an edit session into human-readable Markdown (optionally saving it to disk). Useful for sharing/PR prep without committing any changes.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: true,
   },
   schema: {
@@ -328,7 +328,7 @@ export const exportEditSessionPackage = defineTool({
   description:
     'Export an edit session as a small “package folder”: JSON session log + a Markdown summary. This is Level-1 friendly (shareable) and still makes no repo edits.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: true,
   },
   schema: {
@@ -582,7 +582,7 @@ export const previewCommitPlan = defineTool({
     'Preview a structured commit plan for an edit session without writing any files.\n\n' +
     'This is the recommended Level-2 workflow: preview exactly what would be written (files + change ids + chunk previews), then apply the plan explicitly via apply_commit_plan.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: true,
   },
   schema: {
@@ -679,7 +679,7 @@ export const applyCommitPlan = defineTool({
     'This tool is designed to be used with preview_commit_plan. It supports dryRun mode.\n\n' +
     '**Important contract:** this is an explicit filesystem write step. Do not call it unless the user asked to commit/apply changes to files.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: false,
   },
   schema: {
@@ -821,7 +821,7 @@ export const commitEditSessionToFiles = defineTool({
     'This intentionally runs as an explicit end-of-session step to avoid editor lag during iteration. Currently supports appending recorded CSS/JS snippets to files referenced by targetFilePath (recorded via recordToSession-enabled tools).\n\n' +
     '**Important contract:** this is an explicit filesystem write step. Do not call it unless the user asked to commit/apply changes to files.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.EDIT_SESSION,
     readOnlyHint: false,
   },
   schema: {

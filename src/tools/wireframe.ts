@@ -1150,7 +1150,7 @@ export const wireframeSnapshot = defineTool({
     `- **maxTotal truncation**: \`maxTotal\` is applied after all filters. The snapshot is returned in a deterministic order and sets \`truncated: true\` when the cap is hit. If you’re debugging a component subtree, prefer narrowing with \`scopeSelector\` and increasing \`maxTotal\`.\n` +
     `- **Computed styles (computedStylePreset / computedStyleWhitelist)**: These only apply when \`includeComputedStyles: true\`. Use \`computedStylePreset: "layout"\` for UI/layout debugging; use \`"debug"\` when you also need extra diagnostics; use \`computedStyleWhitelist\` for an explicit list.`,
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.SNAPSHOT,
     // Not read-only due to filePath param.
     readOnlyHint: false,
   },
@@ -1597,7 +1597,7 @@ export const svgSnapshot = defineTool({
     `Render a visual SVG wireframe of the current page (or a subset of elements). ` +
     `Uses the same underlying snapshot as wireframe_snapshot, but returns the SVG content wrapped in JSON for better parseability.`,
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.SNAPSHOT,
     // Not read-only due to filePath param.
     readOnlyHint: false,
   },

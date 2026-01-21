@@ -377,7 +377,7 @@ export const injectChatbox = defineTool({
   description:
     'Inject a dockable in-page chat panel into the current page. Returns a patchId that can be removed via `rollback_patch`.\n\n' +
     '**Notes:**\n' +
-    '- This tool only injects a UI shell. Actual "live chat" wiring is handled by higher-level orchestration.\n' +
+    '- This tool injects a **Live Edit Session** panel intended for the browser-first / deferred-commit workflow (edit sessions + explicit export/commit).\n' +
     '- Injection is idempotent: if the chatbox already exists and `replaceExisting=false`, the tool is a no-op and returns the existing patchId.\n',
   annotations: {
     category: ToolCategory.DEBUGGING,
@@ -654,6 +654,54 @@ export const injectChatbox = defineTool({
             }
             button.send:hover { background: rgba(59,130,246,1); }
             .collapsed .body { display: none; }
+
+            /* Workflow-only controls (edit sessions + explicit export/commit). */
+            .workflow {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+              padding: 10px;
+              border-top: 1px solid rgba(17, 24, 39, 0.10);
+              background: rgba(249,250,251,0.82);
+            }
+            .workflow button {
+              color: #111827;
+              background: rgba(255,255,255,0.96);
+              border: 1px solid rgba(17, 24, 39, 0.18);
+              border-radius: 10px;
+              padding: 6px 10px;
+              font-size: 12px;
+            }
+            .workflow button:hover { background: rgba(243,244,246,0.96); }
+            .workflow button.primary {
+              color: #fff;
+              background: rgba(17, 24, 39, 0.92);
+              border-color: rgba(17, 24, 39, 0.92);
+            }
+            .workflow button.primary:hover { background: rgba(17, 24, 39, 1); }
+            .workflow button.danger {
+              color: #fff;
+              background: rgba(185, 28, 28, 0.92);
+              border-color: rgba(185, 28, 28, 0.92);
+            }
+            .workflow button.danger:hover { background: rgba(185, 28, 28, 1); }
+            .workflow label {
+              font-size: 11px;
+              color: rgba(107,114,128,1);
+              align-self: center;
+            }
+            .workflow input[type="text"] {
+              flex: 1;
+              min-width: 140px;
+              font-size: 12px;
+              padding: 6px 10px;
+              border-radius: 10px;
+            }
+            .workflow .hint {
+              flex-basis: 100%;
+              font-size: 11px;
+              color: rgba(107,114,128,1);
+            }
           </style>
           <div class="panel ${startOpen ? '' : 'collapsed'}" data-role="panel">
             <div class="header">
@@ -665,9 +713,28 @@ export const injectChatbox = defineTool({
             </div>
             <div class="body">
               <div class="messages" data-role="messages"></div>
+              <div class="workflow" data-role="workflow">
+                <button type="button" class="primary" data-role="begin">Begin session</button>
+                <button type="button" data-role="status">Status</button>
+                <button type="button" data-role="plan">Preview plan</button>
+                <button type="button" data-role="diff">Preview diff</button>
+                <button type="button" data-role="exportPrototype">Export prototype</button>
+                <button type="button" data-role="export">Export</button>
+                <button type="button" data-role="summary">Summary</button>
+                <button type="button" class="danger" data-role="rollbackAll">Rollback all</button>
+                <label>Target file (optional):</label>
+                <input data-role="targetFile" type="text" placeholder="./styles.css (for journaling)" />
+                <label>Confirm writes:</label>
+                <input data-role="confirm" type="checkbox" />
+                <button type="button" data-role="applyPlan">Apply plan</button>
+                <button type="button" data-role="applyDiff">Apply diff</button>
+                <div class="hint">
+                  Workflow-only: make changes in the browser first, record to an edit session, then explicitly export/commit when ready.
+                </div>
+              </div>
               <div class="composer">
-                <input data-role="input" type="text" placeholder="${escapeAttribute(placeholder)}" />
-                <button class="send" type="button" data-role="send">Send</button>
+                <input data-role="input" type="text" placeholder="Use buttons above, or type: /help, /css &lt;...&gt;, /js &lt;...&gt;, /plan, /diff" />
+                <button class="send" type="button" data-role="send">Run</button>
               </div>
             </div>
           </div>
@@ -677,6 +744,18 @@ export const injectChatbox = defineTool({
         const messages = shadow.querySelector('[data-role="messages"]') as HTMLElement;
         const input = shadow.querySelector('[data-role="input"]') as HTMLInputElement;
         const sendBtn = shadow.querySelector('[data-role="send"]') as HTMLButtonElement;
+        const beginBtn = shadow.querySelector('[data-role="begin"]') as HTMLButtonElement;
+        const statusBtn = shadow.querySelector('[data-role="status"]') as HTMLButtonElement;
+        const planBtn = shadow.querySelector('[data-role="plan"]') as HTMLButtonElement;
+        const diffBtn = shadow.querySelector('[data-role="diff"]') as HTMLButtonElement;
+        const exportPrototypeBtn = shadow.querySelector('[data-role="exportPrototype"]') as HTMLButtonElement;
+        const exportBtn = shadow.querySelector('[data-role="export"]') as HTMLButtonElement;
+        const summaryBtn = shadow.querySelector('[data-role="summary"]') as HTMLButtonElement;
+        const rollbackAllBtn = shadow.querySelector('[data-role="rollbackAll"]') as HTMLButtonElement;
+        const applyPlanBtn = shadow.querySelector('[data-role="applyPlan"]') as HTMLButtonElement;
+        const applyDiffBtn = shadow.querySelector('[data-role="applyDiff"]') as HTMLButtonElement;
+        const targetFile = shadow.querySelector('[data-role="targetFile"]') as HTMLInputElement;
+        const confirm = shadow.querySelector('[data-role="confirm"]') as HTMLInputElement;
         const toggleBtn = shadow.querySelector('[data-role="toggle"]') as HTMLButtonElement;
         const closeBtn = shadow.querySelector('[data-role="close"]') as HTMLButtonElement;
 
@@ -689,12 +768,80 @@ export const injectChatbox = defineTool({
           messages.scrollTop = messages.scrollHeight;
         };
 
+        const getTargetFilePath = () => {
+          const v = (targetFile?.value ?? '').trim();
+          return v || undefined;
+        };
+
+        const enqueueCmd = (cmd: any) => {
+          const payload = JSON.stringify(cmd);
+          appendMessage('user', payload);
+          try {
+            const w = window as any;
+            w.__MCP_CHATBOX__ = w.__MCP_CHATBOX__ || {};
+            w.__MCP_CHATBOX__.inbox = w.__MCP_CHATBOX__.inbox || [];
+            w.__MCP_CHATBOX__.inbox.push({
+              type: 'user',
+              text: payload,
+              createdAt: Date.now(),
+              patchId,
+            });
+          } catch {
+            // Best-effort only.
+          }
+          window.dispatchEvent(new CustomEvent('mcp-chatbox:send', {detail: {text: payload, patchId}}));
+        };
+
         const doSend = () => {
           const text = (input.value ?? '').trim();
           if (!text) {
             return;
           }
           input.value = '';
+          // Translate known workflow commands into structured JSON so the server can execute them.
+          const targetFilePath = getTargetFilePath();
+          if (text.startsWith('/css ')) {
+            enqueueCmd({kind: 'insert_css', cssText: text.slice(5), targetFilePath});
+            return;
+          }
+          if (text.startsWith('/js ')) {
+            enqueueCmd({kind: 'insert_js', jsText: text.slice(4), targetFilePath});
+            return;
+          }
+          if (text === '/help') {
+            enqueueCmd({kind: 'help'});
+            return;
+          }
+          if (text === '/status') {
+            enqueueCmd({kind: 'status'});
+            return;
+          }
+          if (text === '/begin') {
+            enqueueCmd({kind: 'begin_session'});
+            return;
+          }
+          if (text === '/export') {
+            enqueueCmd({kind: 'export_session'});
+            return;
+          }
+          if (text === '/summary') {
+            enqueueCmd({kind: 'summarize_session'});
+            return;
+          }
+          if (text === '/plan') {
+            enqueueCmd({kind: 'preview_commit_plan'});
+            return;
+          }
+          if (text === '/diff') {
+            enqueueCmd({kind: 'preview_diff_from_commit_plan'});
+            return;
+          }
+          if (text === '/apply') {
+            const ok = Boolean((confirm as any)?.checked);
+            enqueueCmd({kind: 'apply_commit_plan', dryRun: !ok, confirm: ok});
+            return;
+          }
+
           appendMessage('user', text);
 
           // Buffer messages for the agent/orchestrator to drain (no networking required).
@@ -726,6 +873,24 @@ export const injectChatbox = defineTool({
             doSend();
           }
         });
+
+        beginBtn.addEventListener('click', () => enqueueCmd({kind: 'begin_session'}));
+        statusBtn.addEventListener('click', () => enqueueCmd({kind: 'status'}));
+        planBtn.addEventListener('click', () => enqueueCmd({kind: 'preview_commit_plan'}));
+        diffBtn.addEventListener('click', () => enqueueCmd({kind: 'preview_diff_from_commit_plan'}));
+        exportPrototypeBtn.addEventListener('click', () => enqueueCmd({kind: 'export_prototype_state', mode: 'single_html'}));
+        exportBtn.addEventListener('click', () => enqueueCmd({kind: 'export_session'}));
+        summaryBtn.addEventListener('click', () => enqueueCmd({kind: 'summarize_session'}));
+        rollbackAllBtn.addEventListener('click', () => enqueueCmd({kind: 'rollback_all'}));
+        applyPlanBtn.addEventListener('click', () => {
+          const ok = Boolean((confirm as any)?.checked);
+          enqueueCmd({kind: 'apply_commit_plan', dryRun: !ok, confirm: ok});
+        });
+        applyDiffBtn.addEventListener('click', () => {
+          const ok = Boolean((confirm as any)?.checked);
+          enqueueCmd({kind: 'apply_unified_diff', dryRun: !ok, confirm: ok});
+        });
+
         toggleBtn.addEventListener('click', () => {
           panel.classList.toggle('collapsed');
         });
@@ -743,6 +908,8 @@ export const injectChatbox = defineTool({
           inbox: (w.__MCP_CHATBOX__ && w.__MCP_CHATBOX__.inbox) || [],
           outbox: (w.__MCP_CHATBOX__ && w.__MCP_CHATBOX__.outbox) || [],
           appendAssistantMessage: (text: string) => appendMessage('assistant', String(text ?? '')),
+          state: (w.__MCP_CHATBOX__ && w.__MCP_CHATBOX__.state) || {lastPlanJson: null, lastDiff: null},
+          getTargetFilePath,
         };
 
         document.documentElement.appendChild(host);

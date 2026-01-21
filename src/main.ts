@@ -7,6 +7,7 @@
 import './polyfill.js';
 
 import process from 'node:process';
+import path from 'node:path';
 
 import type {Channel} from './browser.js';
 import {ensureBrowserConnected, ensureBrowserLaunched} from './browser.js';
@@ -27,6 +28,8 @@ import {
 import {ToolCategory} from './tools/categories.js';
 import type {ToolDefinition} from './tools/ToolDefinition.js';
 import {tools} from './tools/tools.js';
+import {loadToolTogglesConfig, saveToolTogglesConfig, type ToolTogglesConfigV1} from './tool-toggles.js';
+import {startWebUi, type ToolToggleView} from './web-ui.js';
 
 // If moved update release-please config
 // x-release-please-start-version
@@ -124,6 +127,19 @@ For more details, visit: https://github.com/ChromeDevTools/chrome-devtools-mcp#u
 
 const toolMutex = new Mutex();
 
+type RegisteredTool = {
+  enabled: boolean;
+  enable(): void;
+  disable(): void;
+};
+
+const registeredTools = new Map<string, {tool: ToolDefinition; handle: RegisteredTool}>();
+
+const toolConfigPath = path.resolve(
+  (args as any).toolConfig ?? path.join(process.cwd(), '.chrome-devtools-mcp-tools.json'),
+);
+let toolToggles: ToolTogglesConfigV1 = (await loadToolTogglesConfig(toolConfigPath)).config;
+
 function registerTool(tool: ToolDefinition): void {
   if (
     tool.annotations.category === ToolCategory.EMULATION &&
@@ -161,7 +177,7 @@ function registerTool(tool: ToolDefinition): void {
   ) {
     return;
   }
-  server.registerTool(
+  const handle = server.registerTool(
     tool.name,
     {
       description: tool.description,
@@ -227,10 +243,21 @@ function registerTool(tool: ToolDefinition): void {
       }
     },
   );
+  registeredTools.set(tool.name, {tool, handle: handle as unknown as RegisteredTool});
 }
 
 for (const tool of tools) {
   registerTool(tool);
+}
+
+// Apply persisted toggles before connecting (avoids noisy list_changed notifications at startup).
+{
+  const disabled = new Set(toolToggles.disabledTools ?? []);
+  for (const [name, entry] of registeredTools.entries()) {
+    if (disabled.has(name)) {
+      entry.handle.disable();
+    }
+  }
 }
 
 await loadIssueDescriptions();
@@ -240,3 +267,33 @@ logger('Chrome DevTools MCP Server connected');
 logDisclaimers();
 void clearcutLogger?.logDailyActiveIfNeeded();
 void clearcutLogger?.logServerStart(computeFlagUsage(args, cliOptions));
+
+// Optional local web UI for tool toggles (persistent JSON on disk).
+if ((args as any).webUi) {
+  const host = String((args as any).webUiHost ?? '127.0.0.1');
+  const port = Number((args as any).webUiPort ?? 7332);
+
+  startWebUi({
+    host,
+    port,
+    log: logger,
+    getConfigMeta: () => ({configPath: toolConfigPath, updatedAt: toolToggles.updatedAt}),
+    getTools: (): ToolToggleView[] => {
+      return Array.from(registeredTools.values()).map(({tool, handle}) => ({
+        name: tool.name,
+        description: tool.description,
+        category: String(tool.annotations.category ?? 'unknown'),
+        enabled: Boolean(handle.enabled),
+      }));
+    },
+    setDisabledTools: async (disabledTools: string[]) => {
+      toolToggles = await saveToolTogglesConfig(toolConfigPath, disabledTools);
+      const disabled = new Set(toolToggles.disabledTools);
+      for (const [name, entry] of registeredTools.entries()) {
+        const shouldEnable = !disabled.has(name);
+        if (shouldEnable && !entry.handle.enabled) entry.handle.enable();
+        if (!shouldEnable && entry.handle.enabled) entry.handle.disable();
+      }
+    },
+  });
+}

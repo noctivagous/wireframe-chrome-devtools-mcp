@@ -211,6 +211,29 @@ export const cliOptions = {
     hidden: true,
     describe: 'Set to false to opt-out of usage statistics collection.',
   },
+
+  // Tool toggles UI (local web UI + persistent JSON config)
+  toolConfig: {
+    type: 'string',
+    describe:
+      'Path to a JSON file used to persist tool enable/disable settings (used by the tool toggles web UI). Defaults to ./.chrome-devtools-mcp-tools.json',
+  },
+  webUi: {
+    type: 'boolean',
+    default: true,
+    describe:
+      'If true, start a local web UI for enabling/disabling tools (persisted to toolConfig). Disable with --no-web-ui.',
+  },
+  webUiHost: {
+    type: 'string',
+    default: '127.0.0.1',
+    describe: 'Bind host for the tool toggles web UI (default: 127.0.0.1).',
+  },
+  webUiPort: {
+    type: 'number',
+    default: 7332,
+    describe: 'Port for the tool toggles web UI (default: 7332).',
+  },
 } satisfies Record<string, YargsOptions>;
 
 export function parseArguments(version: string, argv = process.argv) {

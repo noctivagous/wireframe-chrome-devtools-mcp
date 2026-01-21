@@ -30,20 +30,31 @@
 - **[Network](#network)** (2 tools)
   - [`get_network_request`](#get_network_request)
   - [`list_network_requests`](#list_network_requests)
-- **[Debugging](#debugging)** (33 tools)
-  - [`analyze_js`](#analyze_js)
-  - [`apply_commit_plan`](#apply_commit_plan)
-  - [`apply_unified_diff`](#apply_unified_diff)
-  - [`begin_edit_session`](#begin_edit_session)
+- **[Snapshot](#snapshot)** (5 tools)
   - [`capture_evidence_bundle`](#capture_evidence_bundle)
-  - [`chatbox_step`](#chatbox_step)
+  - [`svg_snapshot`](#svg_snapshot)
+  - [`take_screenshot`](#take_screenshot)
+  - [`take_snapshot`](#take_snapshot)
+  - [`wireframe_snapshot`](#wireframe_snapshot)
+- **[Edit Session](#edit-session)** (11 tools)
+  - [`apply_commit_plan`](#apply_commit_plan)
+  - [`begin_edit_session`](#begin_edit_session)
   - [`clear_edit_session`](#clear_edit_session)
   - [`commit_edit_session_to_files`](#commit_edit_session_to_files)
-  - [`evaluate_script`](#evaluate_script)
   - [`export_edit_session`](#export_edit_session)
   - [`export_edit_session_package`](#export_edit_session_package)
-  - [`get_console_message`](#get_console_message)
   - [`get_edit_session`](#get_edit_session)
+  - [`list_edit_sessions`](#list_edit_sessions)
+  - [`preview_commit_plan`](#preview_commit_plan)
+  - [`set_active_edit_session`](#set_active_edit_session)
+  - [`summarize_edit_session`](#summarize_edit_session)
+- **[Debugging](#debugging)** (18 tools)
+  - [`analyze_js`](#analyze_js)
+  - [`apply_unified_diff`](#apply_unified_diff)
+  - [`chatbox_step`](#chatbox_step)
+  - [`evaluate_script`](#evaluate_script)
+  - [`export_prototype_state`](#export_prototype_state)
+  - [`get_console_message`](#get_console_message)
   - [`inject_chatbox`](#inject_chatbox)
   - [`insert_css`](#insert_css)
   - [`insert_css_preview`](#insert_css_preview)
@@ -52,18 +63,10 @@
   - [`inspect_state`](#inspect_state)
   - [`js_console`](#js_console)
   - [`list_console_messages`](#list_console_messages)
-  - [`list_edit_sessions`](#list_edit_sessions)
   - [`manipulate_dom`](#manipulate_dom)
-  - [`preview_commit_plan`](#preview_commit_plan)
-  - [`preview_unified_diff_from_commit_plan`](#preview_unified_diff_from_commit_plan)
+  - [`preview_diff_from_commit_plan`](#preview_diff_from_commit_plan)
   - [`rollback_all`](#rollback_all)
   - [`rollback_patch`](#rollback_patch)
-  - [`set_active_edit_session`](#set_active_edit_session)
-  - [`summarize_edit_session`](#summarize_edit_session)
-  - [`svg_snapshot`](#svg_snapshot)
-  - [`take_screenshot`](#take_screenshot)
-  - [`take_snapshot`](#take_snapshot)
-  - [`wireframe_snapshot`](#wireframe_snapshot)
 
 ## Input automation
 
@@ -342,69 +345,7 @@
 
 ---
 
-## Debugging
-
-### `analyze_js`
-
-**Description:** Analyze JavaScript code quality and detect errors on the current page. Supports various analysis types including code coverage, dependencies, errors, performance, and general issues.
-
-**Parameters:**
-
-- **analysis** (enum: "coverage", "dependencies", "errors", "performance", "issues") **(required)**: Type of JavaScript analysis to perform
-- **categories** (array) _(optional)_: Categories of issues to detect
-- **includeLibraries** (boolean) _(optional)_: Whether to include external libraries in the analysis (only applies to coverage, dependencies, and performance analysis)
-- **reportFormat** (enum: "summary", "detailed") _(optional)_: Format of the analysis report
-- **severity** (enum: "warning", "error") _(optional)_: Minimum severity level for issues
-
----
-
-### `apply_commit_plan`
-
-**Description:** Apply a previously previewed commit plan by writing changes to disk.
-
-This tool is designed to be used with [`preview_commit_plan`](#preview_commit_plan). It supports dryRun mode.
-
-**Important contract:** this is an explicit filesystem write step. Do not call it unless the user asked to commit/apply changes to files.
-
-**Parameters:**
-
-- **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would happen.
-- **planJson** (string) _(optional)_: Commit plan JSON (from [`preview_commit_plan`](#preview_commit_plan) with includeChunkContents=true). If omitted, the plan is regenerated from sessionId.
-- **rootDir** (string) _(optional)_: Safety root directory. All writes must stay within this directory. Defaults to the server process working directory.
-- **sessionId** (string) _(optional)_: Optional session id (used only when planJson is omitted).
-- **skipIfAlreadyApplied** (boolean) _(optional)_: If true, skips appending chunks that appear to already be present in the target file (best-effort marker check).
-
----
-
-### `apply_unified_diff`
-
-**Description:** Apply a unified diff (git-style) to local files with strict conflict detection.
-
-This is a Level-2 building block: apply small, reviewable diffs to the repo after validating changes in-browser.
-
-**Parameters:**
-
-- **diff** (string) **(required)**: Unified diff text to apply.
-- **allowCreate** (boolean) _(optional)_: If true, allow creating new files when the diff targets /dev/null → new file.
-- **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would change.
-- **rootDir** (string) _(optional)_: Safety root directory. All patches must target files within this directory. Defaults to the server process working directory.
-
----
-
-### `begin_edit_session`
-
-**Description:** Start (and optionally activate) an edit session used to buffer live-in-Chromium edits during an interactive workflow.
-
-This is designed to keep the loop fast (apply changes in the Chromium instance) and defer filesystem writes until an explicit export/commit step.
-
-**Important contract:** starting an edit session does **not** write repo/source files. File writes only happen if you explicitly call commit/apply tools (e.g. `[`apply_commit_plan`](#apply_commit_plan)`, `[`commit_edit_session_to_files`](#commit_edit_session_to_files)`, `[`apply_unified_diff`](#apply_unified_diff)`).
-
-**Parameters:**
-
-- **label** (string) _(optional)_: Optional label for the session (e.g., "multi-column feed experiment").
-- **setActive** (boolean) _(optional)_: If true, make this the active session for subsequent recorded changes.
-
----
+## Snapshot
 
 ### `capture_evidence_bundle`
 
@@ -444,20 +385,140 @@ This is designed for Level 0/1 workflows: collect proof of what you changed in C
 
 ---
 
-### `chatbox_step`
+### `svg_snapshot`
 
-**Description:** Drain pending user messages from the injected in-page chatbox (`[`inject_chatbox`](#inject_chatbox)`) and append assistant replies back into the chat UI.
-
-**Purpose:** This is a minimal bridge for chat-driven iteration without requiring any network wiring.
-A higher-level agent can call this tool in a loop: user types → call `[`chatbox_step`](#chatbox_step)` → optionally call other tools → write results back.
-
+**Description:** Render a visual SVG wireframe of the current page (or a subset of elements). Uses the same underlying snapshot as [`wireframe_snapshot`](#wireframe_snapshot), but returns the SVG content wrapped in JSON for better parseability.
 
 **Parameters:**
 
-- **maxMessages** (integer) _(optional)_: Maximum number of queued messages to drain in one call.
-- **patchId** (string) _(optional)_: Optional chatbox patchId to target. If omitted, uses `window.__MCP_CHATBOX__.patchId`.
-- **respond** (boolean) _(optional)_: If true, append an assistant reply for each drained user message.
-- **responsePrefix** (string) _(optional)_: Prefix for the default assistant reply.
+- **background** (enum: "transparent", "white", "black") _(optional)_: Background [`fill`](#fill) for the SVG canvas.
+- **compareWith** (string) _(optional)_: Optional previous wireframe JSON (from [`wireframe_snapshot`](#wireframe_snapshot)) to compare against. When provided with highlightChanged=true, changed rects are highlighted.
+- **computedStylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Computed style whitelist preset used when computedStyleWhitelist is not provided.
+- **computedStyleWhitelist** (array) _(optional)_: Override computed style whitelist. If provided, stylePreset is ignored.
+- **coordinateSpace** (enum: "viewport", "document") _(optional)_: Coordinate space for rendering: viewport (scroll-adjusted) or document (absolute page coordinates, viewBox set to current viewport window).
+- **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the SVG output to instead of attaching it to the response.
+- **fillOpacity** (number) _(optional)_: [`Fill`](#fill) opacity for element rectangles.
+- **highlightChanged** (boolean) _(optional)_: If true, highlights elements whose rect changed compared to compareWith.
+- **includeComputedStyles** (boolean) _(optional)_: If true, includes a whitelist of computed styles for each element via DOMSnapshot.captureSnapshot (also used for optional diff/analysis).
+- **includeDescendants** (boolean) _(optional)_: When used with selectors, includes matching elements’ descendants as well (within scopeSelector if provided).
+- **includeLayoutAssertions** (boolean) _(optional)_: If true, adds a small derived layoutAssertions section (e.g., overflow offenders).
+- **includePseudoElements** (boolean) _(optional)_: If true, includes pseudo-element nodes (e.g. ::before/::after) when present in the DOMSnapshot.
+- **includeShadowDom** (boolean) _(optional)_: If true, attempts to include and query into open shadow roots under the scope root (best-effort).
+- **includeTextSnippets** (boolean) _(optional)_: If true, includes best-effort textSnippet fields when available in the snapshot (bounded).
+- **maxDepth** (integer) _(optional)_: Limit traversal depth (0 means only the scope root itself when scopeSelector is provided).
+- **maxElements** (integer) _(optional)_: Legacy alias for maxTotal. Prefer maxTotal.
+- **maxPerSelector** (integer) _(optional)_: When multiple selectors are provided, cap the number of matches per selector (best-effort).
+- **maxTotal** (integer) _(optional)_: Maximum number of elements to render (after filtering).
+- **scale** (number) _(optional)_: Scale factor applied to the output SVG dimensions.
+- **scopeSelector** (string) _(optional)_: Optional CSS selector that constrains results to elements within this scope element.
+- **scrollToSelector** (string) _(optional)_: Optional CSS selector to scroll into view before capture.
+- **scrollToY** (number) _(optional)_: Optional Y scroll position to set before capture (document coordinates).
+- **selectors** (array) _(optional)_: Optional CSS selectors. When provided, the snapshot is filtered to these elements (not their descendants unless includeDescendants is true).
+- **showDimensions** (boolean) _(optional)_: If true, draws width×height labels for each box.
+- **showLabels** (boolean) _(optional)_: If true, draws tag/id/class labels in the top-left of each box.
+- **showSpacing** (boolean) _(optional)_: If true, visualizes margins, padding, and gaps between elements.
+- **strokeWidth** (number) _(optional)_: Stroke width for element rectangles.
+- **stylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Deprecated alias for computedStylePreset. Prefer computedStylePreset.
+- **textSnippetMaxLength** (integer) _(optional)_: Maximum length for textSnippet when includeTextSnippets is true.
+
+---
+
+### `take_screenshot`
+
+**Description:** Take a screenshot of the page or element.
+
+**Parameters:**
+
+- **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the screenshot to instead of attaching it to the response.
+- **format** (enum: "png", "jpeg", "webp") _(optional)_: Type of format to save the screenshot as. Default is "png"
+- **fullPage** (boolean) _(optional)_: If set to true takes a screenshot of the full page instead of the currently visible viewport. Incompatible with uid.
+- **quality** (number) _(optional)_: Compression quality for JPEG and WebP formats (0-100). Higher values mean better quality but larger file sizes. Ignored for PNG format.
+- **uid** (string) _(optional)_: The uid of an element on the page from the page content snapshot. If omitted takes a pages screenshot.
+
+---
+
+### `take_snapshot`
+
+**Description:** Take a text snapshot of the currently selected page based on the a11y tree. The snapshot lists page elements along with a unique
+identifier (uid). Always use the latest snapshot. Prefer taking a snapshot over taking a screenshot. The snapshot indicates the element selected
+in the DevTools Elements panel (if any).
+
+**Parameters:**
+
+- **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the snapshot to instead of attaching it to the response.
+- **verbose** (boolean) _(optional)_: Whether to include all possible information available in the full a11y tree. Default is false.
+
+---
+
+### `wireframe_snapshot`
+
+**Description:** Capture a compact, deterministic wireframe snapshot of the currently selected page using CDP DOMSnapshot.captureSnapshot. Returns element rects (and optionally a small set of computed styles) suitable for overlap/gap analysis.
+
+**Guidance:**
+
+- **selectors vs scopeSelector**: Use `selectors` to filter down to specific elements (or element groups). Use `scopeSelector` to constrain results to a subtree (descendants of a container). They can be combined: `selectors` are resolved within the `scopeSelector` root.
+- **maxTotal truncation**: `maxTotal` is applied after all filters. The snapshot is returned in a deterministic order and sets `truncated: true` when the cap is hit. If you’re debugging a component subtree, prefer narrowing with `scopeSelector` and increasing `maxTotal`.
+- **Computed styles (computedStylePreset / computedStyleWhitelist)**: These only apply when `includeComputedStyles: true`. Use `computedStylePreset: "layout"` for UI/layout debugging; use `"debug"` when you also need extra diagnostics; use `computedStyleWhitelist` for an explicit list.
+
+**Parameters:**
+
+- **compareWith** (string) _(optional)_: Optional previous wireframe JSON (from [`wireframe_snapshot`](#wireframe_snapshot)) to compare against. Adds diff metadata to the output.
+- **computedStylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Computed style whitelist preset used when computedStyleWhitelist is not provided.
+- **computedStyleWhitelist** (array) _(optional)_: Override computed style whitelist. If provided, stylePreset is ignored.
+- **coordinateSpace** (enum: "viewport", "document") _(optional)_: Coordinate space for returned rects: viewport (scroll-adjusted) or document (page coordinates).
+- **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the JSON output to instead of returning it inline.
+- **includeComputedStyles** (boolean) _(optional)_: If true, includes a whitelist of computed styles for each element via DOMSnapshot.captureSnapshot.
+- **includeDescendants** (boolean) _(optional)_: When used with selectors, includes matching elements’ descendants as well (within scopeSelector if provided).
+- **includeDiff** (boolean) _(optional)_: If true, includes diff metadata (changed/added/removed). Defaults to true when compareWith is provided.
+- **includeLayoutAssertions** (boolean) _(optional)_: If true, adds a small derived layoutAssertions section (e.g., overflow offenders).
+- **includePseudoElements** (boolean) _(optional)_: If true, includes pseudo-element nodes (e.g. ::before/::after) when present in the DOMSnapshot.
+- **includeShadowDom** (boolean) _(optional)_: If true, attempts to include and query into open shadow roots under the scope root (best-effort).
+- **includeTextSnippets** (boolean) _(optional)_: If true, includes best-effort textSnippet fields when available in the snapshot (bounded).
+- **maxDepth** (integer) _(optional)_: Limit traversal depth (0 means only the scope root itself when scopeSelector is provided).
+- **maxElements** (integer) _(optional)_: Legacy alias for maxTotal. Prefer maxTotal.
+- **maxPerSelector** (integer) _(optional)_: When multiple selectors are provided, cap the number of matches per selector (best-effort).
+- **maxTotal** (integer) _(optional)_: Maximum number of elements to return (after filtering).
+- **scopeSelector** (string) _(optional)_: Optional CSS selector that constrains results to elements within this scope element.
+- **scrollToSelector** (string) _(optional)_: Optional CSS selector to scroll into view before capture.
+- **scrollToY** (number) _(optional)_: Optional Y scroll position to set before capture (document coordinates).
+- **selectors** (array) _(optional)_: Optional CSS selectors. When provided, the snapshot is filtered to these elements (not their descendants unless includeDescendants is true).
+- **stylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Deprecated alias for computedStylePreset. Prefer computedStylePreset.
+- **textSnippetMaxLength** (integer) _(optional)_: Maximum length for textSnippet when includeTextSnippets is true.
+
+---
+
+## Edit Session
+
+### `apply_commit_plan`
+
+**Description:** Apply a previously previewed commit plan by writing changes to disk.
+
+This tool is designed to be used with [`preview_commit_plan`](#preview_commit_plan). It supports dryRun mode.
+
+**Important contract:** this is an explicit filesystem write step. Do not call it unless the user asked to commit/apply changes to files.
+
+**Parameters:**
+
+- **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would happen.
+- **planJson** (string) _(optional)_: Commit plan JSON (from [`preview_commit_plan`](#preview_commit_plan) with includeChunkContents=true). If omitted, the plan is regenerated from sessionId.
+- **rootDir** (string) _(optional)_: Safety root directory. All writes must stay within this directory. Defaults to the server process working directory.
+- **sessionId** (string) _(optional)_: Optional session id (used only when planJson is omitted).
+- **skipIfAlreadyApplied** (boolean) _(optional)_: If true, skips appending chunks that appear to already be present in the target file (best-effort marker check).
+
+---
+
+### `begin_edit_session`
+
+**Description:** Start (and optionally activate) an edit session used to buffer live-in-Chromium edits during an interactive workflow.
+
+This is designed to keep the loop fast (apply changes in the Chromium instance) and defer filesystem writes until an explicit export/commit step.
+
+**Important contract:** starting an edit session does **not** write repo/source files. File writes only happen if you explicitly call commit/apply tools (e.g. `[`apply_commit_plan`](#apply_commit_plan)`, `[`commit_edit_session_to_files`](#commit_edit_session_to_files)`, `[`apply_unified_diff`](#apply_unified_diff)`).
+
+**Parameters:**
+
+- **label** (string) _(optional)_: Optional label for the session (e.g., "multi-column feed experiment").
+- **setActive** (boolean) _(optional)_: If true, make this the active session for subsequent recorded changes.
 
 ---
 
@@ -488,27 +549,6 @@ This intentionally runs as an explicit end-of-session step to avoid editor lag d
 
 ---
 
-### `evaluate_script`
-
-**Description:** Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON
-so returned values have to JSON-serializable.
-
-**Parameters:**
-
-- **function** (string) **(required)**: A JavaScript function declaration to be executed by the tool in the currently selected page.
-Example without arguments: `() => {
-  return document.title
-}` or `async () => {
-  return await fetch("example.com")
-}`.
-Example with arguments: `(el) => {
-  return el.innerText;
-}`
-
-- **args** (array) _(optional)_: An optional list of arguments to pass to the function.
-
----
-
 ### `export_edit_session`
 
 **Description:** Export an edit session to a JSON file. This is the recommended way to batch filesystem writes: keep edits live in Chromium during iteration, then export once at the end.
@@ -532,16 +572,6 @@ Example with arguments: `(el) => {
 
 ---
 
-### `get_console_message`
-
-**Description:** Gets a console message by its ID. You can get all messages by calling [`list_console_messages`](#list_console_messages).
-
-**Parameters:**
-
-- **msgid** (number) **(required)**: The msgid of a console message on the page from the listed console messages
-
----
-
 ### `get_edit_session`
 
 **Description:** Get a specific edit session (or the active session if sessionId is omitted).
@@ -552,12 +582,153 @@ Example with arguments: `(el) => {
 
 ---
 
+### `list_edit_sessions`
+
+**Description:** List edit sessions currently held in memory by this MCP server process.
+
+**Parameters:** None
+
+---
+
+### `preview_commit_plan`
+
+**Description:** Preview a structured commit plan for an edit session without writing any files.
+
+This is the recommended Level-2 workflow: preview exactly what would be written (files + change ids + chunk previews), then apply the plan explicitly via [`apply_commit_plan`](#apply_commit_plan).
+
+**Parameters:**
+
+- **checkAlreadyApplied** (boolean) _(optional)_: If true, best-effort checks local files for existing edit-session markers and annotates the plan with alreadyApplied info.
+- **includeChunkContents** (boolean) _(optional)_: If true, include full chunk contents in the response (for copy/paste or passing into [`apply_commit_plan`](#apply_commit_plan)).
+- **maxChunkPreviewLength** (integer) _(optional)_: Maximum length of per-chunk previews included in the plan.
+- **rootDir** (string) _(optional)_: Optional root directory used for safety checks when inspecting planned write paths. If omitted, defaults to the server process working directory.
+- **sessionId** (string) _(optional)_: Optional session id. If omitted, uses the active session.
+
+---
+
+### `set_active_edit_session`
+
+**Description:** Set (or clear) the active edit session used by recordToSession-enabled tools.
+
+**Parameters:**
+
+- **sessionId** (unknown) **(required)**: Session id to activate. Use null to clear the active session.
+
+---
+
+### `summarize_edit_session`
+
+**Description:** Summarize an edit session into human-readable Markdown (optionally saving it to disk). Useful for sharing/PR prep without committing any changes.
+
+**Parameters:**
+
+- **filePath** (string) _(optional)_: Optional output path. If provided, writes the markdown summary to this file.
+- **maxSnippetLength** (integer) _(optional)_: Maximum length of CSS/JS snippet previews included per change (0 disables snippet previews).
+- **sessionId** (string) _(optional)_: Optional session id. If omitted, summarizes the active session.
+
+---
+
+## Debugging
+
+### `analyze_js`
+
+**Description:** Analyze JavaScript code quality and detect errors on the current page. Supports various analysis types including code coverage, dependencies, errors, performance, and general issues.
+
+**Parameters:**
+
+- **analysis** (enum: "coverage", "dependencies", "errors", "performance", "issues") **(required)**: Type of JavaScript analysis to perform
+- **categories** (array) _(optional)_: Categories of issues to detect
+- **includeLibraries** (boolean) _(optional)_: Whether to include external libraries in the analysis (only applies to coverage, dependencies, and performance analysis)
+- **reportFormat** (enum: "summary", "detailed") _(optional)_: Format of the analysis report
+- **severity** (enum: "warning", "error") _(optional)_: Minimum severity level for issues
+
+---
+
+### `apply_unified_diff`
+
+**Description:** Apply a unified diff (git-style) to local files with strict conflict detection.
+
+This is a Level-2 building block: apply small, reviewable diffs to the repo after validating changes in-browser.
+
+**Parameters:**
+
+- **diff** (string) **(required)**: Unified diff text to apply.
+- **allowCreate** (boolean) _(optional)_: If true, allow creating new files when the diff targets /dev/null → new file.
+- **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would change.
+- **rootDir** (string) _(optional)_: Safety root directory. All patches must target files within this directory. Defaults to the server process working directory.
+
+---
+
+### `chatbox_step`
+
+**Description:** Drain pending user messages from the injected in-page chatbox (`[`inject_chatbox`](#inject_chatbox)`) and append assistant replies back into the chat UI.
+
+**Purpose:** This is a minimal bridge for chat-driven iteration without requiring any network wiring.
+A higher-level agent can call this tool in a loop: user types → call `[`chatbox_step`](#chatbox_step)` → optionally call other tools → write results back.
+
+
+**Parameters:**
+
+- **maxMessages** (integer) _(optional)_: Maximum number of queued messages to drain in one call.
+- **patchId** (string) _(optional)_: Optional chatbox patchId to target. If omitted, uses `window.__MCP_CHATBOX__.patchId`.
+
+---
+
+### `evaluate_script`
+
+**Description:** Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON
+so returned values have to JSON-serializable.
+
+**Parameters:**
+
+- **function** (string) **(required)**: A JavaScript function declaration to be executed by the tool in the currently selected page.
+Example without arguments: `() => {
+  return document.title
+}` or `async () => {
+  return await fetch("example.com")
+}`.
+Example with arguments: `(el) => {
+  return el.innerText;
+}`
+
+- **args** (array) _(optional)_: An optional list of arguments to pass to the function.
+
+---
+
+### `export_prototype_state`
+
+**Description:** Export the current page into prototype files (HTML/CSS/JS) for browser-first iteration.
+
+This is intended for prototyping workflows where the browser is the source of truth: the export captures current DOM plus injected CSS/JS patches, and writes files only when explicitly requested.
+
+**Note:** The injected chatbox UI is excluded from the export by default.
+
+**Parameters:**
+
+- **baseName** (string) _(optional)_: Base filename used for outputs (e.g. prototype.html).
+- **includeChatbox** (boolean) _(optional)_: If true, include the injected chatbox UI in the exported HTML. Default false.
+- **includeExternal** (boolean) _(optional)_: If true, keep existing external &lt;link&gt; and &lt;script src&gt; references in the exported HTML.
+- **mode** (enum: "single_html", "split_files") _(optional)_: Export mode. `single_html` writes one self-contained HTML file. `split_files` writes index.html + styles.css + app.js (exporting only MCP-injected patches into the CSS/JS files).
+- **outputDir** (string) _(optional)_: Optional output directory. If omitted, a temporary directory is created.
+
+---
+
+### `get_console_message`
+
+**Description:** Gets a console message by its ID. You can get all messages by calling [`list_console_messages`](#list_console_messages).
+
+**Parameters:**
+
+- **msgid** (number) **(required)**: The msgid of a console message on the page from the listed console messages
+
+---
+
 ### `inject_chatbox`
 
 **Description:** Inject a dockable in-page chat panel into the current page. Returns a patchId that can be removed via `[`rollback_patch`](#rollback_patch)`.
 
 **Notes:**
-- This tool only injects a UI shell. Actual "live chat" wiring is handled by higher-level orchestration.
+- This tool injects a **Live Edit Session** panel intended for the browser-first / deferred-commit workflow (edit sessions + explicit export/commit).
 - Injection is idempotent: if the chatbox already exists and `replaceExisting=false`, the tool is a no-op and returns the existing patchId.
 
 
@@ -730,14 +901,6 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 
 ---
 
-### `list_edit_sessions`
-
-**Description:** List edit sessions currently held in memory by this MCP server process.
-
-**Parameters:** None
-
----
-
 ### `manipulate_dom`
 
 **Description:** Perform DOM manipulations on web pages including setting styles, adding/removing classes, inserting/removing elements, and batch operations.
@@ -758,23 +921,7 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 
 ---
 
-### `preview_commit_plan`
-
-**Description:** Preview a structured commit plan for an edit session without writing any files.
-
-This is the recommended Level-2 workflow: preview exactly what would be written (files + change ids + chunk previews), then apply the plan explicitly via [`apply_commit_plan`](#apply_commit_plan).
-
-**Parameters:**
-
-- **checkAlreadyApplied** (boolean) _(optional)_: If true, best-effort checks local files for existing edit-session markers and annotates the plan with alreadyApplied info.
-- **includeChunkContents** (boolean) _(optional)_: If true, include full chunk contents in the response (for copy/paste or passing into [`apply_commit_plan`](#apply_commit_plan)).
-- **maxChunkPreviewLength** (integer) _(optional)_: Maximum length of per-chunk previews included in the plan.
-- **rootDir** (string) _(optional)_: Optional root directory used for safety checks when inspecting planned write paths. If omitted, defaults to the server process working directory.
-- **sessionId** (string) _(optional)_: Optional session id. If omitted, uses the active session.
-
----
-
-### `preview_unified_diff_from_commit_plan`
+### `preview_diff_from_commit_plan`
 
 **Description:** Generate a unified diff (git-style) from a commit plan (typically produced by [`preview_commit_plan`](#preview_commit_plan)).
 
@@ -811,129 +958,5 @@ This lets Level-2 workflows produce reviewable diffs: plan → diff → [`apply_
 - **patchId** (string) **(required)**: Patch id previously returned by [`insert_css`](#insert_css)/[`insert_js`](#insert_js).
 - **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
 - **recordToSession** (boolean) _(optional)_: If true, record this rollback action into an edit session journal.
-
----
-
-### `set_active_edit_session`
-
-**Description:** Set (or clear) the active edit session used by recordToSession-enabled tools.
-
-**Parameters:**
-
-- **sessionId** (unknown) **(required)**: Session id to activate. Use null to clear the active session.
-
----
-
-### `summarize_edit_session`
-
-**Description:** Summarize an edit session into human-readable Markdown (optionally saving it to disk). Useful for sharing/PR prep without committing any changes.
-
-**Parameters:**
-
-- **filePath** (string) _(optional)_: Optional output path. If provided, writes the markdown summary to this file.
-- **maxSnippetLength** (integer) _(optional)_: Maximum length of CSS/JS snippet previews included per change (0 disables snippet previews).
-- **sessionId** (string) _(optional)_: Optional session id. If omitted, summarizes the active session.
-
----
-
-### `svg_snapshot`
-
-**Description:** Render a visual SVG wireframe of the current page (or a subset of elements). Uses the same underlying snapshot as [`wireframe_snapshot`](#wireframe_snapshot), but returns the SVG content wrapped in JSON for better parseability.
-
-**Parameters:**
-
-- **background** (enum: "transparent", "white", "black") _(optional)_: Background [`fill`](#fill) for the SVG canvas.
-- **compareWith** (string) _(optional)_: Optional previous wireframe JSON (from [`wireframe_snapshot`](#wireframe_snapshot)) to compare against. When provided with highlightChanged=true, changed rects are highlighted.
-- **computedStylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Computed style whitelist preset used when computedStyleWhitelist is not provided.
-- **computedStyleWhitelist** (array) _(optional)_: Override computed style whitelist. If provided, stylePreset is ignored.
-- **coordinateSpace** (enum: "viewport", "document") _(optional)_: Coordinate space for rendering: viewport (scroll-adjusted) or document (absolute page coordinates, viewBox set to current viewport window).
-- **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the SVG output to instead of attaching it to the response.
-- **fillOpacity** (number) _(optional)_: [`Fill`](#fill) opacity for element rectangles.
-- **highlightChanged** (boolean) _(optional)_: If true, highlights elements whose rect changed compared to compareWith.
-- **includeComputedStyles** (boolean) _(optional)_: If true, includes a whitelist of computed styles for each element via DOMSnapshot.captureSnapshot (also used for optional diff/analysis).
-- **includeDescendants** (boolean) _(optional)_: When used with selectors, includes matching elements’ descendants as well (within scopeSelector if provided).
-- **includeLayoutAssertions** (boolean) _(optional)_: If true, adds a small derived layoutAssertions section (e.g., overflow offenders).
-- **includePseudoElements** (boolean) _(optional)_: If true, includes pseudo-element nodes (e.g. ::before/::after) when present in the DOMSnapshot.
-- **includeShadowDom** (boolean) _(optional)_: If true, attempts to include and query into open shadow roots under the scope root (best-effort).
-- **includeTextSnippets** (boolean) _(optional)_: If true, includes best-effort textSnippet fields when available in the snapshot (bounded).
-- **maxDepth** (integer) _(optional)_: Limit traversal depth (0 means only the scope root itself when scopeSelector is provided).
-- **maxElements** (integer) _(optional)_: Legacy alias for maxTotal. Prefer maxTotal.
-- **maxPerSelector** (integer) _(optional)_: When multiple selectors are provided, cap the number of matches per selector (best-effort).
-- **maxTotal** (integer) _(optional)_: Maximum number of elements to render (after filtering).
-- **scale** (number) _(optional)_: Scale factor applied to the output SVG dimensions.
-- **scopeSelector** (string) _(optional)_: Optional CSS selector that constrains results to elements within this scope element.
-- **scrollToSelector** (string) _(optional)_: Optional CSS selector to scroll into view before capture.
-- **scrollToY** (number) _(optional)_: Optional Y scroll position to set before capture (document coordinates).
-- **selectors** (array) _(optional)_: Optional CSS selectors. When provided, the snapshot is filtered to these elements (not their descendants unless includeDescendants is true).
-- **showDimensions** (boolean) _(optional)_: If true, draws width×height labels for each box.
-- **showLabels** (boolean) _(optional)_: If true, draws tag/id/class labels in the top-left of each box.
-- **showSpacing** (boolean) _(optional)_: If true, visualizes margins, padding, and gaps between elements.
-- **strokeWidth** (number) _(optional)_: Stroke width for element rectangles.
-- **stylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Deprecated alias for computedStylePreset. Prefer computedStylePreset.
-- **textSnippetMaxLength** (integer) _(optional)_: Maximum length for textSnippet when includeTextSnippets is true.
-
----
-
-### `take_screenshot`
-
-**Description:** Take a screenshot of the page or element.
-
-**Parameters:**
-
-- **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the screenshot to instead of attaching it to the response.
-- **format** (enum: "png", "jpeg", "webp") _(optional)_: Type of format to save the screenshot as. Default is "png"
-- **fullPage** (boolean) _(optional)_: If set to true takes a screenshot of the full page instead of the currently visible viewport. Incompatible with uid.
-- **quality** (number) _(optional)_: Compression quality for JPEG and WebP formats (0-100). Higher values mean better quality but larger file sizes. Ignored for PNG format.
-- **uid** (string) _(optional)_: The uid of an element on the page from the page content snapshot. If omitted takes a pages screenshot.
-
----
-
-### `take_snapshot`
-
-**Description:** Take a text snapshot of the currently selected page based on the a11y tree. The snapshot lists page elements along with a unique
-identifier (uid). Always use the latest snapshot. Prefer taking a snapshot over taking a screenshot. The snapshot indicates the element selected
-in the DevTools Elements panel (if any).
-
-**Parameters:**
-
-- **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the snapshot to instead of attaching it to the response.
-- **verbose** (boolean) _(optional)_: Whether to include all possible information available in the full a11y tree. Default is false.
-
----
-
-### `wireframe_snapshot`
-
-**Description:** Capture a compact, deterministic wireframe snapshot of the currently selected page using CDP DOMSnapshot.captureSnapshot. Returns element rects (and optionally a small set of computed styles) suitable for overlap/gap analysis.
-
-**Guidance:**
-
-- **selectors vs scopeSelector**: Use `selectors` to filter down to specific elements (or element groups). Use `scopeSelector` to constrain results to a subtree (descendants of a container). They can be combined: `selectors` are resolved within the `scopeSelector` root.
-- **maxTotal truncation**: `maxTotal` is applied after all filters. The snapshot is returned in a deterministic order and sets `truncated: true` when the cap is hit. If you’re debugging a component subtree, prefer narrowing with `scopeSelector` and increasing `maxTotal`.
-- **Computed styles (computedStylePreset / computedStyleWhitelist)**: These only apply when `includeComputedStyles: true`. Use `computedStylePreset: "layout"` for UI/layout debugging; use `"debug"` when you also need extra diagnostics; use `computedStyleWhitelist` for an explicit list.
-
-**Parameters:**
-
-- **compareWith** (string) _(optional)_: Optional previous wireframe JSON (from [`wireframe_snapshot`](#wireframe_snapshot)) to compare against. Adds diff metadata to the output.
-- **computedStylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Computed style whitelist preset used when computedStyleWhitelist is not provided.
-- **computedStyleWhitelist** (array) _(optional)_: Override computed style whitelist. If provided, stylePreset is ignored.
-- **coordinateSpace** (enum: "viewport", "document") _(optional)_: Coordinate space for returned rects: viewport (scroll-adjusted) or document (page coordinates).
-- **filePath** (string) _(optional)_: The absolute path, or a path relative to the current working directory, to save the JSON output to instead of returning it inline.
-- **includeComputedStyles** (boolean) _(optional)_: If true, includes a whitelist of computed styles for each element via DOMSnapshot.captureSnapshot.
-- **includeDescendants** (boolean) _(optional)_: When used with selectors, includes matching elements’ descendants as well (within scopeSelector if provided).
-- **includeDiff** (boolean) _(optional)_: If true, includes diff metadata (changed/added/removed). Defaults to true when compareWith is provided.
-- **includeLayoutAssertions** (boolean) _(optional)_: If true, adds a small derived layoutAssertions section (e.g., overflow offenders).
-- **includePseudoElements** (boolean) _(optional)_: If true, includes pseudo-element nodes (e.g. ::before/::after) when present in the DOMSnapshot.
-- **includeShadowDom** (boolean) _(optional)_: If true, attempts to include and query into open shadow roots under the scope root (best-effort).
-- **includeTextSnippets** (boolean) _(optional)_: If true, includes best-effort textSnippet fields when available in the snapshot (bounded).
-- **maxDepth** (integer) _(optional)_: Limit traversal depth (0 means only the scope root itself when scopeSelector is provided).
-- **maxElements** (integer) _(optional)_: Legacy alias for maxTotal. Prefer maxTotal.
-- **maxPerSelector** (integer) _(optional)_: When multiple selectors are provided, cap the number of matches per selector (best-effort).
-- **maxTotal** (integer) _(optional)_: Maximum number of elements to return (after filtering).
-- **scopeSelector** (string) _(optional)_: Optional CSS selector that constrains results to elements within this scope element.
-- **scrollToSelector** (string) _(optional)_: Optional CSS selector to scroll into view before capture.
-- **scrollToY** (number) _(optional)_: Optional Y scroll position to set before capture (document coordinates).
-- **selectors** (array) _(optional)_: Optional CSS selectors. When provided, the snapshot is filtered to these elements (not their descendants unless includeDescendants is true).
-- **stylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Deprecated alias for computedStylePreset. Prefer computedStylePreset.
-- **textSnippetMaxLength** (integer) _(optional)_: Maximum length for textSnippet when includeTextSnippets is true.
 
 ---

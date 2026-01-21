@@ -40,7 +40,7 @@ export const captureEvidenceBundle = defineTool({
     'Capture a small evidence bundle (wireframe JSON/SVG, text snapshot, optional screenshot) into a folder and optionally record the artifact paths into an edit session.\n\n' +
     'This is designed for Level 0/1 workflows: collect proof of what you changed in Chromium without committing anything to the repo.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.SNAPSHOT,
     // Not read-only due to file writes.
     readOnlyHint: false,
   },

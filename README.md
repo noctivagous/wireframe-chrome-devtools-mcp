@@ -48,6 +48,12 @@ The **default expectation** for this branch is:
 If you want the agent to keep iterating in-browser, say: **“keep it live; don’t write files yet.”**
 If you want to land changes, say: **“commit/apply this to files”** (and ideally specify the target path or ask for a plan/diff first).
 
+### Tool toggles web UI (turn tools on/off, persisted to JSON)
+
+If you have too many tools exposed at once, you can run a small local web UI to enable/disable tools and persist the selection on disk:
+
+- Docs: `docs/tool-toggles-ui.md`
+
 #### Headless edit sessions (supported when explicitly enabled)
 
 You can run the same edit-session workflows **without a visible browser window** by enabling headless mode (`--headless=true`). This preserves the “fast loop” semantics, but the feedback loop becomes **artifacts/logs** instead of what you watch on screen.
@@ -506,20 +512,31 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 - **Network** (2 tools)
   - [`get_network_request`](docs/tool-reference.md#get_network_request)
   - [`list_network_requests`](docs/tool-reference.md#list_network_requests)
-- **Debugging** (33 tools)
-  - [`analyze_js`](docs/tool-reference.md#analyze_js)
-  - [`apply_commit_plan`](docs/tool-reference.md#apply_commit_plan)
-  - [`apply_unified_diff`](docs/tool-reference.md#apply_unified_diff)
-  - [`begin_edit_session`](docs/tool-reference.md#begin_edit_session)
+- **Snapshot** (5 tools)
   - [`capture_evidence_bundle`](docs/tool-reference.md#capture_evidence_bundle)
-  - [`chatbox_step`](docs/tool-reference.md#chatbox_step)
+  - [`svg_snapshot`](docs/tool-reference.md#svg_snapshot)
+  - [`take_screenshot`](docs/tool-reference.md#take_screenshot)
+  - [`take_snapshot`](docs/tool-reference.md#take_snapshot)
+  - [`wireframe_snapshot`](docs/tool-reference.md#wireframe_snapshot)
+- **Edit Session** (11 tools)
+  - [`apply_commit_plan`](docs/tool-reference.md#apply_commit_plan)
+  - [`begin_edit_session`](docs/tool-reference.md#begin_edit_session)
   - [`clear_edit_session`](docs/tool-reference.md#clear_edit_session)
   - [`commit_edit_session_to_files`](docs/tool-reference.md#commit_edit_session_to_files)
-  - [`evaluate_script`](docs/tool-reference.md#evaluate_script)
   - [`export_edit_session`](docs/tool-reference.md#export_edit_session)
   - [`export_edit_session_package`](docs/tool-reference.md#export_edit_session_package)
-  - [`get_console_message`](docs/tool-reference.md#get_console_message)
   - [`get_edit_session`](docs/tool-reference.md#get_edit_session)
+  - [`list_edit_sessions`](docs/tool-reference.md#list_edit_sessions)
+  - [`preview_commit_plan`](docs/tool-reference.md#preview_commit_plan)
+  - [`set_active_edit_session`](docs/tool-reference.md#set_active_edit_session)
+  - [`summarize_edit_session`](docs/tool-reference.md#summarize_edit_session)
+- **Debugging** (18 tools)
+  - [`analyze_js`](docs/tool-reference.md#analyze_js)
+  - [`apply_unified_diff`](docs/tool-reference.md#apply_unified_diff)
+  - [`chatbox_step`](docs/tool-reference.md#chatbox_step)
+  - [`evaluate_script`](docs/tool-reference.md#evaluate_script)
+  - [`export_prototype_state`](docs/tool-reference.md#export_prototype_state)
+  - [`get_console_message`](docs/tool-reference.md#get_console_message)
   - [`inject_chatbox`](docs/tool-reference.md#inject_chatbox)
   - [`insert_css`](docs/tool-reference.md#insert_css)
   - [`insert_css_preview`](docs/tool-reference.md#insert_css_preview)
@@ -528,18 +545,10 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`inspect_state`](docs/tool-reference.md#inspect_state)
   - [`js_console`](docs/tool-reference.md#js_console)
   - [`list_console_messages`](docs/tool-reference.md#list_console_messages)
-  - [`list_edit_sessions`](docs/tool-reference.md#list_edit_sessions)
   - [`manipulate_dom`](docs/tool-reference.md#manipulate_dom)
-  - [`preview_commit_plan`](docs/tool-reference.md#preview_commit_plan)
-  - [`preview_unified_diff_from_commit_plan`](docs/tool-reference.md#preview_unified_diff_from_commit_plan)
+  - [`preview_diff_from_commit_plan`](docs/tool-reference.md#preview_diff_from_commit_plan)
   - [`rollback_all`](docs/tool-reference.md#rollback_all)
   - [`rollback_patch`](docs/tool-reference.md#rollback_patch)
-  - [`set_active_edit_session`](docs/tool-reference.md#set_active_edit_session)
-  - [`summarize_edit_session`](docs/tool-reference.md#summarize_edit_session)
-  - [`svg_snapshot`](docs/tool-reference.md#svg_snapshot)
-  - [`take_screenshot`](docs/tool-reference.md#take_screenshot)
-  - [`take_snapshot`](docs/tool-reference.md#take_snapshot)
-  - [`wireframe_snapshot`](docs/tool-reference.md#wireframe_snapshot)
 
 <!-- END AUTO GENERATED TOOLS -->
 
@@ -626,6 +635,25 @@ The Chrome DevTools MCP server supports the following configuration option:
   Set to false to exclude tools related to network.
   - **Type:** boolean
   - **Default:** `true`
+
+- **`--toolConfig`/ `--tool-config`**
+  Path to a JSON file used to persist tool enable/disable settings (used by the tool toggles web UI). Defaults to ./.chrome-devtools-mcp-tools.json
+  - **Type:** string
+
+- **`--webUi`/ `--web-ui`**
+  If true, start a local web UI for enabling/disabling tools (persisted to toolConfig). Disable with --no-web-ui.
+  - **Type:** boolean
+  - **Default:** `true`
+
+- **`--webUiHost`/ `--web-ui-host`**
+  Bind host for the tool toggles web UI (default: 127.0.0.1).
+  - **Type:** string
+  - **Default:** `127.0.0.1`
+
+- **`--webUiPort`/ `--web-ui-port`**
+  Port for the tool toggles web UI (default: 7332).
+  - **Type:** number
+  - **Default:** `7332`
 
 <!-- END AUTO GENERATED OPTIONS -->
 

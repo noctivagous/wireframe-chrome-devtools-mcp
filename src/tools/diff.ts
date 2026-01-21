@@ -373,7 +373,7 @@ function toUnifiedDiffForAppend(options: {
 }
 
 export const previewUnifiedDiffFromCommitPlan = defineTool({
-  name: 'preview_unified_diff_from_commit_plan',
+  name: 'preview_diff_from_commit_plan',
   description:
     'Generate a unified diff (git-style) from a commit plan (typically produced by preview_commit_plan).\n\n' +
     'This lets Level-2 workflows produce reviewable diffs: plan → diff → apply_unified_diff (or git apply).',
