@@ -20,10 +20,17 @@ Use an edit session to buffer changes during experimentation:
 - **Preview changes**: run tools with `recordToSession: true` (optionally with `targetFilePath`)
   - CSS: `insert_css_preview` (for per-property A/B testing) or `insert_css` (for full snippets)
   - JS: `insert_js_preview` (for variants) or `insert_js` / `evaluate_script`
-- **Capture evidence**: rely on the preview tools’ wireframe output, or capture explicit `wireframe_snapshot` / `svg_snapshot` artifacts as needed.
+- **Capture evidence**:
+  - For a single “evidence bundle folder” (recommended), use `capture_evidence_bundle` (writes artifacts to a temp dir by default, and can optionally `recordToSession` so exported edit-session packages include exact evidence paths).
+  - Or capture explicit artifacts as needed: `wireframe_snapshot` / `svg_snapshot` / `take_snapshot` / `take_screenshot`.
 - **End of session** (explicit):
   - **Export**: `export_edit_session` to a JSON file (for review/sharing), and/or
-  - **Commit**: `commit_edit_session_to_files` (best-effort append-only) using the `targetFilePath` hints recorded during preview.
+  - **Commit (Level 2, recommended)**:
+    - `preview_commit_plan` (shows exactly what files/changes would be written)
+    - `apply_commit_plan` (writes, supports `dryRun`)
+  - **Commit (diff-based, advanced)**:
+    - If you already have a patch in unified diff format (e.g. from an external review step), use `apply_unified_diff` to apply it with strict conflict detection and `rootDir` safety anchoring.
+  - **Commit (legacy)**: `commit_edit_session_to_files` (best-effort append-only) using the `targetFilePath` hints recorded during preview.
 
 ## Rollback semantics
 

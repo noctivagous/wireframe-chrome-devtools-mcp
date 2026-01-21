@@ -30,15 +30,21 @@
 - **[Network](#network)** (2 tools)
   - [`get_network_request`](#get_network_request)
   - [`list_network_requests`](#list_network_requests)
-- **[Debugging](#debugging)** (24 tools)
+- **[Debugging](#debugging)** (33 tools)
   - [`analyze_js`](#analyze_js)
+  - [`apply_commit_plan`](#apply_commit_plan)
+  - [`apply_unified_diff`](#apply_unified_diff)
   - [`begin_edit_session`](#begin_edit_session)
+  - [`capture_evidence_bundle`](#capture_evidence_bundle)
+  - [`chatbox_step`](#chatbox_step)
   - [`clear_edit_session`](#clear_edit_session)
   - [`commit_edit_session_to_files`](#commit_edit_session_to_files)
   - [`evaluate_script`](#evaluate_script)
   - [`export_edit_session`](#export_edit_session)
+  - [`export_edit_session_package`](#export_edit_session_package)
   - [`get_console_message`](#get_console_message)
   - [`get_edit_session`](#get_edit_session)
+  - [`inject_chatbox`](#inject_chatbox)
   - [`insert_css`](#insert_css)
   - [`insert_css_preview`](#insert_css_preview)
   - [`insert_js`](#insert_js)
@@ -48,9 +54,12 @@
   - [`list_console_messages`](#list_console_messages)
   - [`list_edit_sessions`](#list_edit_sessions)
   - [`manipulate_dom`](#manipulate_dom)
+  - [`preview_commit_plan`](#preview_commit_plan)
+  - [`preview_unified_diff_from_commit_plan`](#preview_unified_diff_from_commit_plan)
   - [`rollback_all`](#rollback_all)
   - [`rollback_patch`](#rollback_patch)
   - [`set_active_edit_session`](#set_active_edit_session)
+  - [`summarize_edit_session`](#summarize_edit_session)
   - [`svg_snapshot`](#svg_snapshot)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
@@ -349,16 +358,106 @@
 
 ---
 
+### `apply_commit_plan`
+
+**Description:** Apply a previously previewed commit plan by writing changes to disk.
+
+This tool is designed to be used with [`preview_commit_plan`](#preview_commit_plan). It supports dryRun mode.
+
+**Important contract:** this is an explicit filesystem write step. Do not call it unless the user asked to commit/apply changes to files.
+
+**Parameters:**
+
+- **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would happen.
+- **planJson** (string) _(optional)_: Commit plan JSON (from [`preview_commit_plan`](#preview_commit_plan) with includeChunkContents=true). If omitted, the plan is regenerated from sessionId.
+- **rootDir** (string) _(optional)_: Safety root directory. All writes must stay within this directory. Defaults to the server process working directory.
+- **sessionId** (string) _(optional)_: Optional session id (used only when planJson is omitted).
+- **skipIfAlreadyApplied** (boolean) _(optional)_: If true, skips appending chunks that appear to already be present in the target file (best-effort marker check).
+
+---
+
+### `apply_unified_diff`
+
+**Description:** Apply a unified diff (git-style) to local files with strict conflict detection.
+
+This is a Level-2 building block: apply small, reviewable diffs to the repo after validating changes in-browser.
+
+**Parameters:**
+
+- **diff** (string) **(required)**: Unified diff text to apply.
+- **allowCreate** (boolean) _(optional)_: If true, allow creating new files when the diff targets /dev/null → new file.
+- **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would change.
+- **rootDir** (string) _(optional)_: Safety root directory. All patches must target files within this directory. Defaults to the server process working directory.
+
+---
+
 ### `begin_edit_session`
 
 **Description:** Start (and optionally activate) an edit session used to buffer live-in-Chromium edits during an interactive workflow.
 
 This is designed to keep the loop fast (apply changes in the Chromium instance) and defer filesystem writes until an explicit export/commit step.
 
+**Important contract:** starting an edit session does **not** write repo/source files. File writes only happen if you explicitly call commit/apply tools (e.g. `[`apply_commit_plan`](#apply_commit_plan)`, `[`commit_edit_session_to_files`](#commit_edit_session_to_files)`, `[`apply_unified_diff`](#apply_unified_diff)`).
+
 **Parameters:**
 
 - **label** (string) _(optional)_: Optional label for the session (e.g., "multi-column feed experiment").
 - **setActive** (boolean) _(optional)_: If true, make this the active session for subsequent recorded changes.
+
+---
+
+### `capture_evidence_bundle`
+
+**Description:** Capture a small evidence bundle (wireframe JSON/SVG, text snapshot, optional screenshot) into a folder and optionally record the artifact paths into an edit session.
+
+This is designed for Level 0/1 workflows: collect proof of what you changed in Chromium without committing anything to the repo.
+
+**Parameters:**
+
+- **baseName** (string) _(optional)_: Base filename prefix for artifacts. If omitted, a timestamped name is generated.
+- **computedStylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Computed style preset used when includeComputedStyles=true.
+- **coordinateSpace** (enum: "viewport", "document") _(optional)_: Coordinate space for wireframe rects (viewport or document).
+- **description** (string) _(optional)_: Optional human description to store alongside the evidence bundle entry.
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
+- **includeComputedStyles** (boolean) _(optional)_: If true, include a computed-style whitelist for each element in the wireframe JSON.
+- **includeDescendants** (boolean) _(optional)_: When used with selectors, include descendants of matches in the wireframe capture.
+- **includeScreenshot** (boolean) _(optional)_: If true, capture a screenshot (slower, larger).
+- **includeTextSnapshot** (boolean) _(optional)_: If true, capture the a11y-tree-based text snapshot (like [`take_snapshot`](#take_snapshot)).
+- **includeWireframeJson** (boolean) _(optional)_: If true, capture a structured wireframe snapshot JSON (DOMSnapshot-based).
+- **includeWireframeSvg** (boolean) _(optional)_: If true, render and save an SVG wireframe snapshot.
+- **maxTotal** (integer) _(optional)_: Maximum number of elements to return in the wireframe snapshot (after filtering).
+- **outputDir** (string) _(optional)_: Optional output directory. If omitted, creates a temporary evidence directory under the OS temp folder.
+- **recordToSession** (boolean) _(optional)_: If true, record this evidence bundle (paths + metadata) into an edit session journal.
+- **scopeSelector** (string) _(optional)_: Optional scope selector to constrain wireframe capture to a subtree.
+- **screenshotFormat** (enum: "png", "jpeg", "webp") _(optional)_: Screenshot format (when includeScreenshot=true).
+- **screenshotFullPage** (boolean) _(optional)_: If true, capture a full-page screenshot (when includeScreenshot=true).
+- **screenshotQuality** (number) _(optional)_: Screenshot quality for jpeg/webp (ignored for png).
+- **selectors** (array) _(optional)_: Optional selectors to focus the wireframe capture on specific elements.
+- **svgBackground** (enum: "transparent", "white", "black") _(optional)_: SVG background.
+- **svgFillOpacity** (number) _(optional)_: [`Fill`](#fill) opacity for element rectangles in the SVG.
+- **svgScale** (number) _(optional)_: Scale factor for SVG output.
+- **svgShowDimensions** (boolean) _(optional)_: If true, include element dimensions (W×H) in the SVG.
+- **svgShowLabels** (boolean) _(optional)_: If true, include element labels in the SVG.
+- **svgShowSpacing** (boolean) _(optional)_: If true, render basic spacing annotations (heuristic).
+- **svgStrokeWidth** (number) _(optional)_: Stroke width for element rectangles in the SVG.
+- **textSnapshotVerbose** (boolean) _(optional)_: If true, include the verbose text snapshot payload.
+
+---
+
+### `chatbox_step`
+
+**Description:** Drain pending user messages from the injected in-page chatbox (`[`inject_chatbox`](#inject_chatbox)`) and append assistant replies back into the chat UI.
+
+**Purpose:** This is a minimal bridge for chat-driven iteration without requiring any network wiring.
+A higher-level agent can call this tool in a loop: user types → call `[`chatbox_step`](#chatbox_step)` → optionally call other tools → write results back.
+
+
+**Parameters:**
+
+- **maxMessages** (integer) _(optional)_: Maximum number of queued messages to drain in one call.
+- **patchId** (string) _(optional)_: Optional chatbox patchId to target. If omitted, uses `window.__MCP_CHATBOX__.patchId`.
+- **respond** (boolean) _(optional)_: If true, append an assistant reply for each drained user message.
+- **responsePrefix** (string) _(optional)_: Prefix for the default assistant reply.
 
 ---
 
@@ -378,10 +477,14 @@ This is designed to keep the loop fast (apply changes in the Chromium instance) 
 
 This intentionally runs as an explicit end-of-session step to avoid editor lag during iteration. Currently supports appending recorded CSS/JS snippets to files referenced by targetFilePath (recorded via recordToSession-enabled tools).
 
+**Important contract:** this is an explicit filesystem write step. Do not call it unless the user asked to commit/apply changes to files.
+
 **Parameters:**
 
 - **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would happen.
+- **rootDir** (string) _(optional)_: Safety root directory. All writes must stay within this directory. Defaults to the server process working directory.
 - **sessionId** (string) _(optional)_: Optional session id. If omitted, commits the active session.
+- **skipIfAlreadyApplied** (boolean) _(optional)_: If true, skips appending chunks that appear to already be present in the target file (best-effort marker check).
 
 ---
 
@@ -417,6 +520,18 @@ Example with arguments: `(el) => {
 
 ---
 
+### `export_edit_session_package`
+
+**Description:** Export an edit session as a small “package folder”: JSON session log + a Markdown summary. This is Level-1 friendly (shareable) and still makes no repo edits.
+
+**Parameters:**
+
+- **maxSnippetLength** (integer) _(optional)_: Maximum length of CSS/JS snippet previews included in the generated summary markdown (0 disables snippet previews).
+- **outputDir** (string) _(optional)_: Optional output directory to write the package into. If omitted, creates a temporary directory.
+- **sessionId** (string) _(optional)_: Optional session id. If omitted, exports the active session.
+
+---
+
 ### `get_console_message`
 
 **Description:** Gets a console message by its ID. You can get all messages by calling [`list_console_messages`](#list_console_messages).
@@ -434,6 +549,31 @@ Example with arguments: `(el) => {
 **Parameters:**
 
 - **sessionId** (string) _(optional)_: Optional session id. If omitted, returns the active session.
+
+---
+
+### `inject_chatbox`
+
+**Description:** Inject a dockable in-page chat panel into the current page. Returns a patchId that can be removed via `[`rollback_patch`](#rollback_patch)`.
+
+**Notes:**
+- This tool only injects a UI shell. Actual "live chat" wiring is handled by higher-level orchestration.
+- Injection is idempotent: if the chatbox already exists and `replaceExisting=false`, the tool is a no-op and returns the existing patchId.
+
+
+**Parameters:**
+
+- **action** (enum: "inject", "remove") _(optional)_: Whether to inject the chatbox or remove it (cleanup).
+- **description** (string) _(optional)_: Optional human description to store in the patch registry.
+- **dock** (enum: "right", "left", "bottom") _(optional)_: Where to dock the chatbox UI.
+- **height** (integer) _(optional)_: Height in pixels for bottom-docked chatbox.
+- **patchId** (string) _(optional)_: Optional patch id. If omitted, the server generates a stable patch id.
+- **placeholder** (string) _(optional)_: Placeholder text for the message input.
+- **replaceExisting** (boolean) _(optional)_: If true, replaces any existing injected chatbox UI in the page (even if it was injected under a different patchId).
+- **startOpen** (boolean) _(optional)_: If false, chatbox starts collapsed (header only).
+- **title** (string) _(optional)_: Title displayed in the chatbox header.
+- **width** (integer) _(optional)_: Width in pixels for left/right docked chatbox.
+- **zIndex** (integer) _(optional)_: CSS z-index for the chatbox container.
 
 ---
 
@@ -461,7 +601,8 @@ Example with arguments: `(el) => {
 
 - **Auto-rollback by default**: Changes are automatically rolled back after capturing snapshots (`autoRollback` defaults to `true`), making this safe for temporary CSS experimentation without affecting the live page state.
 - **Multiple values for A/B testing**: Pass an array of different values to `values` (e.g., `["16px", "24px", "32px"]`) to quickly compare how different CSS values affect layout, with each value generating a separate wireframe snapshot for comparison.
-- **Fast interactive workflow (recommended)**: Use `[`begin_edit_session`](#begin_edit_session)`, then run `[`insert_css_preview`](#insert_css_preview)` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, run `[`export_edit_session`](#export_edit_session)` or `[`commit_edit_session_to_files`](#commit_edit_session_to_files)` once at the end to avoid editor/filesystem lag during iteration.
+- **Fast interactive workflow (recommended)**: Use `[`begin_edit_session`](#begin_edit_session)`, then run `[`insert_css_preview`](#insert_css_preview)` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, export (`[`export_edit_session`](#export_edit_session)`) and/or explicitly commit/apply to files (`[`preview_commit_plan`](#preview_commit_plan)` → `[`apply_commit_plan`](#apply_commit_plan)`, or `[`commit_edit_session_to_files`](#commit_edit_session_to_files)`) once at the end.
+- **Important contract**: previewing CSS changes modifies the live page, but does **not** write repo/source files unless you explicitly run a commit/apply tool.
 
 **Parameters:**
 
@@ -505,7 +646,8 @@ Example with arguments: `(el) => {
 
 - **Rollback caveat**: `autoRollback` removes the injected `&lt;script&gt;` tag, but it cannot reliably undo side-effects (e.g., DOM mutations, timers, event listeners). Treat this as best-effort cleanup for exploration.
 - **Multiple variants for A/B testing**: Pass multiple entries to `scripts` to compare outcomes; each variant generates its own wireframe snapshot.
-- **Fast interactive workflow (recommended)**: Use `[`begin_edit_session`](#begin_edit_session)`, then run `[`insert_js_preview`](#insert_js_preview)` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, run `[`export_edit_session`](#export_edit_session)` or `[`commit_edit_session_to_files`](#commit_edit_session_to_files)` once at the end.
+- **Fast interactive workflow (recommended)**: Use `[`begin_edit_session`](#begin_edit_session)`, then run `[`insert_js_preview`](#insert_js_preview)` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, export (`[`export_edit_session`](#export_edit_session)`) and/or explicitly commit/apply to files (`[`preview_commit_plan`](#preview_commit_plan)` → `[`apply_commit_plan`](#apply_commit_plan)`, or `[`commit_edit_session_to_files`](#commit_edit_session_to_files)`) once at the end.
+- **Important contract**: previewing JS changes modifies the live page, but does **not** write repo/source files unless you explicitly run a commit/apply tool.
 
 **Parameters:**
 
@@ -616,6 +758,38 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 
 ---
 
+### `preview_commit_plan`
+
+**Description:** Preview a structured commit plan for an edit session without writing any files.
+
+This is the recommended Level-2 workflow: preview exactly what would be written (files + change ids + chunk previews), then apply the plan explicitly via [`apply_commit_plan`](#apply_commit_plan).
+
+**Parameters:**
+
+- **checkAlreadyApplied** (boolean) _(optional)_: If true, best-effort checks local files for existing edit-session markers and annotates the plan with alreadyApplied info.
+- **includeChunkContents** (boolean) _(optional)_: If true, include full chunk contents in the response (for copy/paste or passing into [`apply_commit_plan`](#apply_commit_plan)).
+- **maxChunkPreviewLength** (integer) _(optional)_: Maximum length of per-chunk previews included in the plan.
+- **rootDir** (string) _(optional)_: Optional root directory used for safety checks when inspecting planned write paths. If omitted, defaults to the server process working directory.
+- **sessionId** (string) _(optional)_: Optional session id. If omitted, uses the active session.
+
+---
+
+### `preview_unified_diff_from_commit_plan`
+
+**Description:** Generate a unified diff (git-style) from a commit plan (typically produced by [`preview_commit_plan`](#preview_commit_plan)).
+
+This lets Level-2 workflows produce reviewable diffs: plan → diff → [`apply_unified_diff`](#apply_unified_diff) (or git apply).
+
+**Parameters:**
+
+- **planJson** (string) **(required)**: Commit plan JSON (from [`preview_commit_plan`](#preview_commit_plan) with includeChunkContents=true).
+- **allowCreate** (boolean) _(optional)_: If true, allow generating diffs that create new files when targets do not exist.
+- **contextLines** (integer) _(optional)_: Number of trailing context lines to include per file for stricter patching.
+- **rootDir** (string) _(optional)_: Safety root directory used to compute relative paths and constrain file reads. Defaults to the server process working directory.
+- **skipIfAlreadyApplied** (boolean) _(optional)_: If true, skips chunks whose marker text already exists in the target file (best-effort).
+
+---
+
 ### `rollback_all`
 
 **Description:** Rollback (remove) all patches inserted by this MCP server in the current page.
@@ -647,6 +821,18 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 **Parameters:**
 
 - **sessionId** (unknown) **(required)**: Session id to activate. Use null to clear the active session.
+
+---
+
+### `summarize_edit_session`
+
+**Description:** Summarize an edit session into human-readable Markdown (optionally saving it to disk). Useful for sharing/PR prep without committing any changes.
+
+**Parameters:**
+
+- **filePath** (string) _(optional)_: Optional output path. If provided, writes the markdown summary to this file.
+- **maxSnippetLength** (integer) _(optional)_: Maximum length of CSS/JS snippet previews included per change (0 disables snippet previews).
+- **sessionId** (string) _(optional)_: Optional session id. If omitted, summarizes the active session.
 
 ---
 

@@ -1,0 +1,141 @@
+{
+  "sessionId": "edit_2",
+  "createdAt": 1768952228558,
+  "label": "dark-theme-segmented-control",
+  "changes": [
+    {
+      "type": "insert_css",
+      "pageId": 2,
+      "createdAt": 1768952235603,
+      "patchId": "css_3",
+      "description": "Dark theme styling for header controls",
+      "payload": {
+        "cssText": "    body {\n        background: #1e1e1e;\n        color: #d4d4d4;\n    }\n\n    .header {\n        background: linear-gradient(to bottom, #2d2d30 0%, #252526 100%);\n        border: 1px solid #3e3e42;\n        border-radius: 6px;\n        box-shadow: 0 2px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);\n        padding: 12px 16px;\n    }\n\n    .control-group {\n        background: linear-gradient(to bottom, #3c3c3c 0%, #323233 100%);\n        border: 1px solid #464647;\n        border-radius: 4px;\n        padding: 8px 12px;\n        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.05);\n        min-height: 36px;\n    }\n\n    .control-group label {\n        color: #cccccc;\n        font-size: 0.875rem;\n        font-weight: 500;\n    }\n\n    /* Segmented Control for Mode */\n    .mode-segmented {\n        display: inline-flex;\n        background: #1e1e1e;\n        border: 1px solid #464647;\n        border-radius: 4px;\n        padding: 2px;\n        gap: 2px;\n    }\n\n    .mode-segmented button {\n        background: transparent;\n        border: none;\n        padding: 4px 12px;\n        font-size: 0.8125rem;\n        color: #cccccc;\n        cursor: pointer;\n        border-radius: 3px;\n        transition: all 0.15s;\n        white-space: nowrap;\n        box-shadow: none;\n    }\n\n    .mode-segmented button:hover {\n        background: rgba(255,255,255,0.05);\n    }\n\n    .mode-segmented button.active {\n        background: linear-gradient(to bottom, #0078d4 0%, #0063b1 100%);\n        color: #ffffff;\n        box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 2px rgba(0,0,0,0.3);\n    }\n\n    select {\n        background: linear-gradient(to bottom, #3c3c3c 0%, #323233 100%);\n        border: 1px solid #464647;\n        border-radius: 3px;\n        padding: 4px 24px 4px 8px;\n        font-size: 0.875rem;\n        color: #cccccc;\n        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);\n        cursor: pointer;\n        appearance: none;\n        background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23cccccc' d='M6 9L1 4h10z'/%3E%3C/svg%3E\");\n        background-repeat: no-repeat;\n        background-position: right 6px center;\n    }\n\n    select:hover {\n        border-color: #5a5a5a;\n        background: linear-gradient(to bottom, #404040 0%, #363637 100%);\n    }\n\n    select:focus {\n        outline: none;\n        border-color: #0078d4;\n        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 2px rgba(0,120,212,0.3);\n    }\n\n    input[type=\"number\"] {\n        background: linear-gradient(to bottom, #3c3c3c 0%, #323233 100%);\n        border: 1px solid #464647;\n        border-radius: 3px;\n        padding: 4px 8px;\n        font-size: 0.875rem;\n        color: #cccccc;\n        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);\n        width: 60px;\n    }\n\n    input[type=\"number\"]:hover {\n        border-color: #5a5a5a;\n    }\n\n    input[type=\"number\"]:focus {\n        outline: none;\n        border-color: #0078d4;\n        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 2px rgba(0,120,212,0.3);\n    }\n\n    .checkbox {\n        color: #cccccc;\n        font-size: 0.875rem;\n        padding: 4px 8px;\n        border-radius: 3px;\n        transition: background 0.15s;\n    }\n\n    .checkbox:hover {\n        background: rgba(255,255,255,0.05);\n    }\n\n    .checkbox input[type=\"checkbox\"] {\n        width: 16px;\n        height: 16px;\n        cursor: pointer;\n        accent-color: #0078d4;\n    }\n\n    button {\n        background: linear-gradient(to bottom, #3c3c3c 0%, #323233 100%);\n        border: 1px solid #464647;\n        border-radius: 4px;\n        padding: 6px 16px;\n        color: #cccccc;\n        font-size: 0.875rem;\n        font-weight: 500;\n        cursor: pointer;\n        box-shadow: 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);\n        transition: all 0.15s;\n    }\n\n    button:hover {\n        background: linear-gradient(to bottom, #404040 0%, #363637 100%);\n        border-color: #5a5a5a;\n        box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);\n    }\n\n    button:active {\n        background: linear-gradient(to bottom, #2d2d30 0%, #252526 100%);\n        box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);\n        transform: translateY(1px);\n    }\n\n    .info {\n        color: #858585;\n        font-size: 0.8125rem;\n        font-style: italic;\n    }\n",
+        "replaceExisting": false
+      },
+      "changeId": "change_3"
+    },
+    {
+      "type": "manipulate_dom",
+      "pageId": 2,
+      "createdAt": 1768952241608,
+      "patchId": "dom-manipulate_4",
+      "description": "DOM manipulation: remove-element on #mode, insert-html on .control-group:has(#tolerance)",
+      "payload": {
+        "operations": [
+          {
+            "action": "remove-element",
+            "selector": "#mode"
+          },
+          {
+            "action": "insert-html",
+            "selector": ".control-group:has(#tolerance)",
+            "html": "<div class=\"mode-segmented\" id=\"modeSegmented\"><button data-mode=\"cutoff\" class=\"active\">Cutoff</button><button data-mode=\"edgeProtruding\">Edge</button><button data-mode=\"justifyHyphenCut\">Hyphen</button><button data-mode=\"justifySpaces\">Justify</button></div>",
+            "position": "afterbegin"
+          }
+        ]
+      },
+      "changeId": "change_4"
+    },
+    {
+      "type": "insert_js",
+      "pageId": 2,
+      "createdAt": 1768952246986,
+      "patchId": "js_5",
+      "description": "Segmented control functionality for mode selection",
+      "payload": {
+        "jsText": "(function() {\n    const modeSegmented = document.getElementById('modeSegmented');\n    if (!modeSegmented) return;\n\n    const buttons = modeSegmented.querySelectorAll('button');\n    let currentMode = 'cutoff'; // default\n\n    // Get current mode from hidden select if it exists, or use default\n    const hiddenSelect = document.getElementById('mode');\n    if (hiddenSelect) {\n        currentMode = hiddenSelect.value;\n    }\n\n    // Set active button based on current mode\n    buttons.forEach(btn => {\n        if (btn.dataset.mode === currentMode) {\n            btn.classList.add('active');\n        }\n        btn.addEventListener('click', function() {\n            buttons.forEach(b => b.classList.remove('active'));\n            this.classList.add('active');\n            currentMode = this.dataset.mode;\n            \n            // Update hidden select if it exists\n            if (hiddenSelect) {\n                hiddenSelect.value = currentMode;\n                hiddenSelect.dispatchEvent(new Event('change'));\n            } else {\n                // Trigger reflow directly\n                if (typeof autoReflow === 'function') {\n                    autoReflow();\n                }\n            }\n        });\n    });\n\n    // Create a hidden select for compatibility with existing code\n    if (!hiddenSelect) {\n        const hidden = document.createElement('select');\n        hidden.id = 'mode';\n        hidden.style.display = 'none';\n        hidden.innerHTML = '<option value=\"cutoff\">Absolute cutoff</option><option value=\"edgeProtruding\">Edge-protruding</option><option value=\"justifyHyphenCut\">Justified (hyphenated cutoffs)</option><option value=\"justifySpaces\">Justified (adds spaces)</option>';\n        hidden.value = currentMode;\n        modeSegmented.parentElement.appendChild(hidden);\n        \n        // Sync segmented control with hidden select changes\n        hidden.addEventListener('change', function() {\n            buttons.forEach(btn => {\n                btn.classList.toggle('active', btn.dataset.mode === this.value);\n            });\n        });\n    }\n})();\n",
+        "replaceExisting": false
+      },
+      "changeId": "change_5"
+    },
+    {
+      "type": "insert_css",
+      "pageId": 2,
+      "createdAt": 1768952250961,
+      "patchId": "css_6",
+      "description": "Enhanced segmented control styling",
+      "payload": {
+        "cssText": "    /* Segmented Control for Mode - Enhanced */\n    .mode-segmented {\n        display: inline-flex;\n        background: #1e1e1e;\n        border: 1px solid #464647;\n        border-radius: 4px;\n        padding: 2px;\n        gap: 2px;\n        align-items: center;\n    }\n\n    .mode-segmented button {\n        background: transparent;\n        border: none;\n        padding: 5px 10px;\n        font-size: 0.8125rem;\n        color: #cccccc;\n        cursor: pointer;\n        border-radius: 3px;\n        transition: all 0.15s;\n        white-space: nowrap;\n        box-shadow: none;\n        font-weight: 500;\n        min-width: 50px;\n    }\n\n    .mode-segmented button:hover:not(.active) {\n        background: rgba(255,255,255,0.08);\n    }\n\n    .mode-segmented button.active {\n        background: linear-gradient(to bottom, #0078d4 0%, #0063b1 100%);\n        color: #ffffff;\n        box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 2px rgba(0,0,0,0.4);\n        font-weight: 600;\n    }\n\n    .mode-segmented button:active {\n        transform: scale(0.98);\n    }\n",
+        "replaceExisting": false
+      },
+      "changeId": "change_6"
+    },
+    {
+      "type": "manipulate_dom",
+      "pageId": 2,
+      "createdAt": 1768952255542,
+      "patchId": "dom-manipulate_7",
+      "description": "DOM manipulation: remove-element on label[for=\"mode\"]",
+      "payload": {
+        "operations": [
+          {
+            "action": "remove-element",
+            "selector": "label[for=\"mode\"]"
+          }
+        ]
+      },
+      "changeId": "change_7"
+    },
+    {
+      "type": "insert_js",
+      "pageId": 2,
+      "createdAt": 1768952321304,
+      "patchId": "js_8",
+      "description": "Fixed segmented control sync with hidden select",
+      "payload": {
+        "jsText": "(function() {\n    const modeSegmented = document.getElementById('modeSegmented');\n    if (!modeSegmented) return;\n\n    const buttons = modeSegmented.querySelectorAll('button');\n    let hiddenSelect = document.getElementById('mode');\n    \n    // Create hidden select if it doesn't exist\n    if (!hiddenSelect) {\n        hiddenSelect = document.createElement('select');\n        hiddenSelect.id = 'mode';\n        hiddenSelect.style.display = 'none';\n        hiddenSelect.innerHTML = '<option value=\"cutoff\">Absolute cutoff</option><option value=\"edgeProtruding\">Edge-protruding</option><option value=\"justifyHyphenCut\">Justified (hyphenated cutoffs)</option><option value=\"justifySpaces\">Justified (adds spaces)</option>';\n        modeSegmented.parentElement.appendChild(hiddenSelect);\n    }\n\n    // Map button data-mode to select values\n    const modeMap = {\n        'cutoff': 'cutoff',\n        'edgeProtruding': 'edgeProtruding',\n        'justifyHyphenCut': 'justifyHyphenCut',\n        'justifySpaces': 'justifySpaces'\n    };\n\n    // Initialize: set active button based on hidden select value\n    const currentMode = hiddenSelect.value;\n    buttons.forEach(btn => {\n        const btnMode = btn.dataset.mode;\n        if (modeMap[btnMode] === currentMode) {\n            btn.classList.add('active');\n        } else {\n            btn.classList.remove('active');\n        }\n    });\n\n    // Add click handlers\n    buttons.forEach(btn => {\n        btn.addEventListener('click', function() {\n            // Remove active from all buttons\n            buttons.forEach(b => b.classList.remove('active'));\n            // Add active to clicked button\n            this.classList.add('active');\n            \n            // Update hidden select\n            const newMode = modeMap[this.dataset.mode];\n            if (newMode) {\n                hiddenSelect.value = newMode;\n                // Trigger change event to update reflow\n                hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));\n            }\n        });\n    });\n\n    // Sync segmented control when hidden select changes (for compatibility)\n    hiddenSelect.addEventListener('change', function() {\n        buttons.forEach(btn => {\n            const btnMode = btn.dataset.mode;\n            btn.classList.toggle('active', modeMap[btnMode] === this.value);\n        });\n    });\n})();\n",
+        "replaceExisting": true
+      },
+      "changeId": "change_8"
+    },
+    {
+      "type": "insert_js",
+      "pageId": 2,
+      "createdAt": 1768952338013,
+      "patchId": "js_9",
+      "description": "Fixed segmented control to trigger reflow on click",
+      "payload": {
+        "jsText": "(function() {\n    const modeSegmented = document.getElementById('modeSegmented');\n    if (!modeSegmented) return;\n\n    const buttons = modeSegmented.querySelectorAll('button');\n    let hiddenSelect = document.getElementById('mode');\n    \n    // Create hidden select if it doesn't exist\n    if (!hiddenSelect) {\n        hiddenSelect = document.createElement('select');\n        hiddenSelect.id = 'mode';\n        hiddenSelect.style.display = 'none';\n        hiddenSelect.innerHTML = '<option value=\"cutoff\">Absolute cutoff</option><option value=\"edgeProtruding\">Edge-protruding</option><option value=\"justifyHyphenCut\">Justified (hyphenated cutoffs)</option><option value=\"justifySpaces\">Justified (adds spaces)</option>';\n        modeSegmented.parentElement.appendChild(hiddenSelect);\n    }\n\n    // Map button data-mode to select values\n    const modeMap = {\n        'cutoff': 'cutoff',\n        'edgeProtruding': 'edgeProtruding',\n        'justifyHyphenCut': 'justifyHyphenCut',\n        'justifySpaces': 'justifySpaces'\n    };\n\n    // Initialize: set active button based on hidden select value\n    const currentMode = hiddenSelect.value;\n    buttons.forEach(btn => {\n        const btnMode = btn.dataset.mode;\n        if (modeMap[btnMode] === currentMode) {\n            btn.classList.add('active');\n        } else {\n            btn.classList.remove('active');\n        }\n    });\n\n    // Add click handlers\n    buttons.forEach(btn => {\n        btn.addEventListener('click', function() {\n            // Remove active from all buttons\n            buttons.forEach(b => b.classList.remove('active'));\n            // Add active to clicked button\n            this.classList.add('active');\n            \n            // Update hidden select\n            const newMode = modeMap[this.dataset.mode];\n            if (newMode && newMode !== hiddenSelect.value) {\n                hiddenSelect.value = newMode;\n                // Trigger change event to update reflow\n                const changeEvent = new Event('change', { bubbles: true });\n                hiddenSelect.dispatchEvent(changeEvent);\n                \n                // Also directly trigger reflow if autoReflow exists\n                if (typeof autoReflow === 'function') {\n                    autoReflow();\n                }\n            }\n        });\n    });\n\n    // Sync segmented control when hidden select changes (for compatibility)\n    hiddenSelect.addEventListener('change', function() {\n        buttons.forEach(btn => {\n            const btnMode = btn.dataset.mode;\n            btn.classList.toggle('active', modeMap[btnMode] === this.value);\n        });\n    });\n})();\n",
+        "replaceExisting": true
+      },
+      "changeId": "change_9"
+    },
+    {
+      "type": "insert_js",
+      "pageId": 2,
+      "createdAt": 1768952368951,
+      "patchId": "js_10",
+      "description": "Fixed segmented control with proper reflow triggering",
+      "payload": {
+        "jsText": "(function() {\n    // Update the modeSelect variable to point to hidden select\n    const hiddenSelect = document.getElementById('mode');\n    if (hiddenSelect && typeof window !== 'undefined') {\n        // Update the global modeSelect if it exists\n        if (window.modeSelect) {\n            window.modeSelect = hiddenSelect;\n        }\n    }\n    \n    const modeSegmented = document.getElementById('modeSegmented');\n    if (!modeSegmented) return;\n\n    const buttons = modeSegmented.querySelectorAll('button');\n    \n    // Create hidden select if it doesn't exist\n    if (!hiddenSelect) {\n        const select = document.createElement('select');\n        select.id = 'mode';\n        select.style.display = 'none';\n        select.innerHTML = '<option value=\"cutoff\">Absolute cutoff</option><option value=\"edgeProtruding\">Edge-protruding</option><option value=\"justifyHyphenCut\">Justified (hyphenated cutoffs)</option><option value=\"justifySpaces\">Justified (adds spaces)</option>';\n        modeSegmented.parentElement.appendChild(select);\n        if (window.modeSelect) {\n            window.modeSelect = select;\n        }\n    }\n\n    const modeMap = {\n        'cutoff': 'cutoff',\n        'edgeProtruding': 'edgeProtruding',\n        'justifyHyphenCut': 'justifyHyphenCut',\n        'justifySpaces': 'justifySpaces'\n    };\n\n    // Initialize active button\n    const currentMode = hiddenSelect.value;\n    buttons.forEach(btn => {\n        const btnMode = btn.dataset.mode;\n        btn.classList.toggle('active', modeMap[btnMode] === currentMode);\n    });\n\n    // Add click handlers\n    buttons.forEach(btn => {\n        btn.addEventListener('click', function(e) {\n            e.preventDefault();\n            e.stopPropagation();\n            \n            // Update active state\n            buttons.forEach(b => b.classList.remove('active'));\n            this.classList.add('active');\n            \n            // Update hidden select\n            const newMode = modeMap[this.dataset.mode];\n            const select = document.getElementById('mode');\n            if (newMode && select && newMode !== select.value) {\n                select.value = newMode;\n                \n                // Update global modeSelect if it exists\n                if (window.modeSelect) {\n                    window.modeSelect.value = newMode;\n                }\n                \n                // Trigger change event\n                const changeEvent = new Event('change', { bubbles: true, cancelable: true });\n                select.dispatchEvent(changeEvent);\n                \n                // Also call autoReflow directly\n                if (typeof autoReflow === 'function') {\n                    setTimeout(() => autoReflow(), 10);\n                } else if (typeof reflow === 'function') {\n                    setTimeout(() => reflow(), 10);\n                }\n            }\n        });\n    });\n\n    // Sync when hidden select changes externally\n    const select = document.getElementById('mode');\n    if (select) {\n        select.addEventListener('change', function() {\n            buttons.forEach(btn => {\n                const btnMode = btn.dataset.mode;\n                btn.classList.toggle('active', modeMap[btnMode] === this.value);\n            });\n        });\n    }\n})();\n",
+        "replaceExisting": true
+      },
+      "changeId": "change_10"
+    },
+    {
+      "type": "insert_js",
+      "pageId": 2,
+      "createdAt": 1768952394890,
+      "patchId": "js_11",
+      "description": "Fixed modeSelect reference and reflow triggering",
+      "payload": {
+        "jsText": "(function() {\n    // Update the global modeSelect variable to point to hidden select\n    const hiddenSelect = document.getElementById('mode');\n    if (hiddenSelect) {\n        // Override the modeSelect variable if it exists in the original code's scope\n        if (typeof window !== 'undefined') {\n            window.modeSelect = hiddenSelect;\n        }\n        \n        // Also try to update it in the module scope by redefining\n        const script = document.createElement('script');\n        script.textContent = `\n            if (typeof modeSelect !== 'undefined') {\n                modeSelect = document.getElementById('mode');\n            }\n        `;\n        document.head.appendChild(script);\n        setTimeout(() => document.head.removeChild(script), 100);\n    }\n    \n    const modeSegmented = document.getElementById('modeSegmented');\n    if (!modeSegmented) return;\n\n    const buttons = modeSegmented.querySelectorAll('button');\n    \n    // Create hidden select if it doesn't exist\n    if (!hiddenSelect) {\n        const select = document.createElement('select');\n        select.id = 'mode';\n        select.style.display = 'none';\n        select.innerHTML = '<option value=\"cutoff\">Absolute cutoff</option><option value=\"edgeProtruding\">Edge-protruding</option><option value=\"justifyHyphenCut\">Justified (hyphenated cutoffs)</option><option value=\"justifySpaces\">Justified (adds spaces)</option>';\n        modeSegmented.parentElement.appendChild(select);\n        if (typeof window !== 'undefined') {\n            window.modeSelect = select;\n        }\n    }\n\n    const modeMap = {\n        'cutoff': 'cutoff',\n        'edgeProtruding': 'edgeProtruding',\n        'justifyHyphenCut': 'justifyHyphenCut',\n        'justifySpaces': 'justifySpaces'\n    };\n\n    // Initialize active button\n    const currentMode = hiddenSelect ? hiddenSelect.value : 'cutoff';\n    buttons.forEach(btn => {\n        const btnMode = btn.dataset.mode;\n        btn.classList.toggle('active', modeMap[btnMode] === currentMode);\n    });\n\n    // Add click handlers\n    buttons.forEach(btn => {\n        btn.addEventListener('click', function(e) {\n            e.preventDefault();\n            e.stopPropagation();\n            \n            // Update active state\n            buttons.forEach(b => b.classList.remove('active'));\n            this.classList.add('active');\n            \n            // Update hidden select\n            const newMode = modeMap[this.dataset.mode];\n            const select = document.getElementById('mode');\n            if (newMode && select) {\n                select.value = newMode;\n                \n                // Update global modeSelect\n                if (typeof window !== 'undefined') {\n                    window.modeSelect = select;\n                }\n                \n                // Update the original modeSelect variable by re-evaluating\n                try {\n                    eval('if (typeof modeSelect !== \"undefined\") modeSelect = document.getElementById(\"mode\");');\n                } catch(e) {}\n                \n                // Trigger change event\n                const changeEvent = new Event('change', { bubbles: true, cancelable: true });\n                select.dispatchEvent(changeEvent);\n                \n                // Force reflow\n                if (typeof autoReflow === 'function') {\n                    setTimeout(() => autoReflow(), 50);\n                } else if (typeof reflow === 'function') {\n                    setTimeout(() => reflow(), 50);\n                }\n            }\n        });\n    });\n\n    // Sync when hidden select changes externally\n    const select = document.getElementById('mode');\n    if (select) {\n        const syncHandler = function() {\n            buttons.forEach(btn => {\n                const btnMode = btn.dataset.mode;\n                btn.classList.toggle('active', modeMap[btnMode] === this.value);\n            });\n        };\n        select.addEventListener('change', syncHandler);\n    }\n})();\n",
+        "replaceExisting": true
+      },
+      "changeId": "change_11"
+    },
+    {
+      "type": "insert_js",
+      "pageId": 2,
+      "createdAt": 1768952401984,
+      "patchId": "js_12",
+      "description": "Override getSettings to use hidden select",
+      "payload": {
+        "jsText": "(function() {\n    // Override getSettings to use hidden select\n    if (typeof getSettings === 'function') {\n        const originalGetSettings = getSettings;\n        window.getSettings = function() {\n            const hiddenSelect = document.getElementById('mode');\n            const settings = originalGetSettings();\n            if (hiddenSelect) {\n                settings.mode = hiddenSelect.value;\n            }\n            return settings;\n        };\n    }\n    \n    const modeSegmented = document.getElementById('modeSegmented');\n    if (!modeSegmented) return;\n\n    const buttons = modeSegmented.querySelectorAll('button');\n    const hiddenSelect = document.getElementById('mode') || (function() {\n        const select = document.createElement('select');\n        select.id = 'mode';\n        select.style.display = 'none';\n        select.innerHTML = '<option value=\"cutoff\">Absolute cutoff</option><option value=\"edgeProtruding\">Edge-protruding</option><option value=\"justifyHyphenCut\">Justified (hyphenated cutoffs)</option><option value=\"justifySpaces\">Justified (adds spaces)</option>';\n        modeSegmented.parentElement.appendChild(select);\n        return select;\n    })();\n\n    const modeMap = {\n        'cutoff': 'cutoff',\n        'edgeProtruding': 'edgeProtruding',\n        'justifyHyphenCut': 'justifyHyphenCut',\n        'justifySpaces': 'justifySpaces'\n    };\n\n    // Initialize active button\n    const currentMode = hiddenSelect.value;\n    buttons.forEach(btn => {\n        const btnMode = btn.dataset.mode;\n        btn.classList.toggle('active', modeMap[btnMode] === currentMode);\n    });\n\n    // Add click handlers\n    buttons.forEach(btn => {\n        btn.addEventListener('click', function(e) {\n            e.preventDefault();\n            e.stopPropagation();\n            \n            buttons.forEach(b => b.classList.remove('active'));\n            this.classList.add('active');\n            \n            const newMode = modeMap[this.dataset.mode];\n            if (newMode && newMode !== hiddenSelect.value) {\n                hiddenSelect.value = newMode;\n                \n                const changeEvent = new Event('change', { bubbles: true });\n                hiddenSelect.dispatchEvent(changeEvent);\n                \n                if (typeof autoReflow === 'function') {\n                    setTimeout(() => autoReflow(), 50);\n                }\n            }\n        });\n    });\n\n    hiddenSelect.addEventListener('change', function() {\n        buttons.forEach(btn => {\n            const btnMode = btn.dataset.mode;\n            btn.classList.toggle('active', modeMap[btnMode] === this.value);\n        });\n    });\n})();\n",
+        "replaceExisting": true
+      },
+      "changeId": "change_12"
+    }
+  ]
+}

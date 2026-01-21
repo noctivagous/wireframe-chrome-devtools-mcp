@@ -25,12 +25,41 @@ These tools excel at detecting layout problems that are difficult to identify th
 
 Beyond wireframe-only analysis, the long-term goal is provide a **progressive “debugging → editing → refactoring” spectrum** that keeps the feedback loop fast (see changes instantly in Chromium), allowing you to choose which functions and overall process you need. You may want to just use a few tools to fix a problem, or refactor an entire codebase in the browser. The project should allow you to “graduate” changes back into the codebase as clean diffs when you’re ready.
 
-- **Level 0 — Pure debugging/preview (no repo writes)**: Make temporary CSS/JS/DOM changes in-browser, capture evidence (wireframes/snapshots), and rollback by default.
-- **Level 1 — Journal + export (still no repo writes)**: Record the exact sequence of live edits into an edit session, then export/share it as a reproducible change log (optionally as a “package folder” with a Markdown summary).
+- **Level 0 — Pure debugging/preview (no repo/source edits)**: Make temporary CSS/JS/DOM changes in-browser, capture evidence (wireframes/snapshots), and rollback by default. This may write **evidence artifacts** to a temp folder or a user-specified path, but it does not modify your repo’s source files.
+- **Level 1 — Journal + export (still no repo/source edits)**: Record the exact sequence of live edits into an edit session, then export/share it as a reproducible change log (optionally as a “package folder” with a Markdown summary). Still no repo/source edits unless you explicitly commit/apply a plan.
 - **Level 2 — Targeted commits (scoped diffs back to the repo)**: Select the final “chosen” edits and apply them as small, reviewable patches to specific files—without forcing a full refactor workflow.
 - **Level 3 — Deep refactors (multi-file, clean diffs)**: Opt-in refactor mode where you can iterate/verify in-browser and then generate/apply a structured, conflict-aware refactor plan across many files.
 
 This is aimed at reducing the friction of “edit files → reload → re-check layout/behavior” by enabling rapid in-browser iteration first, then turning the final, validated changes into minimal, reviewable filesystem diffs.
+
+### Contract: edit sessions are live-in-browser, and do not write repo files unless you explicitly commit
+
+The **default expectation** for this branch is:
+
+- **Visible by default**: if you start an edit session and use preview tools, you should see changes applied live in Chromium (unless you explicitly enable headless mode).
+- **No repo/source edits unless you say so**: `begin_edit_session` + `recordToSession` tools **do not modify repo files**. They only:
+  - apply temporary changes in the browser, and/or
+  - record what happened into an in-memory edit session, and/or
+  - write *evidence artifacts* (snapshots/wireframes/screenshots) to temp/user paths.
+- **Only explicit tools write repo/source files**:
+  - `apply_commit_plan` / `commit_edit_session_to_files` (write to specified target paths)
+  - `apply_unified_diff` (patches files)
+
+If you want the agent to keep iterating in-browser, say: **“keep it live; don’t write files yet.”**
+If you want to land changes, say: **“commit/apply this to files”** (and ideally specify the target path or ask for a plan/diff first).
+
+#### Headless edit sessions (supported when explicitly enabled)
+
+You can run the same edit-session workflows **without a visible browser window** by enabling headless mode (`--headless=true`). This preserves the “fast loop” semantics, but the feedback loop becomes **artifacts/logs** instead of what you watch on screen.
+
+Headless edit sessions are especially useful for:
+
+- **CI / remote servers**: run workflows on a machine with no display, record an edit session + evidence bundle, export it, and review/apply later.
+- **Batch experiments**: sweep many variants (CSS values, layout tweaks, toggles) across pages/breakpoints and save wireframes/snapshots as the comparison surface.
+- **Regression checking**: apply patches, capture before/after wireframe + snapshot evidence, rollback, repeat—without manual viewing.
+- **Performance / timing-sensitive runs**: reduce UI overhead/noise while collecting traces, wireframes, or DOM snapshots.
+- **Repro artifacts for humans**: generate a shareable package (`export_edit_session_package` + evidence files) so someone else can review diffs/evidence without an interactive session.
+- **Security/permissions constraints**: environments where showing a browser window is undesirable, but controlled automation and artifacts are acceptable.
 
 
 From one perspective, the web browser is a JIT code execution environment carrying a very large
@@ -51,7 +80,7 @@ the file system, allowing users to utilize individual mcp tools like wireframe_s
 and svg_snapshot that can fix layout issues in a web page, previewing them live before
 applying the fixes.  Going up a level is watching the AI construct a page, 
 gui components, and and write sections of the app while the software developer is
-also workgin in the code editor. The level above this is a future live chat
+also working in the code editor. The level above this is a future live chat
 window placed inside the browser produced by the mcp server and allows 
 the user to make changes inside web the page by chatting there.  Eventually,
 going along with this will be the ability of the AI to seek out
@@ -61,6 +90,16 @@ that adds external libraries on the fly.  Then when the user approves
 of the current session, all changes can be committed from what is 
 shown in the web browser to the filesystem and the chat session
 ended.
+
+The friction to using AI for making software is very high because 
+the code and the page markup is being written to disk before 
+being executed and there is a sluggish loop.  The process is 
+speeding you up during code generation of the files, 
+while being slow at executing the results.  You need to
+be able to see results as fast as the AI is generating
+them for the conditions of using this technology to line up
+with what it is.
+
 
 ### Additional Debugging Tools
 
@@ -467,10 +506,13 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 - **Network** (2 tools)
   - [`get_network_request`](docs/tool-reference.md#get_network_request)
   - [`list_network_requests`](docs/tool-reference.md#list_network_requests)
-- **Debugging** (27 tools)
+- **Debugging** (33 tools)
   - [`analyze_js`](docs/tool-reference.md#analyze_js)
+  - [`apply_commit_plan`](docs/tool-reference.md#apply_commit_plan)
+  - [`apply_unified_diff`](docs/tool-reference.md#apply_unified_diff)
   - [`begin_edit_session`](docs/tool-reference.md#begin_edit_session)
   - [`capture_evidence_bundle`](docs/tool-reference.md#capture_evidence_bundle)
+  - [`chatbox_step`](docs/tool-reference.md#chatbox_step)
   - [`clear_edit_session`](docs/tool-reference.md#clear_edit_session)
   - [`commit_edit_session_to_files`](docs/tool-reference.md#commit_edit_session_to_files)
   - [`evaluate_script`](docs/tool-reference.md#evaluate_script)
@@ -478,6 +520,7 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`export_edit_session_package`](docs/tool-reference.md#export_edit_session_package)
   - [`get_console_message`](docs/tool-reference.md#get_console_message)
   - [`get_edit_session`](docs/tool-reference.md#get_edit_session)
+  - [`inject_chatbox`](docs/tool-reference.md#inject_chatbox)
   - [`insert_css`](docs/tool-reference.md#insert_css)
   - [`insert_css_preview`](docs/tool-reference.md#insert_css_preview)
   - [`insert_js`](docs/tool-reference.md#insert_js)
@@ -487,6 +530,8 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`list_console_messages`](docs/tool-reference.md#list_console_messages)
   - [`list_edit_sessions`](docs/tool-reference.md#list_edit_sessions)
   - [`manipulate_dom`](docs/tool-reference.md#manipulate_dom)
+  - [`preview_commit_plan`](docs/tool-reference.md#preview_commit_plan)
+  - [`preview_unified_diff_from_commit_plan`](docs/tool-reference.md#preview_unified_diff_from_commit_plan)
   - [`rollback_all`](docs/tool-reference.md#rollback_all)
   - [`rollback_patch`](docs/tool-reference.md#rollback_patch)
   - [`set_active_edit_session`](docs/tool-reference.md#set_active_edit_session)

@@ -6,6 +6,7 @@
 
 import type {CallToolResult} from '@modelcontextprotocol/sdk/types.js';
 import logger from 'debug';
+import fs from 'node:fs';
 import type {Browser} from 'puppeteer';
 import puppeteer, {Locator} from 'puppeteer';
 import type {
@@ -48,14 +49,43 @@ export async function withBrowser(
   cb: (browser: Browser, page: Page) => Promise<void>,
   options: {debug?: boolean; autoOpenDevTools?: boolean} = {},
 ) {
+  const extraArgs = (process.env.PUPPETEER_ARGS ?? '')
+    .split(' ')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  const defaultExecutablePath = (() => {
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+      return process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+    // Prefer system Chromium on environments where Puppeteer's downloaded browser may be unavailable
+    // (e.g. ARM SBCs / minimal images).
+    for (const candidate of ['/usr/bin/chromium-browser', '/usr/bin/chromium']) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    return undefined;
+  })();
+
   const launchOptions: LaunchOptions = {
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+    executablePath: defaultExecutablePath,
     headless: !options.debug,
     defaultViewport: null,
     devtools: options.autoOpenDevTools ?? false,
     pipe: true,
     handleDevToolsAsPage: true,
-    args: ['--screen-info={3840x2160}'],
+    args: [
+      '--screen-info={3840x2160}',
+      // More robust defaults for constrained Linux environments (CI, containers, SBCs).
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-default-browser-check',
+      ...extraArgs,
+    ],
     enableExtensions: true,
   };
   const key = JSON.stringify(launchOptions);

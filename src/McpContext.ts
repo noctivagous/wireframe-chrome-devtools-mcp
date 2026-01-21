@@ -70,7 +70,8 @@ export type EditChangeType =
   | 'insert_css_preview'
   | 'manipulate_dom'
   | 'rollback_patch'
-  | 'rollback_all';
+  | 'rollback_all'
+  | 'capture_evidence_bundle';
 
 export interface EditChangeRecord {
   changeId: string;

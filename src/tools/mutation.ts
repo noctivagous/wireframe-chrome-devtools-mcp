@@ -372,6 +372,455 @@ export const rollbackPatch = defineTool({
   },
 });
 
+export const injectChatbox = defineTool({
+  name: 'inject_chatbox',
+  description:
+    'Inject a dockable in-page chat panel into the current page. Returns a patchId that can be removed via `rollback_patch`.\n\n' +
+    '**Notes:**\n' +
+    '- This tool only injects a UI shell. Actual "live chat" wiring is handled by higher-level orchestration.\n' +
+    '- Injection is idempotent: if the chatbox already exists and `replaceExisting=false`, the tool is a no-op and returns the existing patchId.\n',
+  annotations: {
+    category: ToolCategory.DEBUGGING,
+    readOnlyHint: false,
+  },
+  schema: {
+    action: zod
+      .enum(['inject', 'remove'])
+      .optional()
+      .default('inject')
+      .describe('Whether to inject the chatbox or remove it (cleanup).'),
+    patchId: zod
+      .string()
+      .optional()
+      .describe(
+        'Optional patch id. If omitted, the server generates a stable patch id.',
+      ),
+    description: zod
+      .string()
+      .optional()
+      .describe('Optional human description to store in the patch registry.'),
+    replaceExisting: zod
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        'If true, replaces any existing injected chatbox UI in the page (even if it was injected under a different patchId).',
+      ),
+    dock: zod
+      .enum(['right', 'left', 'bottom'])
+      .optional()
+      .default('right')
+      .describe('Where to dock the chatbox UI.'),
+    width: zod
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .default(380)
+      .describe('Width in pixels for left/right docked chatbox.'),
+    height: zod
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Height in pixels for bottom-docked chatbox.'),
+    zIndex: zod
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .default(2147483647)
+      .describe('CSS z-index for the chatbox container.'),
+    title: zod
+      .string()
+      .optional()
+      .default('Chat')
+      .describe('Title displayed in the chatbox header.'),
+    placeholder: zod
+      .string()
+      .optional()
+      .default('Type a message…')
+      .describe('Placeholder text for the message input.'),
+    startOpen: zod
+      .boolean()
+      .optional()
+      .default(true)
+      .describe('If false, chatbox starts collapsed (header only).'),
+  },
+  handler: async (request, response, context) => {
+    const page = context.getSelectedPage();
+    const pageId = context.getPageId(page) ?? 0;
+    const requestedPatchId =
+      request.params.patchId ?? context.createPatchId('chatbox');
+
+    // Note: when tools are invoked directly (unit tests), zod defaults are not applied.
+    // Keep explicit JS-side defaults here so the tool behaves sensibly in both contexts.
+    const action = request.params.action ?? 'inject';
+    const replaceExisting = request.params.replaceExisting ?? false;
+    const dock = request.params.dock ?? 'right';
+    const width = request.params.width ?? 380;
+    const height = request.params.height;
+    const zIndex = request.params.zIndex ?? 2147483647;
+    const title = request.params.title ?? 'Chat';
+    const placeholder = request.params.placeholder ?? 'Type a message…';
+    const startOpen = request.params.startOpen ?? true;
+
+    const result = await page.evaluate(
+      ({
+        action,
+        patchId,
+        replaceExisting,
+        dock,
+        width,
+        height,
+        zIndex,
+        title,
+        placeholder,
+        startOpen,
+        PATCH_ID_ATTR,
+        PATCH_OWNER_ATTR,
+        PATCH_KIND_ATTR,
+        PATCH_OWNER_VALUE,
+      }) => {
+        const ROOT_ID = 'mcp-chatbox-root';
+        const existing = document.getElementById(ROOT_ID) as HTMLElement | null;
+        const existingPatchId = existing?.getAttribute(PATCH_ID_ATTR) ?? null;
+
+        if (action === 'remove') {
+          if (!existing) {
+            return {action, removed: false, removedPatchId: null, existed: false};
+          }
+          if (patchId && existingPatchId && patchId !== existingPatchId) {
+            return {
+              action,
+              removed: false,
+              removedPatchId: null,
+              existed: true,
+              existingPatchId,
+              reason: 'Chatbox exists but patchId did not match.',
+            };
+          }
+          const removedPatchId = existingPatchId ?? patchId ?? null;
+          existing.remove();
+          return {action, removed: true, removedPatchId, existed: true};
+        }
+
+        // action === 'inject'
+        let replaced = false;
+        let replacedPatchId: string | null = null;
+
+        if (existing) {
+          if (!replaceExisting) {
+            return {
+              action,
+              patchId: existingPatchId ?? patchId,
+              inserted: false,
+              replaced: false,
+              existed: true,
+              rootId: ROOT_ID,
+              dock,
+            };
+          }
+          replaced = true;
+          replacedPatchId = existingPatchId;
+          existing.remove();
+        }
+
+        const host = document.createElement('div');
+        host.id = ROOT_ID;
+        host.setAttribute(PATCH_ID_ATTR, patchId);
+        host.setAttribute(PATCH_OWNER_ATTR, PATCH_OWNER_VALUE);
+        host.setAttribute(PATCH_KIND_ATTR, 'chatbox');
+
+        host.style.position = 'fixed';
+        host.style.zIndex = String(zIndex);
+        host.style.fontFamily =
+          'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
+        host.style.color = '#111827';
+        host.style.pointerEvents = 'auto';
+
+        if (dock === 'right') {
+          host.style.top = '0';
+          host.style.right = '0';
+          host.style.height = '100vh';
+          host.style.width = `${width}px`;
+        } else if (dock === 'left') {
+          host.style.top = '0';
+          host.style.left = '0';
+          host.style.height = '100vh';
+          host.style.width = `${width}px`;
+        } else {
+          // bottom
+          host.style.left = '0';
+          host.style.right = '0';
+          host.style.bottom = '0';
+          host.style.width = '100vw';
+          host.style.height = `${height ?? 280}px`;
+          host.style.maxHeight = '80vh';
+        }
+
+        const shadow = host.attachShadow({mode: 'open'});
+        const escapeAttribute = (value: unknown) => {
+          return String(value ?? '').replace(/"/g, '&quot;');
+        };
+        shadow.innerHTML = `
+          <style>
+            :host { all: initial; }
+            .panel {
+              height: 100%;
+              width: 100%;
+              box-sizing: border-box;
+              background: rgba(255,255,255,0.92);
+              border: 1px solid rgba(17, 24, 39, 0.20);
+              border-${dock === 'right' ? 'left' : dock === 'left' ? 'right' : 'top'}: 1px solid rgba(17, 24, 39, 0.20);
+              box-shadow: 0 12px 40px rgba(0,0,0,0.22);
+              display: flex;
+              flex-direction: column;
+              backdrop-filter: blur(10px);
+            }
+            .header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding: 10px 10px;
+              background: rgba(17, 24, 39, 0.92);
+              color: #fff;
+              user-select: none;
+              cursor: default;
+              gap: 8px;
+            }
+            .title {
+              font-size: 13px;
+              font-weight: 600;
+              letter-spacing: 0.2px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+            .header-actions { display: flex; gap: 6px; }
+            button {
+              font: inherit;
+              border: 1px solid rgba(255,255,255,0.18);
+              background: rgba(255,255,255,0.08);
+              color: #fff;
+              border-radius: 6px;
+              padding: 4px 8px;
+              cursor: pointer;
+            }
+            button:hover { background: rgba(255,255,255,0.14); }
+            .body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+            .messages {
+              flex: 1;
+              min-height: 0;
+              overflow: auto;
+              padding: 10px;
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+            }
+            .msg {
+              font-size: 12px;
+              line-height: 1.35;
+              padding: 8px 10px;
+              border-radius: 10px;
+              max-width: 90%;
+              word-break: break-word;
+              border: 1px solid rgba(17, 24, 39, 0.10);
+              background: rgba(255,255,255,0.96);
+            }
+            .msg.user { align-self: flex-end; background: rgba(219,234,254,0.95); border-color: rgba(59,130,246,0.25); }
+            .msg.assistant { align-self: flex-start; background: rgba(243,244,246,0.95); }
+            .composer {
+              border-top: 1px solid rgba(17, 24, 39, 0.10);
+              padding: 10px;
+              display: flex;
+              gap: 8px;
+              background: rgba(255,255,255,0.70);
+            }
+            input[type="text"] {
+              flex: 1;
+              font: inherit;
+              border-radius: 10px;
+              border: 1px solid rgba(17, 24, 39, 0.18);
+              padding: 8px 10px;
+              outline: none;
+              background: rgba(255,255,255,0.96);
+              color: #111827;
+            }
+            input[type="text"]:focus { border-color: rgba(59,130,246,0.6); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+            button.send {
+              border: 1px solid rgba(59,130,246,0.45);
+              background: rgba(59,130,246,0.92);
+            }
+            button.send:hover { background: rgba(59,130,246,1); }
+            .collapsed .body { display: none; }
+          </style>
+          <div class="panel ${startOpen ? '' : 'collapsed'}" data-role="panel">
+            <div class="header">
+              <div class="title" title="${escapeAttribute(title)}">${escapeAttribute(title)}</div>
+              <div class="header-actions">
+                <button type="button" data-role="toggle" title="Toggle">▾</button>
+                <button type="button" data-role="close" title="Close">✕</button>
+              </div>
+            </div>
+            <div class="body">
+              <div class="messages" data-role="messages"></div>
+              <div class="composer">
+                <input data-role="input" type="text" placeholder="${escapeAttribute(placeholder)}" />
+                <button class="send" type="button" data-role="send">Send</button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        const panel = shadow.querySelector('[data-role="panel"]') as HTMLElement;
+        const messages = shadow.querySelector('[data-role="messages"]') as HTMLElement;
+        const input = shadow.querySelector('[data-role="input"]') as HTMLInputElement;
+        const sendBtn = shadow.querySelector('[data-role="send"]') as HTMLButtonElement;
+        const toggleBtn = shadow.querySelector('[data-role="toggle"]') as HTMLButtonElement;
+        const closeBtn = shadow.querySelector('[data-role="close"]') as HTMLButtonElement;
+
+        const appendMessage = (role: 'user' | 'assistant', text: string) => {
+          const el = document.createElement('div');
+          el.className = `msg ${role}`;
+          el.textContent = text;
+          messages.appendChild(el);
+          // Keep newest messages visible.
+          messages.scrollTop = messages.scrollHeight;
+        };
+
+        const doSend = () => {
+          const text = (input.value ?? '').trim();
+          if (!text) {
+            return;
+          }
+          input.value = '';
+          appendMessage('user', text);
+
+          // Buffer messages for the agent/orchestrator to drain (no networking required).
+          try {
+            const w = window as any;
+            w.__MCP_CHATBOX__ = w.__MCP_CHATBOX__ || {};
+            w.__MCP_CHATBOX__.inbox = w.__MCP_CHATBOX__.inbox || [];
+            w.__MCP_CHATBOX__.inbox.push({
+              type: 'user',
+              text,
+              createdAt: Date.now(),
+              patchId,
+            });
+          } catch {
+            // Best-effort only.
+          }
+
+          window.dispatchEvent(
+            new CustomEvent('mcp-chatbox:send', {
+              detail: {text, patchId},
+            }),
+          );
+        };
+
+        sendBtn.addEventListener('click', doSend);
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            doSend();
+          }
+        });
+        toggleBtn.addEventListener('click', () => {
+          panel.classList.toggle('collapsed');
+        });
+        closeBtn.addEventListener('click', () => {
+          // "Close" is intentionally non-destructive; cleanup is done via rollback_patch or action=remove.
+          panel.classList.add('collapsed');
+        });
+
+        // Expose a tiny API for later orchestration (best-effort; safe to ignore).
+        const w = window as any;
+        w.__MCP_CHATBOX__ = {
+          ...(w.__MCP_CHATBOX__ || {}),
+          rootId: ROOT_ID,
+          patchId,
+          inbox: (w.__MCP_CHATBOX__ && w.__MCP_CHATBOX__.inbox) || [],
+          outbox: (w.__MCP_CHATBOX__ && w.__MCP_CHATBOX__.outbox) || [],
+          appendAssistantMessage: (text: string) => appendMessage('assistant', String(text ?? '')),
+        };
+
+        document.documentElement.appendChild(host);
+
+        return {
+          action,
+          patchId,
+          inserted: true,
+          replaced,
+          replacedPatchId,
+          existed: Boolean(existing),
+          rootId: ROOT_ID,
+          dock,
+        };
+      },
+      {
+        action,
+        patchId: requestedPatchId,
+        replaceExisting,
+        dock,
+        width,
+        height,
+        zIndex,
+        title,
+        placeholder,
+        startOpen,
+        PATCH_ID_ATTR,
+        PATCH_OWNER_ATTR,
+        PATCH_KIND_ATTR,
+        PATCH_OWNER_VALUE,
+      },
+    );
+
+    if (action === 'remove') {
+      const removedPatchId =
+        (result as {removedPatchId?: string | null}).removedPatchId ?? null;
+      if (removedPatchId) {
+        context.unregisterPatch(removedPatchId);
+      } else {
+        // If user provided patchId, unregister it anyway (idempotent cleanup).
+        context.unregisterPatch(requestedPatchId);
+      }
+    } else {
+      const effectivePatchId =
+        (result as {patchId?: string | null}).patchId ?? requestedPatchId;
+      const replacedPatchId =
+        (result as {replacedPatchId?: string | null}).replacedPatchId ?? null;
+
+      // If we replaced a previously injected chatbox under a different patchId, clear its registry entry.
+      if (replacedPatchId && replacedPatchId !== effectivePatchId) {
+        context.unregisterPatch(replacedPatchId);
+      }
+
+      context.registerPatch({
+        patchId: effectivePatchId,
+        patchType: 'dom-manipulation',
+        pageId,
+        createdAt: Date.now(),
+        description:
+          request.params.description ?? `Injected chatbox UI (dock=${dock})`,
+      });
+    }
+
+    response.appendResponseLine('```json');
+    response.appendResponseLine(
+      JSON.stringify(
+        {
+          ...result,
+          pageId,
+        },
+        null,
+        2,
+      ),
+    );
+    response.appendResponseLine('```');
+  },
+});
+
 export const insertCssPreview = defineTool({
   name: 'insert_css_preview',
   description:
@@ -379,7 +828,8 @@ export const insertCssPreview = defineTool({
     '**Guidance:**\n\n' +
     '- **Auto-rollback by default**: Changes are automatically rolled back after capturing snapshots (`autoRollback` defaults to `true`), making this safe for temporary CSS experimentation without affecting the live page state.\n' +
     '- **Multiple values for A/B testing**: Pass an array of different values to `values` (e.g., `["16px", "24px", "32px"]`) to quickly compare how different CSS values affect layout, with each value generating a separate wireframe snapshot for comparison.\n' +
-    '- **Fast interactive workflow (recommended)**: Use `begin_edit_session`, then run `insert_css_preview` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, run `export_edit_session` or `commit_edit_session_to_files` once at the end to avoid editor/filesystem lag during iteration.',
+    '- **Fast interactive workflow (recommended)**: Use `begin_edit_session`, then run `insert_css_preview` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, export (`export_edit_session`) and/or explicitly commit/apply to files (`preview_commit_plan` → `apply_commit_plan`, or `commit_edit_session_to_files`) once at the end.\n' +
+    '- **Important contract**: previewing CSS changes modifies the live page, but does **not** write repo/source files unless you explicitly run a commit/apply tool.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -811,7 +1261,8 @@ export const insertJsPreview = defineTool({
     '**Guidance:**\n\n' +
     '- **Rollback caveat**: `autoRollback` removes the injected `<script>` tag, but it cannot reliably undo side-effects (e.g., DOM mutations, timers, event listeners). Treat this as best-effort cleanup for exploration.\n' +
     '- **Multiple variants for A/B testing**: Pass multiple entries to `scripts` to compare outcomes; each variant generates its own wireframe snapshot.\n' +
-    '- **Fast interactive workflow (recommended)**: Use `begin_edit_session`, then run `insert_js_preview` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, run `export_edit_session` or `commit_edit_session_to_files` once at the end.',
+    '- **Fast interactive workflow (recommended)**: Use `begin_edit_session`, then run `insert_js_preview` with `recordToSession: true` (optionally add `targetFilePath`). When you’re done experimenting, export (`export_edit_session`) and/or explicitly commit/apply to files (`preview_commit_plan` → `apply_commit_plan`, or `commit_edit_session_to_files`) once at the end.\n' +
+    '- **Important contract**: previewing JS changes modifies the live page, but does **not** write repo/source files unless you explicitly run a commit/apply tool.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -1400,21 +1851,21 @@ export const manipulateDom = defineTool({
     const patchId = requestedPatchId ?? context.createPatchId('dom-manipulate');
 
     // Execute DOM manipulations
-    type DomManipulationOpResult = {
+    interface DomManipulationOpResult {
       selector: string;
       found: boolean;
       action: string;
       success?: boolean;
       message?: string;
       elementIndex?: number;
-    };
-    type DomManipulationEvalResult = {
+    }
+    interface DomManipulationEvalResult {
       patchId: string;
       success: boolean;
       operations: DomManipulationOpResult[];
       executedOperations: unknown[];
       error?: string;
-    };
+    }
 
     const result: DomManipulationEvalResult = await page.evaluate(
       ({operations, patchId, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE}) => {

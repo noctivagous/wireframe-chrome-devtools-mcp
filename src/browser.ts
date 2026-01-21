@@ -149,7 +149,8 @@ interface McpLaunchOptions {
 }
 
 export async function launch(options: McpLaunchOptions): Promise<Browser> {
-  const {channel, executablePath, headless, isolated} = options;
+  const {channel, headless, isolated} = options;
+  let {executablePath} = options;
   const profileDirName =
     channel && channel !== 'stable'
       ? `chrome-profile-${channel}`
@@ -182,11 +183,46 @@ export async function launch(options: McpLaunchOptions): Promise<Browser> {
   if (options.devtools) {
     args.push('--auto-open-devtools-for-tabs');
   }
+
+  // Defensive fallback: on Linux ARM, Puppeteer's `executablePath()` can resolve to an
+  // incompatible x64 build (often under a `chrome-linux64/` directory). If so, prefer a
+  // system Chromium.
+  if (
+    executablePath &&
+    process.platform === 'linux' &&
+    (process.arch === 'arm64' || process.arch === 'arm') &&
+    executablePath.includes('chrome-linux64')
+  ) {
+    for (const candidate of ['/usr/bin/chromium-browser', '/usr/bin/chromium']) {
+      if (fs.existsSync(candidate)) {
+        logger(
+          `Overriding incompatible executablePath (${executablePath}) with system Chromium (${candidate}).`,
+        );
+        executablePath = candidate;
+        break;
+      }
+    }
+  }
+
   if (!executablePath) {
-    puppeteerChannel =
-      channel && channel !== 'stable'
-        ? (`chrome-${channel}` as ChromeReleaseChannel)
-        : 'chrome';
+    // On some Linux environments (notably ARM SBCs / minimal distros), Puppeteer's
+    // managed Chrome download may be unavailable or incompatible. Prefer a system
+    // Chromium if present.
+    if (process.platform === 'linux' && (process.arch === 'arm64' || process.arch === 'arm')) {
+      for (const candidate of ['/usr/bin/chromium-browser', '/usr/bin/chromium']) {
+        if (fs.existsSync(candidate)) {
+          executablePath = candidate;
+          break;
+        }
+      }
+    }
+    // If we found a system executable, prefer it over Puppeteer's "channel" logic.
+    if (!executablePath) {
+      puppeteerChannel =
+        channel && channel !== 'stable'
+          ? (`chrome-${channel}` as ChromeReleaseChannel)
+          : 'chrome';
+    }
   }
 
   try {

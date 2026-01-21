@@ -6,6 +6,9 @@
 
 import {analyzeJs} from './analyze.js';
 import * as consoleTools from './console.js';
+import * as chatTools from './chat.js';
+import * as diffTools from './diff.js';
+import * as evidenceTools from './evidence.js';
 import * as editSessionTools from './edit-session.js';
 import * as emulationTools from './emulation.js';
 import * as extensionTools from './extensions.js';
@@ -23,7 +26,10 @@ import {wireframeSnapshot, svgSnapshot} from './wireframe.js';
 
 const tools = [
   analyzeJs,
+  ...Object.values(chatTools),
   ...Object.values(consoleTools),
+  ...Object.values(diffTools),
+  ...Object.values(evidenceTools),
   ...Object.values(emulationTools),
   ...Object.values(editSessionTools),
   ...Object.values(extensionTools),

@@ -96,22 +96,28 @@ describe('e2e', () => {
           continue;
         }
         const fileTools = await import(`../src/tools/${file}`);
-        for (const maybeTool of Object.values<ToolDefinition>(fileTools)) {
-          if ('name' in maybeTool) {
-            if (maybeTool.annotations?.conditions?.includes('computerVision')) {
+        for (const maybeTool of Object.values(fileTools)) {
+          // Tool modules can export helper functions too (which also have a `name`),
+          // so ensure this looks like a real ToolDefinition object.
+          if (
+            typeof maybeTool === 'object' &&
+            maybeTool &&
+            'name' in maybeTool &&
+            'handler' in maybeTool &&
+            'schema' in maybeTool &&
+            'annotations' in maybeTool
+          ) {
+            const tool = maybeTool as ToolDefinition;
+            if (tool.annotations?.conditions?.includes('computerVision')) {
               continue;
             }
-            if (
-              maybeTool.annotations?.conditions?.includes(
-                'experimentalInteropTools',
-              )
-            ) {
+            if (tool.annotations?.conditions?.includes('experimentalInteropTools')) {
               continue;
             }
-            if (maybeTool.name === 'install_extension') {
+            if (tool.name === 'install_extension') {
               continue;
             }
-            definedNames.push(maybeTool.name);
+            definedNames.push(tool.name);
           }
         }
       }

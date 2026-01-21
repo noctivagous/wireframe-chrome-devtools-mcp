@@ -7,7 +7,14 @@
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
-import {insertCss, insertJs, manipulateDom, rollbackPatch} from '../../src/tools/mutation.js';
+import {
+  injectChatbox,
+  insertCss,
+  insertJs,
+  manipulateDom,
+  rollbackPatch,
+} from '../../src/tools/mutation.js';
+import {chatboxStep} from '../../src/tools/chat.js';
 import {serverHooks} from '../server.js';
 import {html, withMcpContext} from '../utils.js';
 
@@ -287,6 +294,85 @@ describe('mutation', () => {
           return document.getElementById('test')!.textContent;
         });
         assert.strictEqual(text, 'Changed');
+      });
+    });
+  });
+
+  describe('inject_chatbox', () => {
+    it('injects chatbox UI, allows sending a message, and can be rolled back', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = await context.newPage();
+        await page.setContent(html`
+          <div id="app">Hello</div>
+        `);
+
+        await injectChatbox.handler(
+          {
+            params: {
+              action: 'inject',
+              patchId: 'chatbox-patch',
+              dock: 'right',
+              width: 380,
+              zIndex: 2147483647,
+              replaceExisting: false,
+              title: 'Chat',
+              placeholder: 'Type…',
+              startOpen: true,
+            },
+          },
+          response,
+          context,
+        );
+
+        const exists = await page.evaluate(() => {
+          return document.getElementById('mcp-chatbox-root') !== null;
+        });
+        assert.strictEqual(exists, true);
+
+        const sentCount = await page.evaluate(() => {
+          const host = document.getElementById('mcp-chatbox-root') as any;
+          const sr = host.shadowRoot as ShadowRoot;
+          const input = sr.querySelector('[data-role="input"]') as HTMLInputElement;
+          const send = sr.querySelector('[data-role="send"]') as HTMLButtonElement;
+          input.value = 'hello';
+          send.click();
+          return sr.querySelectorAll('.msg.user').length;
+        });
+        assert.strictEqual(sentCount, 1);
+
+        // Drain message via the orchestration bridge and post an assistant reply.
+        response.resetResponseLineForTesting();
+        await chatboxStep.handler(
+          {
+            params: {
+              patchId: 'chatbox-patch',
+              maxMessages: 10,
+              respond: true,
+              responsePrefix: 'Ack:',
+            },
+          },
+          response,
+          context,
+        );
+
+        const assistantCount = await page.evaluate(() => {
+          const host = document.getElementById('mcp-chatbox-root') as any;
+          const sr = host.shadowRoot as ShadowRoot;
+          return sr.querySelectorAll('.msg.assistant').length;
+        });
+        assert.strictEqual(assistantCount, 1);
+
+        response.resetResponseLineForTesting();
+        await rollbackPatch.handler(
+          {params: {patchId: 'chatbox-patch'}},
+          response,
+          context,
+        );
+
+        const removed = await page.evaluate(() => {
+          return document.getElementById('mcp-chatbox-root') === null;
+        });
+        assert.strictEqual(removed, true);
       });
     });
   });
