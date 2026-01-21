@@ -9,8 +9,8 @@
         margin: 0;
         padding: 20px;
         font-family: system-ui, sans-serif;
-        background: #0d1117;
-        color: #c9d1d9;
+        background: #1e1e1e;
+        color: #d4d4d4;
         min-height: 100vh;
         display: flex;
         flex-direction: column;
@@ -20,24 +20,20 @@
 
     .header {
         display: flex;
-        flex-wrap: wrap;
-        gap: 16px;
-        align-items: center;
-    }
-
-    .slider-container {
-        display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 12px;
-        flex: 1;
-        min-width: 260px;
+        padding: 12px 16px;
+        background: linear-gradient(to bottom, #2d2d30 0%, #252526 100%);
+        border: 1px solid #3e3e42;
+        border-radius: 6px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
     }
 
     .control-row {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 12px 16px;
+        gap: 12px 24px;
         width: 100%;
     }
 
@@ -45,99 +41,168 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 10px 12px;
-        border: 1px solid #30363d;
-        background: #0f1623;
-        border-radius: 10px;
-        flex: 1 1 auto;
-        min-width: 260px;
+        flex: 0 1 auto;
+        background: linear-gradient(to bottom, #3c3c3c 0%, #323233 100%);
+        border: 1px solid #464647;
+        border-radius: 4px;
+        padding: 8px 12px;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.05);
+        min-height: 36px;
     }
 
     .control-group label {
-        color: #8b949e;
-        font-size: 0.9rem;
+        color: #cccccc;
+        font-size: 0.875rem;
+        font-weight: 500;
         white-space: nowrap;
     }
 
-    select, input[type="number"] {
-        background: #161b22;
-        color: #c9d1d9;
-        border: 1px solid #30363d;
-        border-radius: 8px;
-        padding: 8px 10px;
-        font: inherit;
+    /* Segmented Control for Mode */
+    .mode-segmented {
+        display: inline-flex;
+        background: #1e1e1e;
+        border: 1px solid #464647;
+        border-radius: 4px;
+        padding: 2px;
+        gap: 2px;
+        align-items: center;
+    }
+
+    .mode-segmented button {
+        background: transparent;
+        border: none;
+        padding: 5px 10px;
+        font-size: 0.8125rem;
+        color: #cccccc;
+        cursor: pointer;
+        border-radius: 3px;
+        transition: all 0.15s;
+        white-space: nowrap;
+        box-shadow: none;
+        font-weight: 500;
+        min-width: 50px;
+    }
+
+    .mode-segmented button:hover:not(.active) {
+        background: rgba(255,255,255,0.08);
+    }
+
+    .mode-segmented button.active {
+        background: linear-gradient(to bottom, #0078d4 0%, #0063b1 100%);
+        color: #ffffff;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 2px rgba(0,0,0,0.4);
+        font-weight: 600;
+    }
+
+    .mode-segmented button:active {
+        transform: scale(0.98);
+    }
+
+    select {
+        background: linear-gradient(to bottom, #3c3c3c 0%, #323233 100%);
+        border: 1px solid #464647;
+        border-radius: 3px;
+        padding: 4px 24px 4px 8px;
+        font-size: 0.875rem;
+        color: #cccccc;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23cccccc' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 6px center;
+    }
+
+    select:hover {
+        border-color: #5a5a5a;
+        background: linear-gradient(to bottom, #404040 0%, #363637 100%);
+    }
+
+    select:focus {
         outline: none;
+        border-color: #0078d4;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 2px rgba(0,120,212,0.3);
     }
 
     input[type="number"] {
-        width: 80px;
+        background: linear-gradient(to bottom, #3c3c3c 0%, #323233 100%);
+        border: 1px solid #464647;
+        border-radius: 3px;
+        padding: 4px 8px;
+        font-size: 0.875rem;
+        color: #cccccc;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+        width: 60px;
+    }
+
+    input[type="number"]:hover {
+        border-color: #5a5a5a;
+    }
+
+    input[type="number"]:focus {
+        outline: none;
+        border-color: #0078d4;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 2px rgba(0,120,212,0.3);
     }
 
     .checkbox {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         user-select: none;
-        color: #c9d1d9;
-        font-size: 0.95rem;
+        color: #cccccc;
+        font-size: 0.875rem;
+        padding: 4px 8px;
+        border-radius: 3px;
+        transition: background 0.15s;
     }
 
-    input[type="range"] {
-        flex: 1;
-        height: 8px;
-        background: #30363d;
-        border-radius: 4px;
-        outline: none;
+    .checkbox:hover {
+        background: rgba(255,255,255,0.05);
     }
 
-    input[type="range"]::-webkit-slider-thumb {
-        appearance: none;
-        width: 20px;
-        height: 20px;
-        background: #58a6ff;
-        border-radius: 50%;
+    .checkbox input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
         cursor: pointer;
-        border: 2px solid #0d1117;
-    }
-
-    input[type="range"]::-moz-range-thumb {
-        width: 20px;
-        height: 20px;
-        background: #58a6ff;
-        border-radius: 50%;
-        cursor: pointer;
-        border: 2px solid #0d1117;
-    }
-
-    .width-display {
-        font-weight: bold;
-        min-width: 60px;
-        text-align: center;
-        color: #58a6ff;
+        accent-color: #0078d4;
     }
 
     button {
-        padding: 10px 20px;
-        background: #238636;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
+        background: linear-gradient(to bottom, #3c3c3c 0%, #323233 100%);
+        border: 1px solid #464647;
+        border-radius: 4px;
+        padding: 6px 16px;
+        color: #cccccc;
+        font-size: 0.875rem;
         font-weight: 500;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+        transition: all 0.15s;
     }
 
     button:hover {
-        background: #2ea043;
+        background: linear-gradient(to bottom, #404040 0%, #363637 100%);
+        border-color: #5a5a5a;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    button:active {
+        background: linear-gradient(to bottom, #2d2d30 0%, #252526 100%);
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+        transform: translateY(1px);
     }
 
     .editor-wrap {
         position: relative;
         flex: 1 1 auto;
         min-height: 260px;
+        display: flex;
+        flex-direction: column;
     }
 
     textarea {
-        height: 100%;
+        flex: 1 1 auto;
         min-height: 260px;
         resize: none;
         padding: 16px;
@@ -147,91 +212,151 @@
         background: #161b22;
         color: #c9d1d9;
         border: 1px solid #30363d;
-        border-radius: 8px;
+        border-radius: 0 0 8px 8px;
         width: 100%;
         box-sizing: border-box;
         white-space: pre;
         overflow-x: auto;
     }
 
-    /* “Columns” slider sits on top of the textarea, with a triangle knob */
-    .overlay-slider {
+    .info {
+        color: #858585;
+        font-size: 0.8125rem;
+        font-style: italic;
+    }
+
+    /* Word Processor Style Ruler */
+    .ruler-bar {
+        position: relative;
+        height: 32px;
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+        cursor: default;
+        user-select: none;
+        overflow: hidden;
+    }
+
+    .ruler-marks {
         position: absolute;
+        top: 0;
         left: 16px;
         right: 16px;
-        top: 8px;
-        height: 28px;
-        z-index: 3;
-        pointer-events: none; /* let clicks go to textarea, except the thumb */
+        bottom: 0;
+        background-image:
+            linear-gradient(to right, rgba(139, 148, 158, 0.2) 1px, transparent 1px),
+            linear-gradient(to right, rgba(139, 148, 158, 0.4) 1px, transparent 1px);
+        background-size: 8px 8px, 80px 16px;
+        background-repeat: repeat-x;
+        background-position: 0 bottom;
+        pointer-events: none;
     }
 
-    .overlay-slider input[type="range"] {
-        width: 100%;
-        height: 28px;
+    .margin-indicator {
+        position: absolute;
+        top: 0;
+        width: 12px;
+        height: 32px;
+        cursor: ew-resize;
+        z-index: 10;
+        display: flex;
+        justify-content: center;
+    }
+
+    .margin-handle {
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 10px solid #58a6ff;
+        filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3));
+        margin-top: 0;
+    }
+
+    .margin-indicator:hover .margin-handle {
+        border-top-color: #79c0ff;
+    }
+
+    .margin-indicator.dragging .margin-handle {
+        border-top-color: #79c0ff;
+        transform: scale(1.1);
+    }
+
+    .ruler-labels {
+        position: absolute;
+        top: 2px;
+        left: 0;
+        right: 0;
+        height: 20px;
+        pointer-events: none;
+    }
+
+    .ruler-labels span {
+        position: absolute;
+        top: 0;
+        font-size: 10px;
+        font-weight: bold;
+        color: #8b949e;
+        white-space: nowrap;
+    }
+
+    .width-connector {
+        position: absolute;
+        top: 24px;
+        height: 2px;
+        background: rgba(88, 166, 255, 0.4);
+        z-index: 5;
+    }
+
+    .width-input-container {
+        position: absolute;
+        top: 2px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #0d1117;
+        padding: 1px 8px;
+        border-radius: 4px;
+        border: 1px solid #30363d;
+        z-index: 15;
+        transition: left 0.1s ease-out;
+    }
+
+    .width-input-container input {
+        width: 45px;
         background: transparent;
-        pointer-events: auto;
+        border: none;
+        color: #58a6ff;
+        font-weight: bold;
+        text-align: center;
+        font-size: 0.85rem;
+        outline: none;
     }
 
-    .overlay-slider input[type="range"]::-webkit-slider-runnable-track {
-        height: 2px;
-        background: rgba(139,148,158,0.35);
-        border-radius: 999px;
-    }
-
-    .overlay-slider input[type="range"]::-webkit-slider-thumb {
-        appearance: none;
-        width: 0;
-        height: 0;
-        margin-top: -6px; /* centers on track */
-        border-left: 10px solid transparent;
-        border-right: 10px solid transparent;
-        border-top: 16px solid #58a6ff;
-        cursor: pointer;
-        filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.7));
-    }
-
-    .overlay-slider input[type="range"]::-moz-range-track {
-        height: 2px;
-        background: rgba(139,148,158,0.35);
-        border-radius: 999px;
-    }
-
-    .overlay-slider input[type="range"]::-moz-range-thumb {
-        width: 0;
-        height: 0;
-        border-left: 10px solid transparent;
-        border-right: 10px solid transparent;
-        border-top: 16px solid #58a6ff;
-        cursor: pointer;
+    .width-input-container label {
+        font-size: 0.75rem;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     .margin-guide {
         position: absolute;
-        top: 16px;
-        bottom: 16px;
+        top: 32px;
+        bottom: 0;
         width: 1px;
-        background: rgba(88,166,255,0.35);
-        z-index: 2;
+        background: rgba(88, 166, 255, 0.2);
         pointer-events: none;
+        z-index: 1;
     }
 
-    .info {
-        font-size: 0.9rem;
-        color: #8b949e;
+    .margin-guide.left-margin-guide {
+        background: rgba(40, 167, 69, 0.3);
     }
 
-    /* GUI Display Fixes */
-    .control-group {
-        min-height: 45px;
-    }
-
-    .editor-wrap {
-        display: flex;
-    }
-
-    textarea {
-        height: auto;
-        flex: 1 1 auto;
+    .margin-guide.right-margin-guide {
+        background: rgba(88, 166, 255, 0.3);
     }
 </style>
 </head>
@@ -240,12 +365,19 @@
 <div class="header">
     <div class="control-row">
         <div class="control-group">
-            <label for="mode">Mode</label>
-            <select id="mode">
+            <div class="mode-segmented" id="modeSegmented">
+                <button data-mode="cutoff" class="active">Cutoff</button>
+                <button data-mode="edgeProtruding">Edge</button>
+                <button data-mode="justifyHyphenCut">Hyphen</button>
+                <button data-mode="justifySpaces">Justify</button>
+                <button data-mode="centered">Centered</button>
+            </div>
+            <select id="mode" style="display: none;">
                 <option value="cutoff">Absolute cutoff</option>
                 <option value="edgeProtruding">Edge-protruding</option>
                 <option value="justifyHyphenCut">Justified (hyphenated cutoffs)</option>
                 <option value="justifySpaces">Justified (adds spaces)</option>
+                <option value="centered">Centered</option>
             </select>
 
             <label for="tolerance" title="Only used for Edge-protruding mode">Tolerance</label>
@@ -253,16 +385,18 @@
         </div>
 
         <div class="control-group">
-            <label for="leftMargin">Left margin</label>
-            <input type="range" id="leftMargin" min="0" max="20" value="0">
-            <span class="width-display" id="leftMarginValue">0</span>
-
-            <span class="info" style="margin-left:auto;">Ctrl+Enter / Paste / Slider release reflows</span>
+            <span class="info">Use ruler above text area to adjust margins • Ctrl+Enter / Paste / Slider release reflows</span>
         </div>
 
         <div class="control-group">
             <label for="frame">Frame</label>
-            <select id="frame">
+            <div class="mode-segmented" id="frameSegmented">
+                <button data-frame="none" class="active">None</button>
+                <button data-frame="solid">Solid</button>
+                <button data-frame="single">Single</button>
+                <button data-frame="double">Double</button>
+            </div>
+            <select id="frame" style="display: none;">
                 <option value="none">None</option>
                 <option value="solid">Solid blocks</option>
                 <option value="single">Single line</option>
@@ -278,56 +412,147 @@
             </label>
         </div>
 
-        <div class="control-group" style="justify-content:space-between;">
-            <div class="slider-container" style="margin:0; padding:0; border:none; background:transparent; min-width: 220px;">
-                <label for="width">Columns</label>
-                <input type="range" id="width" min="20" max="120" value="80">
-                <span class="width-display" id="widthValue">80</span>
-            </div>
+        <div class="control-group" style="margin-left: auto;">
             <button onclick="reflow()">Reflow Now</button>
         </div>
     </div>
 </div>
 
 <div class="editor-wrap">
-    <div class="overlay-slider" id="overlaySliderWrap" aria-hidden="true">
-        <input type="range" id="widthOverlay" min="20" max="120" value="80">
+    <!-- Word Processor Style Ruler -->
+    <div class="ruler-bar" id="rulerBar">
+        <div class="ruler-marks"></div>
+        <div class="margin-indicator left-margin" id="leftMarginIndicator" data-margin="left">
+            <div class="margin-handle"></div>
+        </div>
+        <div class="margin-indicator right-margin" id="rightMarginIndicator" data-margin="right">
+            <div class="margin-handle"></div>
+        </div>
+        <div class="ruler-labels">
+            <span class="left-margin-label" id="leftMarginLabel">0</span>
+            <span class="right-margin-label" id="rightMarginLabel">80</span>
+        </div>
+        <div class="width-connector" id="widthConnector"></div>
+        <div class="width-input-container" id="widthInputContainer">
+            <label for="widthInput">Width:</label>
+            <input type="number" id="widthInput" min="20" max="150" value="80">
+        </div>
     </div>
-    <div class="margin-guide" id="marginGuide"></div>
+
+    <div class="margin-guide left-margin-guide" id="leftMarginGuide"></div>
+    <div class="margin-guide right-margin-guide" id="rightMarginGuide"></div>
     <textarea id="editor" spellcheck="false" placeholder="Paste or type your text here...
 You can reflow multiple times with different widths!"></textarea>
 </div>
 
 <script>
 const editor = document.getElementById('editor');
-const widthSlider = document.getElementById('width');
-const widthOverlay = document.getElementById('widthOverlay');
-const widthDisplay = document.getElementById('widthValue');
-const leftMarginSlider = document.getElementById('leftMargin');
-const leftMarginDisplay = document.getElementById('leftMarginValue');
+const widthInput = document.getElementById('widthInput');
 const modeSelect = document.getElementById('mode');
 const toleranceInput = document.getElementById('tolerance');
 const frameSelect = document.getElementById('frame');
 const innerPaddingInput = document.getElementById('innerPadding');
 const gradientsCheckbox = document.getElementById('gradients');
-const marginGuide = document.getElementById('marginGuide');
-const overlaySliderWrap = document.getElementById('overlaySliderWrap');
 
-function updateWidthDisplay() {
-    widthDisplay.textContent = widthSlider.value;
-    if (widthOverlay) widthOverlay.value = widthSlider.value;
-    updateMarginGuide();
-}
+// Ruler elements
+const rulerBar = document.getElementById('rulerBar');
+const leftMarginIndicator = document.getElementById('leftMarginIndicator');
+const rightMarginIndicator = document.getElementById('rightMarginIndicator');
+const leftMarginLabel = document.getElementById('leftMarginLabel');
+const rightMarginLabel = document.getElementById('rightMarginLabel');
+const leftMarginGuide = document.getElementById('leftMarginGuide');
+const rightMarginGuide = document.getElementById('rightMarginGuide');
+const widthConnector = document.getElementById('widthConnector');
+const widthInputContainer = document.getElementById('widthInputContainer');
 
-function updateLeftMarginDisplay() {
-    leftMarginDisplay.textContent = leftMarginSlider.value;
-    updateMarginGuide();
+// Margin state
+let leftMargin = 0;
+let rightMargin = 0;
+let isDragging = false;
+let dragStartX = 0;
+let dragStartMargin = 0;
+let cachedCharWidthPx = null;
+
+function updateRulerIndicators() {
+    if (!rulerBar || !leftMarginIndicator || !rightMarginIndicator || !widthConnector || !widthInputContainer) return;
+    if (cachedCharWidthPx == null) cachedCharWidthPx = getCharWidthPx();
+
+    const width = parseInt(widthInput.value) || 80;
+    const leftX = 16 + (leftMargin * cachedCharWidthPx);
+    const rightX = 16 + ((width + leftMargin) * cachedCharWidthPx);
+
+    leftMarginIndicator.style.left = `${leftX - 6}px`; 
+    rightMarginIndicator.style.left = `${rightX - 6}px`;
+    
+    widthConnector.style.left = `${leftX}px`;
+    widthConnector.style.width = `${rightX - leftX}px`;
+    
+    // Position width input in the center between left and right margins
+    const centerX = leftX + (rightX - leftX) / 2;
+    widthInputContainer.style.left = `${centerX}px`;
+    widthInputContainer.style.transform = 'translateX(-50%)';
+    
+    leftMarginLabel.textContent = leftMargin.toString();
+    rightMarginLabel.textContent = (width + leftMargin).toString();
+    leftMarginLabel.style.left = `${leftX}px`;
+    rightMarginLabel.style.left = `${rightX}px`;
+
+    // Position guides
+    const paddingLeft = 16;
+    leftMarginGuide.style.left = `${paddingLeft + (leftMargin * cachedCharWidthPx)}px`;
+    rightMarginGuide.style.left = `${paddingLeft + ((width + leftMargin) * cachedCharWidthPx)}px`;
 }
 
 function clampInt(value, fallback, min, max) {
     const n = Number.parseInt(String(value), 10);
     if (!Number.isFinite(n)) return fallback;
     return Math.max(min, Math.min(max, n));
+}
+
+function startMarginDrag(e, marginType) {
+    e.preventDefault();
+    isDragging = true;
+    dragStartX = e.clientX;
+    const width = parseInt(widthInput.value) || 80;
+    dragStartMargin = marginType === 'left' ? leftMargin : (width + leftMargin);
+
+    const indicator = marginType === 'left' ? leftMarginIndicator : rightMarginIndicator;
+    indicator.classList.add('dragging');
+
+    document.addEventListener('mousemove', handleMarginDrag);
+    document.addEventListener('mouseup', stopMarginDrag);
+}
+
+function handleMarginDrag(e) {
+    if (!isDragging) return;
+
+    const deltaX = e.clientX - dragStartX;
+    if (cachedCharWidthPx == null) cachedCharWidthPx = getCharWidthPx();
+    const deltaChars = Math.round(deltaX / cachedCharWidthPx);
+
+    if (leftMarginIndicator.classList.contains('dragging')) {
+        leftMargin = Math.max(0, Math.min(40, dragStartMargin + deltaChars));
+    } else if (rightMarginIndicator.classList.contains('dragging')) {
+        const newTotalWidth = dragStartMargin + deltaChars;
+        const newTextWidth = newTotalWidth - leftMargin;
+        widthInput.value = Math.max(20, Math.min(150, newTextWidth));
+    }
+
+    updateRulerIndicators();
+}
+
+function stopMarginDrag() {
+    if (!isDragging) return;
+
+    isDragging = false;
+    leftMarginIndicator.classList.remove('dragging');
+    rightMarginIndicator.classList.remove('dragging');
+
+    document.removeEventListener('mousemove', handleMarginDrag);
+    document.removeEventListener('mouseup', stopMarginDrag);
+
+    // Trigger reflow
+    autoReflow();
 }
 
 function getCharWidthPx() {
@@ -345,38 +570,47 @@ function getCharWidthPx() {
     return w || 8;
 }
 
-let cachedCharWidthPx = null;
-function updateMarginGuide() {
-    if (!marginGuide) return;
+leftMarginIndicator.addEventListener('mousedown', (e) => startMarginDrag(e, 'left'));
+rightMarginIndicator.addEventListener('mousedown', (e) => startMarginDrag(e, 'right'));
+
+// Clicking on the ruler to move markers
+rulerBar.addEventListener('click', (e) => {
+    if (isDragging) return;
+    // Don't trigger if clicking the indicators themselves or the width input
+    if (e.target.closest('.margin-indicator') || e.target.closest('.width-input-container')) return;
+
+    const rect = rulerBar.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
     if (cachedCharWidthPx == null) cachedCharWidthPx = getCharWidthPx();
-    const width = clampInt(widthSlider.value, 80, 10, 999);
-    const leftMargin = clampInt(leftMarginSlider.value, 0, 0, 999);
-    const style = getComputedStyle(editor);
-    const paddingLeft = Number.parseFloat(style.paddingLeft) || 16;
-    const x = paddingLeft + (width + leftMargin) * cachedCharWidthPx;
-    marginGuide.style.left = `${x}px`;
+    
+    const clickChars = Math.round((clickX - 16) / cachedCharWidthPx);
+    const width = parseInt(widthInput.value) || 80;
+    const currentLeftX = 16 + (leftMargin * cachedCharWidthPx);
+    const currentRightX = 16 + ((width + leftMargin) * cachedCharWidthPx);
 
-    // Keep the overlay slider's 0-column origin aligned to the left margin.
-    // This makes the triangle knob visually line up with the right margin guide.
-    if (overlaySliderWrap) {
-        const overlayLeft = paddingLeft + (leftMargin * cachedCharWidthPx);
-        overlaySliderWrap.style.left = `${overlayLeft}px`;
-        overlaySliderWrap.style.right = `${Number.parseFloat(getComputedStyle(editor).paddingRight) || 16}px`;
+    if (clickX < currentLeftX) {
+        // Move left margin
+        leftMargin = Math.max(0, clickChars);
+        updateRulerIndicators();
+        autoReflow();
+    } else if (clickX > currentRightX) {
+        // Move right margin (updates width)
+        const newTotalWidth = clickChars;
+        const newTextWidth = newTotalWidth - leftMargin;
+        widthInput.value = Math.max(20, Math.min(150, newTextWidth));
+        updateRulerIndicators();
+        autoReflow();
     }
-}
-
-widthSlider.addEventListener('input', updateWidthDisplay);
-widthOverlay.addEventListener('input', (e) => {
-    widthSlider.value = widthOverlay.value;
-    updateWidthDisplay();
 });
-leftMarginSlider.addEventListener('input', updateLeftMarginDisplay);
 
-updateWidthDisplay(); // init
-updateLeftMarginDisplay(); // init
+widthInput.addEventListener('input', () => { updateRulerIndicators(); autoReflow(); });
+
+// Init
+updateRulerIndicators();
+
 window.addEventListener('resize', () => {
     cachedCharWidthPx = null;
-    updateMarginGuide();
+    updateRulerIndicators();
 });
 
 function normalizeParagraphText(para) {
@@ -389,7 +623,7 @@ function normalizeParagraphText(para) {
 }
 
 function tokenize(content) {
-    // Regex tokenization avoids accidental empty tokens and helps prevent “conjoined words”
+    // Regex tokenization avoids accidental empty tokens and helps prevent "conjoined words"
     const tokens = content.match(/\S+/g);
     return tokens ? tokens : [];
 }
@@ -437,6 +671,30 @@ function wrapEdgeProtruding(words, width, tolerance) {
         line = w;
     }
     if (line) lines.push(line);
+    return lines;
+}
+
+function wrapCentered(words, width) {
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+        if (!line) {
+            line = w;
+            continue;
+        }
+        if (line.length + 1 + w.length <= width) {
+            line += ' ' + w;
+        } else {
+            // Center the line before pushing
+            const padding = Math.max(0, Math.floor((width - line.length) / 2));
+            lines.push(' '.repeat(padding) + line);
+            line = w;
+        }
+    }
+    if (line) {
+        const padding = Math.max(0, Math.floor((width - line.length) / 2));
+        lines.push(' '.repeat(padding) + line);
+    }
     return lines;
 }
 
@@ -527,8 +785,30 @@ function applyEdgeGradients(lines, { enabled, gap = 1, leftOffset = 1, gradientW
 function applyFrame(lines, frameType, innerPadding) {
     if (frameType === 'none') return lines;
     const pad = Math.max(0, innerPadding);
-    const contentWidth = lines.reduce((m, l) => Math.max(m, l.length), 0);
-    const innerWidth = contentWidth + pad * 2;
+
+    // Find the bounding box of the text (min left, max right)
+    let minLeft = Infinity;
+    let maxRight = 0;
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+            const leftSpaces = line.length - line.trimStart().length;
+            const rightPos = leftSpaces + trimmed.length;
+            minLeft = Math.min(minLeft, leftSpaces);
+            maxRight = Math.max(maxRight, rightPos);
+        }
+    }
+
+    // If no text found, fall back to original behavior
+    if (minLeft === Infinity) {
+        minLeft = 0;
+        maxRight = lines.reduce((m, l) => Math.max(m, l.length), 0);
+    }
+
+    // Calculate frame dimensions with inner padding
+    const frameLeft = Math.max(0, minLeft - pad);
+    const frameRight = maxRight + pad;
+    const frameWidth = frameRight - frameLeft;
 
     let chars;
     if (frameType === 'single') {
@@ -539,17 +819,34 @@ function applyFrame(lines, frameType, innerPadding) {
         chars = { tl: '█', tr: '█', bl: '█', br: '█', h: '█', v: '█' };
     }
 
-    const top = chars.tl + chars.h.repeat(innerWidth) + chars.tr;
-    const bottom = chars.bl + chars.h.repeat(innerWidth) + chars.br;
-    const leftPad = ' '.repeat(pad);
-    const rightPad = ' '.repeat(pad);
+    // Create frame lines - preserve original line content, just add borders
+    const framed = [];
 
-    const framed = [top];
-    for (const l of lines) {
-        const body = leftPad + l.padEnd(contentWidth, ' ') + rightPad;
-        framed.push(chars.v + body + chars.v);
+    // Top border
+    const topBorder = ' '.repeat(frameLeft) + chars.tl + chars.h.repeat(frameWidth) + chars.tr;
+    framed.push(topBorder);
+
+    // Content lines with vertical borders
+    for (const line of lines) {
+        // Extend line to frameRight if needed, preserving original content
+        let extendedLine = line;
+        if (line.length < frameRight) {
+            extendedLine = line + ' '.repeat(frameRight - line.length);
+        }
+
+        // Add vertical borders at frame positions
+        const beforeFrame = extendedLine.slice(0, frameLeft);
+        const inFrame = extendedLine.slice(frameLeft, frameRight);
+        const afterFrame = extendedLine.slice(frameRight);
+
+        const framedLine = beforeFrame + chars.v + inFrame + chars.v + afterFrame;
+        framed.push(framedLine);
     }
-    framed.push(bottom);
+
+    // Bottom border
+    const bottomBorder = ' '.repeat(frameLeft) + chars.bl + chars.h.repeat(frameWidth) + chars.br;
+    framed.push(bottomBorder);
+
     return framed;
 }
 
@@ -577,6 +874,8 @@ function reflowText(text, settings) {
         } else if (settings.mode === 'justifySpaces') {
             lines = wrapCutoff(words, settings.width);
             lines = lines.map((l, idx) => idx === lines.length - 1 ? l : justifyLine(l, settings.width));
+        } else if (settings.mode === 'centered') {
+            lines = wrapCentered(words, settings.width);
         } else {
             lines = wrapCutoff(words, settings.width);
         }
@@ -595,13 +894,14 @@ function reflowText(text, settings) {
 }
 
 function getSettings() {
+    const hiddenSelect = document.getElementById('mode');
     return {
-        mode: modeSelect.value,
-        width: clampInt(widthSlider.value, 80, 10, 999),
-        tolerance: clampInt(toleranceInput.value, 5, 0, 999),
-        leftMargin: clampInt(leftMarginSlider.value, 0, 0, 999),
+        mode: hiddenSelect ? hiddenSelect.value : modeSelect.value,
+        width: parseInt(widthInput.value) || 80,
+        tolerance: parseInt(toleranceInput.value) || 5,
+        leftMargin: leftMargin,
         frame: frameSelect.value,
-        innerPadding: clampInt(innerPaddingInput.value, 1, 0, 20),
+        innerPadding: parseInt(innerPaddingInput.value) || 1,
         gradients: {
             enabled: !!gradientsCheckbox.checked,
             gap: 1,
@@ -633,17 +933,223 @@ editor.addEventListener('keydown', (e) => {
 // Reflow as soon as text is pasted in.
 editor.addEventListener('paste', () => autoReflow());
 
-// Reflow at the end of slider move event (on release).
-widthSlider.addEventListener('change', () => autoReflow());
-widthOverlay.addEventListener('change', () => autoReflow());
-leftMarginSlider.addEventListener('change', () => autoReflow());
-
 // Keep controls in sync and reflow when mode options change.
 modeSelect.addEventListener('change', () => autoReflow());
 toleranceInput.addEventListener('change', () => autoReflow());
 frameSelect.addEventListener('change', () => autoReflow());
 innerPaddingInput.addEventListener('change', () => autoReflow());
 gradientsCheckbox.addEventListener('change', () => autoReflow());
+
+// Segmented Control for Mode
+(function() {
+    const modeSegmented = document.getElementById('modeSegmented');
+    if (!modeSegmented) return;
+
+    const buttons = modeSegmented.querySelectorAll('button');
+    const hiddenSelect = document.getElementById('mode');
+
+    const modeMap = {
+        'cutoff': 'cutoff',
+        'edgeProtruding': 'edgeProtruding',
+        'justifyHyphenCut': 'justifyHyphenCut',
+        'justifySpaces': 'justifySpaces',
+        'centered': 'centered'
+    };
+
+    // Initialize active button
+    const currentMode = hiddenSelect ? hiddenSelect.value : 'cutoff';
+    buttons.forEach(btn => {
+        const btnMode = btn.dataset.mode;
+        btn.classList.toggle('active', modeMap[btnMode] === currentMode);
+    });
+
+    // Add click handlers
+    buttons.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            buttons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            const newMode = modeMap[this.dataset.mode];
+            if (newMode && hiddenSelect && newMode !== hiddenSelect.value) {
+                hiddenSelect.value = newMode;
+                modeSelect.value = newMode;
+                
+                const changeEvent = new Event('change', { bubbles: true });
+                hiddenSelect.dispatchEvent(changeEvent);
+                modeSelect.dispatchEvent(changeEvent);
+                
+                if (typeof autoReflow === 'function') {
+                    setTimeout(() => autoReflow(), 50);
+                }
+            }
+        });
+    });
+
+    // Sync when hidden select changes externally
+    if (hiddenSelect) {
+        hiddenSelect.addEventListener('change', function() {
+            buttons.forEach(btn => {
+                const btnMode = btn.dataset.mode;
+                btn.classList.toggle('active', modeMap[btnMode] === this.value);
+            });
+        });
+    }
+})();
+
+// Segmented Control for Frame
+(function() {
+    const frameSegmented = document.getElementById('frameSegmented');
+    if (!frameSegmented) return;
+
+    const buttons = frameSegmented.querySelectorAll('button');
+    const hiddenSelect = document.getElementById('frame');
+
+    const frameMap = {
+        'none': 'none',
+        'solid': 'solid',
+        'single': 'single',
+        'double': 'double'
+    };
+
+    // Initialize active button
+    const currentFrame = hiddenSelect ? hiddenSelect.value : 'none';
+    buttons.forEach(btn => {
+        const btnFrame = btn.dataset.frame;
+        btn.classList.toggle('active', frameMap[btnFrame] === currentFrame);
+    });
+
+    // Add click handlers
+    buttons.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            buttons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            const newFrame = frameMap[this.dataset.frame];
+            if (newFrame && hiddenSelect && newFrame !== hiddenSelect.value) {
+                hiddenSelect.value = newFrame;
+                
+                const changeEvent = new Event('change', { bubbles: true });
+                hiddenSelect.dispatchEvent(changeEvent);
+            }
+        });
+    });
+
+    // Sync when hidden select changes externally
+    if (hiddenSelect) {
+        hiddenSelect.addEventListener('change', function() {
+            buttons.forEach(btn => {
+                const btnFrame = btn.dataset.frame;
+                btn.classList.toggle('active', frameMap[btnFrame] === this.value);
+            });
+        });
+    }
+})();
+
+// Fix: Prevent double-application of gradients and frames
+// Store original text and always reflow from it
+let originalText = null;
+
+// Extract original text from formatted text (reverse the formatting)
+function extractOriginalText(formattedText) {
+    if (!formattedText) return '';
+    
+    const lines = formattedText.split('\n');
+    const frameCharPattern = /^[┌┐└┘╔╗╚╝─═█]+$/;
+    
+    // Filter out frame border lines
+    let filteredLines = lines.filter(line => !frameCharPattern.test(line));
+    
+    // Remove formatting from each line
+    filteredLines = filteredLines.map(line => {
+        // Remove gradient chars: █▓▒░ at start, ░▒▓█ at end
+        line = line.replace(/^[█▓▒░]+\s*/, '').replace(/\s*[░▒▓█]+$/, '');
+        // Remove frame borders: │║█ at start/end
+        line = line.replace(/^[│║█]+\s*/, '').replace(/\s*[│║█]+$/, '');
+        // Remove any remaining gradient patterns in the middle
+        line = line.replace(/\s*[█▓▒░]+\s*/g, ' ').replace(/\s*[░▒▓█]+\s*/g, ' ');
+        return line.trim();
+    }).filter(line => line.length > 0);
+    
+    // Normalize paragraph breaks
+    return filteredLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// Fixed reflow - always uses original unformatted text
+function reflowFixed() {
+    const settings = getSettings();
+    if (!settings.width || settings.width < 10) return;
+    
+    const currentValue = editor.value;
+    
+    // Determine source text
+    let sourceText;
+    if (originalText && originalText.trim()) {
+        // Use stored original
+        sourceText = originalText;
+    } else {
+        // Try to extract from current value
+        const hasFormatting = /[█▓▒░┌┐└┘╔╗╚╝│║─═]/.test(currentValue);
+        if (hasFormatting) {
+            sourceText = extractOriginalText(currentValue);
+            if (sourceText) originalText = sourceText;
+        } else {
+            sourceText = currentValue;
+            originalText = currentValue;
+        }
+    }
+    
+    // Reflow from source
+    const reflowed = reflowText(sourceText, settings);
+    editor.value = reflowed;
+}
+
+// Override reflow functions
+window.reflow = reflowFixed;
+window.autoReflow = function() {
+    requestAnimationFrame(() => reflowFixed());
+};
+
+// Capture original text on input (before formatting is applied)
+let inputTimeout;
+editor.addEventListener('input', function() {
+    clearTimeout(inputTimeout);
+    // Use timeout to capture AFTER paste completes but BEFORE autoReflow
+    inputTimeout = setTimeout(() => {
+        const current = editor.value;
+        const hasFormatting = /[█▓▒░┌┐└┘╔╗╚╝│║─═]/.test(current);
+        if (!hasFormatting && current.trim()) {
+            originalText = current;
+        }
+    }, 0);
+});
+
+// Handle paste - capture clipboard text as original
+editor.addEventListener('paste', function(e) {
+    const clipboardData = e.clipboardData || window.clipboardData;
+    if (clipboardData) {
+        const pastedText = clipboardData.getData('text/plain');
+        if (pastedText && pastedText.trim()) {
+            const hasFormatting = /[█▓▒░┌┐└┘╔╗╚╝│║─═]/.test(pastedText);
+            if (!hasFormatting) {
+                originalText = pastedText;
+            }
+        }
+    }
+});
+
+// Init with Lorem Ipsum
+const initialText = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+editor.value = initialText;
+// Initialize originalText with the initial text
+originalText = initialText;
+updateRulerIndicators();
+reflow();
 </script>
 
 </body>
