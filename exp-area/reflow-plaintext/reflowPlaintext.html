@@ -787,13 +787,14 @@ function applyFrame(lines, frameType, innerPadding, width, leftMargin) {
     const pad = Math.max(0, innerPadding);
 
     // Use margin lines and text boundaries as reference for edges
-    // Left edge: left margin position (already applied to lines, so relative position 0)
-    // Right edge: left margin + width position (so relative position width)
+    // Since margins are already applied to lines, frame edges are relative to margined text:
+    // Left edge: left margin position (relative position 0, since margins already applied)
+    // Right edge: right margin position (relative position width, since margins already applied)
     // Top edge: first line of text (index 0)
     // Bottom edge: last line of text (index lines.length - 1)
 
-    const frameLeft = Math.max(0, leftMargin - pad);
-    const frameRight = (leftMargin + width) + pad;
+    const frameLeft = Math.max(0, -pad);  // Left margin is at position 0, so frame starts at 0 - pad
+    const frameRight = width + pad;       // Right margin is at position width, so frame ends at width + pad
     const frameWidth = frameRight - frameLeft;
 
     let chars;
