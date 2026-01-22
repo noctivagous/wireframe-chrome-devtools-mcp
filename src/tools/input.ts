@@ -159,6 +159,23 @@ async function fillFormElement(
     if (aXNode && aXNode.role === 'combobox') {
       await selectOption(handle, aXNode, value);
     } else {
+      if (value.length >= 1000) {
+        const didSet = await handle.evaluate(
+          (el, nextValue) => {
+            if (el && 'value' in (el as HTMLInputElement | HTMLTextAreaElement)) {
+              (el as HTMLInputElement | HTMLTextAreaElement).value = nextValue;
+              el.dispatchEvent(new Event('input', {bubbles: true}));
+              el.dispatchEvent(new Event('change', {bubbles: true}));
+              return true;
+            }
+            return false;
+          },
+          value,
+        );
+        if (didSet) {
+          return;
+        }
+      }
       // Increase timeout for longer input values.
       const timeoutPerChar = 10; // ms
       const fillTimeout =

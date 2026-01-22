@@ -4,28 +4,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {exec} from 'node:child_process';
 import http from 'node:http';
 import {URL} from 'node:url';
-import {exec} from 'node:child_process';
 import {promisify} from 'node:util';
 
 const execAsync = promisify(exec);
 
-export type ToolToggleView = {
+export interface ToolToggleView {
   name: string;
   description: string;
   category: string;
   enabled: boolean;
-};
+}
 
-export type WebUiDeps = {
+export interface WebUiDeps {
   host: string;
   port: number;
   getTools(): ToolToggleView[];
   getConfigMeta(): {configPath: string; updatedAt: string};
   setDisabledTools(disabledTools: string[]): Promise<void>;
   log: (...args: any[]) => void;
-};
+}
 
 function htmlPage(): string {
   // Inline HTML/JS to keep this lightweight.
@@ -561,7 +561,7 @@ async function readJsonBody(req: http.IncomingMessage): Promise<any> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
   }
   const text = Buffer.concat(chunks).toString('utf8').trim();
-  if (!text) return null;
+  if (!text) {return null;}
   return JSON.parse(text);
 }
 

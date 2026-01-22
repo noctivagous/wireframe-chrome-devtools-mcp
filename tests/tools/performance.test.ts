@@ -379,9 +379,8 @@ describe('performance', () => {
         const selectedPage = context.getSelectedPage();
 
         // Mock the monitoring script setup
-        const evaluateStub = sinon.stub(selectedPage, 'evaluate');
-        evaluateStub.onFirstCall().resolves(); // Setup call
-        evaluateStub.onSecondCall().resolves({
+        const evaluateStub = sinon.stub(selectedPage, 'evaluate').resolves();
+        evaluateStub.onCall(2).resolves({
           duration: 2000,
           measurements: [
             {

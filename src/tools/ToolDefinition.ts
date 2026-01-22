@@ -133,6 +133,9 @@ export type Context = Readonly<{
    */
   resolveCdpElementId(cdpBackendNodeId: number): string | undefined;
   installExtension(path: string): Promise<string>;
+  uninstallExtension(id: string): Promise<void>;
+  reloadExtension(id: string): Promise<void>;
+  reinstallExtension(id: string, path: string): Promise<string>;
   createPatchId(prefix?: string): string;
   registerPatch(patch: PatchRecord): void;
   getPatch(patchId: string): PatchRecord | undefined;

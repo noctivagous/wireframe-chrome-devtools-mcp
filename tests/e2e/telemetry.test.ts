@@ -168,7 +168,13 @@ describe('Telemetry E2E', () => {
     () =>
       runTelemetryTest(
         ctx => {
-          process.kill(-ctx.process!.pid!, 'SIGTERM');
+          try {
+            process.kill(-ctx.process!.pid!, 'SIGTERM');
+          } catch (error) {
+            if (error && (error as NodeJS.ErrnoException).code !== 'ESRCH') {
+              throw error;
+            }
+          }
         },
         'sigterm-group',
         {detached: true},

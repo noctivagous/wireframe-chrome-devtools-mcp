@@ -279,7 +279,7 @@ async function generateToolDocumentation(): Promise<void> {
     const toolsWithAnnotations: ToolWithAnnotations[] = tools
       .filter(tool => {
         // Filter out extension tools
-        if (tool.name === 'install_extension') {
+        if (tool.annotations?.category === ToolCategory.EXTENSIONS) {
           return false;
         }
 

@@ -374,7 +374,7 @@ export const exportEditSessionPackage = defineTool({
   },
 });
 
-type CommitPlanChunk = {
+interface CommitPlanChunk {
   changeId: string;
   type: string;
   createdAt: number;
@@ -387,9 +387,9 @@ type CommitPlanChunk = {
    * Exact text to be appended (already includes header/footer markers).
    */
   appendText: string;
-};
+}
 
-type CommitPlan = {
+interface CommitPlan {
   kind: 'mcp_edit_session_commit_plan';
   generatedAt: number;
   sessionId: string;
@@ -410,7 +410,7 @@ type CommitPlan = {
    * Internal payload used by apply_commit_plan. Included only when requested.
    */
   _chunksByFile?: Record<string, CommitPlanChunk[]>;
-};
+}
 
 function buildCommitPlan(
   session: EditSession,

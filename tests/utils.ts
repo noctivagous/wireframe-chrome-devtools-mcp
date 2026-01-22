@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import fs from 'node:fs';
+
 import type {CallToolResult} from '@modelcontextprotocol/sdk/types.js';
 import logger from 'debug';
-import fs from 'node:fs';
 import type {Browser} from 'puppeteer';
 import puppeteer, {Locator} from 'puppeteer';
 import type {

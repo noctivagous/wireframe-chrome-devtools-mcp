@@ -8,13 +8,18 @@ import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
 import {inspectState} from '../../src/tools/state.js';
-import {withMcpContext} from '../utils.js';
+import {serverHooks} from '../server.js';
+import {html, withMcpContext} from '../utils.js';
+
+const server = serverHooks();
 
 describe('state', () => {
   describe('inspect_state', () => {
     it('inspects localStorage', async () => {
       await withMcpContext(async (response, context) => {
         const page = context.getSelectedPage();
+        server.addHtmlRoute('/state', html`<main>state</main>`);
+        await page.goto(server.getRoute('/state'));
 
         // Set up some localStorage data
         await page.evaluate(() => {
@@ -48,6 +53,8 @@ describe('state', () => {
     it('inspects sessionStorage', async () => {
       await withMcpContext(async (response, context) => {
         const page = context.getSelectedPage();
+        server.addHtmlRoute('/state', html`<main>state</main>`);
+        await page.goto(server.getRoute('/state'));
 
         // Set up some sessionStorage data
         await page.evaluate(() => {
@@ -79,6 +86,8 @@ describe('state', () => {
     it('inspects global variables', async () => {
       await withMcpContext(async (response, context) => {
         const page = context.getSelectedPage();
+        server.addHtmlRoute('/state', html`<main>state</main>`);
+        await page.goto(server.getRoute('/state'));
 
         // Set up some global variables
         await page.evaluate(() => {
@@ -113,6 +122,8 @@ describe('state', () => {
     it('applies filtering correctly', async () => {
       await withMcpContext(async (response, context) => {
         const page = context.getSelectedPage();
+        server.addHtmlRoute('/state', html`<main>state</main>`);
+        await page.goto(server.getRoute('/state'));
 
         // Set up mixed data
         await page.evaluate(() => {
@@ -154,6 +165,8 @@ describe('state', () => {
     it('respects maxItems limit', async () => {
       await withMcpContext(async (response, context) => {
         const page = context.getSelectedPage();
+        server.addHtmlRoute('/state', html`<main>state</main>`);
+        await page.goto(server.getRoute('/state'));
 
         // Set up many items
         await page.evaluate(() => {
@@ -185,6 +198,8 @@ describe('state', () => {
     it('excludes values when includeValues is false', async () => {
       await withMcpContext(async (response, context) => {
         const page = context.getSelectedPage();
+        server.addHtmlRoute('/state', html`<main>state</main>`);
+        await page.goto(server.getRoute('/state'));
 
         await page.evaluate(() => {
           localStorage.setItem('testKey', 'secretValue');
@@ -271,6 +286,8 @@ describe('state', () => {
     it('handles multiple targets', async () => {
       await withMcpContext(async (response, context) => {
         const page = context.getSelectedPage();
+        server.addHtmlRoute('/state', html`<main>state</main>`);
+        await page.goto(server.getRoute('/state'));
 
         // Set up data for multiple targets
         await page.evaluate(() => {

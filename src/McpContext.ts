@@ -871,4 +871,52 @@ export class McpContext implements Context {
   async installExtension(path: string): Promise<string> {
     return this.browser.installExtension(path);
   }
+
+  async uninstallExtension(id: string): Promise<void> {
+    await this.browser.uninstallExtension(id);
+  }
+
+  async reloadExtension(id: string): Promise<void> {
+    const session = await this.browser.target().createCDPSession();
+    try {
+      const connection = session.connection();
+      if (!connection) {
+        throw new Error('No browser connection available for extension reload.');
+      }
+      const {targetInfos} = await connection.send('Target.getTargets');
+      const extensionPrefix = `chrome-extension://${id}/`;
+      const target = targetInfos.find(
+        info =>
+          (info.type === 'background_page' || info.type === 'service_worker') &&
+          info.url.startsWith(extensionPrefix),
+      );
+      if (!target) {
+        throw new Error(`No extension background target found for id ${id}.`);
+      }
+      const {sessionId} = await connection.send('Target.attachToTarget', {
+        targetId: target.targetId,
+        flatten: true,
+      });
+      try {
+        const attachedSession = connection.session(sessionId);
+        if (!attachedSession) {
+          throw new Error(`Failed to attach to extension target for id ${id}.`);
+        }
+        await attachedSession.send('Runtime.evaluate', {
+          expression: 'chrome.runtime.reload()',
+          includeCommandLineAPI: false,
+          awaitPromise: false,
+        });
+      } finally {
+        await connection.send('Target.detachFromTarget', {sessionId});
+      }
+    } finally {
+      await session.detach().catch(() => undefined);
+    }
+  }
+
+  async reinstallExtension(id: string, extensionPath: string): Promise<string> {
+    await this.uninstallExtension(id);
+    return this.installExtension(extensionPath);
+  }
 }

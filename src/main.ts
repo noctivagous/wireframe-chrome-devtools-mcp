@@ -6,10 +6,10 @@
 
 import './polyfill.js';
 
-import process from 'node:process';
-import path from 'node:path';
-import {fileURLToPath} from 'node:url';
 import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
+import {fileURLToPath} from 'node:url';
 
 import type {Channel} from './browser.js';
 import {ensureBrowserConnected, ensureBrowserLaunched} from './browser.js';
@@ -27,10 +27,11 @@ import {
   type CallToolResult,
   SetLevelRequestSchema,
 } from './third_party/index.js';
+import {loadToolTogglesConfig, saveToolTogglesConfig, type ToolTogglesConfigV1} from './tool-toggles.js';
+import {setBatchOpsExecutor} from './tools/batch-ops.js';
 import {ToolCategory} from './tools/categories.js';
 import type {ToolDefinition} from './tools/ToolDefinition.js';
 import {tools} from './tools/tools.js';
-import {loadToolTogglesConfig, saveToolTogglesConfig, type ToolTogglesConfigV1} from './tool-toggles.js';
 import {startWebUi, type ToolToggleView} from './web-ui.js';
 
 // If moved update release-please config
@@ -111,6 +112,16 @@ async function getContext(): Promise<McpContext> {
   return context;
 }
 
+async function createIsolatedContext(): Promise<McpContext> {
+  const baseContext = await getContext();
+  const newContext = await McpContext.from(baseContext.browser, logger, {
+    experimentalDevToolsDebugging: args.experimentalDevtools ?? false,
+    experimentalIncludeAllPages: args.experimentalIncludeAllPages,
+  });
+  await newContext.detectOpenDevToolsWindows();
+  return newContext;
+}
+
 const logDisclaimers = () => {
   console.error(
     `chrome-devtools-mcp exposes content of the browser instance to the MCP clients allowing them to inspect,
@@ -129,13 +140,28 @@ For more details, visit: https://github.com/ChromeDevTools/chrome-devtools-mcp#u
 
 const toolMutex = new Mutex();
 
-type RegisteredTool = {
+interface RegisteredTool {
   enabled: boolean;
   enable(): void;
   disable(): void;
-};
+}
 
 const registeredTools = new Map<string, {tool: ToolDefinition; handle: RegisteredTool}>();
+
+setBatchOpsExecutor({
+  getToolEntry: name => {
+    const entry = registeredTools.get(name);
+    if (!entry) {
+      return undefined;
+    }
+    return {
+      tool: entry.tool,
+      enabled: entry.handle.enabled,
+    };
+  },
+  createIsolatedContext,
+  experimentalStructuredContent: Boolean(args.experimentalStructuredContent),
+});
 
 /**
  * Find the project root directory (where package.json is located).
@@ -319,8 +345,8 @@ if ((args as any).webUi) {
       const disabled = new Set(toolToggles.disabledTools);
       for (const [name, entry] of registeredTools.entries()) {
         const shouldEnable = !disabled.has(name);
-        if (shouldEnable && !entry.handle.enabled) entry.handle.enable();
-        if (!shouldEnable && entry.handle.enabled) entry.handle.disable();
+        if (shouldEnable && !entry.handle.enabled) {entry.handle.enable();}
+        if (!shouldEnable && entry.handle.enabled) {entry.handle.disable();}
       }
     },
   });

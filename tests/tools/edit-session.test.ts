@@ -65,14 +65,14 @@ describe('edit-session', () => {
 
       // Dry-run first
       await commitEditSessionToFiles.handler(
-        {params: {sessionId, dryRun: true, skipIfAlreadyApplied: true}},
+        {params: {sessionId, dryRun: true, skipIfAlreadyApplied: true, rootDir: tmpDir}},
         response,
         context,
       );
 
       // Commit to disk
       await commitEditSessionToFiles.handler(
-        {params: {sessionId, dryRun: false, skipIfAlreadyApplied: true}},
+        {params: {sessionId, dryRun: false, skipIfAlreadyApplied: true, rootDir: tmpDir}},
         response,
         context,
       );

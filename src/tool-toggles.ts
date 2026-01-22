@@ -7,7 +7,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-export type ToolTogglesConfigV1 = {
+export interface ToolTogglesConfigV1 {
   version: 1;
   updatedAt: string; // ISO
   /**
@@ -15,7 +15,7 @@ export type ToolTogglesConfigV1 = {
    * Using a denylist means newly added tools default to enabled.
    */
   disabledTools: string[];
-};
+}
 
 const DEFAULT_CONFIG: ToolTogglesConfigV1 = {
   version: 1,

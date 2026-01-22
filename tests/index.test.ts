@@ -5,13 +5,15 @@
  */
 
 import assert from 'node:assert';
-import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {describe, it} from 'node:test';
 
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {executablePath} from 'puppeteer';
 
+import {ToolCategory} from '../src/tools/categories.js';
 import type {ToolDefinition} from '../src/tools/ToolDefinition';
 
 describe('e2e', () => {
@@ -19,6 +21,10 @@ describe('e2e', () => {
     cb: (client: Client) => Promise<void>,
     extraArgs: string[] = [],
   ) {
+    const toolConfigPath = path.join(
+      os.tmpdir(),
+      `mcp-tools-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
+    );
     const transport = new StdioClientTransport({
       command: 'node',
       args: [
@@ -27,6 +33,8 @@ describe('e2e', () => {
         '--isolated',
         '--executable-path',
         executablePath(),
+        '--tool-config',
+        toolConfigPath,
         ...extraArgs,
       ],
     });
@@ -89,39 +97,22 @@ describe('e2e', () => {
     await withClient(async client => {
       const {tools} = await client.listTools();
       const exposedNames = tools.map(t => t.name).sort();
-      const files = fs.readdirSync('build/src/tools');
-      const definedNames = [];
-      for (const file of files) {
-        if (file === 'ToolDefinition.js') {
-          continue;
-        }
-        const fileTools = await import(`../src/tools/${file}`);
-        for (const maybeTool of Object.values(fileTools)) {
-          // Tool modules can export helper functions too (which also have a `name`),
-          // so ensure this looks like a real ToolDefinition object.
-          if (
-            typeof maybeTool === 'object' &&
-            maybeTool &&
-            'name' in maybeTool &&
-            'handler' in maybeTool &&
-            'schema' in maybeTool &&
-            'annotations' in maybeTool
-          ) {
-            const tool = maybeTool as ToolDefinition;
-            if (tool.annotations?.conditions?.includes('computerVision')) {
-              continue;
-            }
-            if (tool.annotations?.conditions?.includes('experimentalInteropTools')) {
-              continue;
-            }
-            if (tool.name === 'install_extension') {
-              continue;
-            }
-            definedNames.push(tool.name);
+      const {tools: allTools} = await import('../src/tools/tools.js');
+      const definedNames = (allTools as ToolDefinition[])
+        .filter(tool => {
+          if (tool.annotations?.conditions?.includes('computerVision')) {
+            return false;
           }
-        }
-      }
-      definedNames.sort();
+          if (tool.annotations?.conditions?.includes('experimentalInteropTools')) {
+            return false;
+          }
+          if (tool.annotations?.category === ToolCategory.EXTENSIONS) {
+            return false;
+          }
+          return true;
+        })
+        .map(tool => tool.name)
+        .sort();
       assert.deepStrictEqual(exposedNames, definedNames);
     });
   });
@@ -130,8 +121,14 @@ describe('e2e', () => {
     await withClient(
       async client => {
         const {tools} = await client.listTools();
-        const clickAt = tools.find(t => t.name === 'install_extension');
-        assert.ok(clickAt);
+        const install = tools.find(t => t.name === 'install_extension');
+        const uninstall = tools.find(t => t.name === 'uninstall_extension');
+        const reload = tools.find(t => t.name === 'reload_extension');
+        const reinstall = tools.find(t => t.name === 'reinstall_extension');
+        assert.ok(install);
+        assert.ok(uninstall);
+        assert.ok(reload);
+        assert.ok(reinstall);
       },
       ['--category-extensions'],
     );

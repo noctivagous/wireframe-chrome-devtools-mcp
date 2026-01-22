@@ -9,6 +9,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {describe, it} from 'node:test';
 
+import {chatboxStep} from '../../src/tools/chat.js';
 import {
   injectChatbox,
   insertCss,
@@ -16,7 +17,6 @@ import {
   manipulateDom,
   rollbackPatch,
 } from '../../src/tools/mutation.js';
-import {chatboxStep} from '../../src/tools/chat.js';
 import {serverHooks} from '../server.js';
 import {html, withMcpContext} from '../utils.js';
 

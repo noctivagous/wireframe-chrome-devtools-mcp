@@ -54,8 +54,9 @@
 - **[Chatbox](#chatbox)** (2 tools)
   - [`chatbox_step`](#chatbox_step)
   - [`inject_chatbox`](#inject_chatbox)
-- **[Debugging](#debugging)** (13 tools)
+- **[Debugging](#debugging)** (14 tools)
   - [`apply_unified_diff`](#apply_unified_diff)
+  - [`batch_ops`](#batch_ops)
   - [`evaluate_script`](#evaluate_script)
   - [`export_prototype_state`](#export_prototype_state)
   - [`get_console_message`](#get_console_message)
@@ -687,6 +688,23 @@ This is a Level A building block: apply small, reviewable diffs to the repo afte
 - **allowCreate** (boolean) _(optional)_: If true, allow creating new files when the diff targets /dev/null → new file.
 - **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would change.
 - **rootDir** (string) _(optional)_: Safety root directory. All patches must target files within this directory. Defaults to the server process working directory.
+
+---
+
+### `batch_ops`
+
+**Description:** Execute multiple tool operations in a single call to reduce round-trips. Supports sequential execution in MVP. Returns structured results for observability.
+
+**Parameters:**
+
+- **operations** (array) **(required)**: Array of operations to execute
+- **aggregateResults** (boolean) _(optional)_: Legacy flag for compatibility. Structured results are always returned.
+- **continueOnError** (boolean) _(optional)_: Alias for !stopOnError. If true, continue on errors.
+- **executionMode** (enum: "sequential", "parallel") _(optional)_: Execution mode: sequential (default, preserves order) or parallel (future).
+- **lastResultOnly** (boolean) _(optional)_: If true, include a compact lastResult field while still returning structured results.
+- **shareContext** (boolean) _(optional)_: If true, reuse a shared context instance across operations.
+- **stopOnError** (boolean) _(optional)_: If true, stop execution on first error.
+- **timeoutMs** (integer) _(optional)_: Maximum total execution time for the batch in milliseconds.
 
 ---
 

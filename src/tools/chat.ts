@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+
+import {McpResponse} from '../McpResponse.js';
 import {zod} from '../third_party/index.js';
 
 import {ToolCategory} from './categories.js';
-import {defineTool} from './ToolDefinition.js';
-import {McpResponse} from '../McpResponse.js';
-
+import {
+  applyUnifiedDiff,
+  previewUnifiedDiffFromCommitPlan,
+} from './diff.js';
 import {
   beginEditSession,
   exportEditSession,
@@ -18,10 +21,6 @@ import {
   applyCommitPlan,
 } from './edit-session.js';
 import {
-  applyUnifiedDiff,
-  previewUnifiedDiffFromCommitPlan,
-} from './diff.js';
-import {
   insertCss,
   insertJs,
   manipulateDom,
@@ -29,6 +28,7 @@ import {
   rollbackPatch,
 } from './mutation.js';
 import {exportPrototypeState} from './prototype.js';
+import {defineTool} from './ToolDefinition.js';
 
 type ChatboxCommand =
   | {kind: 'help'}
@@ -57,9 +57,9 @@ function safeStringify(value: unknown): string {
 
 function extractFirstJsonFence(lines: readonly string[]): string | null {
   const start = lines.findIndex(l => l.trim() === '```json');
-  if (start < 0) return null;
+  if (start < 0) {return null;}
   const end = lines.findIndex((l, idx) => idx > start && l.trim() === '```');
-  if (end < 0) return null;
+  if (end < 0) {return null;}
   const jsonText = lines.slice(start + 1, end).join('\n').trim();
   return jsonText || null;
 }
@@ -74,8 +74,8 @@ async function setChatboxStateOnPage(
       ({patchId, state}: {patchId: string | null; state: any}) => {
         const w = window as any;
         const api = w.__MCP_CHATBOX__;
-        if (!api) return;
-        if (patchId && api.patchId && patchId !== api.patchId) return;
+        if (!api) {return;}
+        if (patchId && api.patchId && patchId !== api.patchId) {return;}
         api.state = {...(api.state || {}), ...(state || {})};
       },
       {patchId, state},
@@ -90,8 +90,8 @@ async function appendAssistant(page: any, patchId: string | null, text: string):
     ({patchId, text}: {patchId: string | null; text: string}) => {
       const w = window as any;
       const api = w.__MCP_CHATBOX__;
-      if (!api || typeof api.appendAssistantMessage !== 'function') return;
-      if (patchId && api.patchId && patchId !== api.patchId) return;
+      if (!api || typeof api.appendAssistantMessage !== 'function') {return;}
+      if (patchId && api.patchId && patchId !== api.patchId) {return;}
       api.appendAssistantMessage(String(text ?? ''));
     },
     {patchId, text},
@@ -100,7 +100,7 @@ async function appendAssistant(page: any, patchId: string | null, text: string):
 
 function parseCommandFromMessage(text: string): ChatboxCommand | null {
   const raw = String(text ?? '').trim();
-  if (!raw) return null;
+  if (!raw) {return null;}
 
   // Preferred: JSON command emitted by the chatbox UI.
   if (raw.startsWith('{') && raw.endsWith('}')) {
@@ -115,8 +115,8 @@ function parseCommandFromMessage(text: string): ChatboxCommand | null {
   }
 
   // Minimal slash commands (for power users).
-  if (raw === '/help') return {kind: 'help'};
-  if (raw === '/status') return {kind: 'status'};
+  if (raw === '/help') {return {kind: 'help'};}
+  if (raw === '/status') {return {kind: 'status'};}
   if (raw.startsWith('/begin')) {
     const label = raw.replace(/^\/begin\s*/, '').trim();
     return {kind: 'begin_session', label: label || undefined};
@@ -127,11 +127,11 @@ function parseCommandFromMessage(text: string): ChatboxCommand | null {
   if (raw.startsWith('/js ')) {
     return {kind: 'insert_js', jsText: raw.slice(4)};
   }
-  if (raw === '/export') return {kind: 'export_session'};
-  if (raw === '/summary') return {kind: 'summarize_session'};
-  if (raw === '/plan') return {kind: 'preview_commit_plan'};
-  if (raw === '/diff') return {kind: 'preview_diff_from_commit_plan'};
-  if (raw === '/apply') return {kind: 'apply_commit_plan', dryRun: true, confirm: false};
+  if (raw === '/export') {return {kind: 'export_session'};}
+  if (raw === '/summary') {return {kind: 'summarize_session'};}
+  if (raw === '/plan') {return {kind: 'preview_commit_plan'};}
+  if (raw === '/diff') {return {kind: 'preview_diff_from_commit_plan'};}
+  if (raw === '/apply') {return {kind: 'apply_commit_plan', dryRun: true, confirm: false};}
 
   return null;
 }
@@ -240,8 +240,8 @@ export const chatboxStep = defineTool({
       const state = await page.evaluate(({patchId}) => {
         const w = window as any;
         const api = w.__MCP_CHATBOX__;
-        if (!api) return null;
-        if (patchId && api.patchId && patchId !== api.patchId) return null;
+        if (!api) {return null;}
+        if (patchId && api.patchId && patchId !== api.patchId) {return null;}
         return api.state || null;
       }, {patchId: usedPatchId});
       lastPlanJson = state?.lastPlanJson ?? null;

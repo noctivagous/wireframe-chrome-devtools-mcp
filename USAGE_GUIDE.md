@@ -117,6 +117,9 @@ Or just export without touching files:
 - "Preview three different gap values for this grid and show me wireframes for each"
 - "Test margin-bottom values of 16px, 24px, and 32px and compare"
 
+**Batch ops + edit session (when available):**
+- "Use batch_ops to start an edit session, apply CSS + DOM changes with recordToSession, take a snapshot, then preview the commit plan"
+
 ---
 
 ## Traditional Workflow (Not Live)

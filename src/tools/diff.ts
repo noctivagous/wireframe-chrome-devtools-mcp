@@ -8,6 +8,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import {zod} from '../third_party/index.js';
+
 import {ToolCategory} from './categories.js';
 import {defineTool} from './ToolDefinition.js';
 
@@ -16,19 +17,19 @@ type HunkLine =
   | {kind: 'remove'; text: string}
   | {kind: 'add'; text: string};
 
-type Hunk = {
+interface Hunk {
   oldStart: number;
   oldCount: number;
   newStart: number;
   newCount: number;
   lines: HunkLine[];
-};
+}
 
-type FilePatch = {
+interface FilePatch {
   filePath: string;
   hunks: Hunk[];
   isNewFile: boolean;
-};
+}
 
 function isPathWithinRoot(rootDir: string, filePath: string): boolean {
   const root = path.resolve(rootDir);
@@ -58,8 +59,8 @@ function parseHunkHeader(line: string): {
 
 function normalizeDiffPath(p: string): string {
   // Common prefixes: a/ b/
-  if (p.startsWith('a/')) return p.slice(2);
-  if (p.startsWith('b/')) return p.slice(2);
+  if (p.startsWith('a/')) {return p.slice(2);}
+  if (p.startsWith('b/')) {return p.slice(2);}
   return p;
 }
 
@@ -71,7 +72,7 @@ function parseUnifiedDiff(diffText: string): FilePatch[] {
   let cur: FilePatch | null = null;
 
   function flush() {
-    if (cur) patches.push(cur);
+    if (cur) {patches.push(cur);}
     cur = null;
   }
 
@@ -114,17 +115,17 @@ function parseUnifiedDiff(diffText: string): FilePatch[] {
       i++;
       while (i < lines.length) {
         const hl = lines[i] ?? '';
-        if (hl.startsWith('@@ ')) break;
-        if (hl.startsWith('--- ') || hl.startsWith('diff --git ')) break;
+        if (hl.startsWith('@@ ')) {break;}
+        if (hl.startsWith('--- ') || hl.startsWith('diff --git ')) {break;}
         if (hl.startsWith('\\ No newline at end of file')) {
           i++;
           continue;
         }
         const prefix = hl[0];
         const text = hl.slice(1);
-        if (prefix === ' ') hunk.lines.push({kind: 'context', text});
-        else if (prefix === '-') hunk.lines.push({kind: 'remove', text});
-        else if (prefix === '+') hunk.lines.push({kind: 'add', text});
+        if (prefix === ' ') {hunk.lines.push({kind: 'context', text});}
+        else if (prefix === '-') {hunk.lines.push({kind: 'remove', text});}
+        else if (prefix === '+') {hunk.lines.push({kind: 'add', text});}
         else if (hl === '') {
           // This happens for empty last line in diff; treat as context with empty string
           // only if it was explicitly prefixed (which it isn't). Ignore.
@@ -159,8 +160,8 @@ function applyPatchToText(
   let lineOffset = 0;
   for (const hunk of patch.hunks) {
     let idx = (hunk.oldStart - 1) + lineOffset;
-    if (idx < 0) idx = 0;
-    if (idx > out.length) idx = out.length;
+    if (idx < 0) {idx = 0;}
+    if (idx > out.length) {idx = out.length;}
 
     const before = out.slice(0, idx);
     const after = out.slice(idx);
@@ -319,16 +320,16 @@ export const applyUnifiedDiff = defineTool({
   },
 });
 
-type CommitPlanChunkLike = {
+interface CommitPlanChunkLike {
   appendText: string;
   marker?: string;
-};
+}
 
-type CommitPlanLike = {
+interface CommitPlanLike {
   kind?: string;
   plannedWrites?: Array<{filePath: string}>;
   _chunksByFile?: Record<string, CommitPlanChunkLike[]>;
-};
+}
 
 function splitLinesPreserveEmpty(text: string): string[] {
   const normalized = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
@@ -446,7 +447,7 @@ export const previewUnifiedDiffFromCommitPlan = defineTool({
 
     for (const w of plannedWrites) {
       const plannedPath = typeof w?.filePath === 'string' ? w.filePath : '';
-      if (!plannedPath) continue;
+      if (!plannedPath) {continue;}
 
       // The plan may store absolute paths. Resolve and enforce root.
       const abs = path.resolve(plannedPath);

@@ -23,6 +23,12 @@ describe('cli args parsing', () => {
     autoConnect: undefined,
     'usage-statistics': false,
     usageStatistics: false,
+    'web-ui': true,
+    webUi: true,
+    'web-ui-host': '127.0.0.1',
+    webUiHost: '127.0.0.1',
+    'web-ui-port': 7332,
+    webUiPort: 7332,
   };
 
   it('parses with default args', async () => {

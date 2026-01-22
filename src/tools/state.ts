@@ -96,21 +96,20 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
       }
     }
 
-    // Create filter regex if provided
-    const filterRegex = filter ? new RegExp(filter.replace(/\*/g, '.*').replace(/\?/g, '.'), 'i') : null;
+    const filterPattern = filter ?? null;
 
     // Inspect each target
     for (const target of targets) {
       try {
         switch (target) {
           case 'localStorage':
-            results.localStorage = await inspectLocalStorage(page, filterRegex, includeValues, maxItems);
+            results.localStorage = await inspectLocalStorage(page, filterPattern, includeValues, maxItems);
             break;
           case 'sessionStorage':
-            results.sessionStorage = await inspectSessionStorage(page, filterRegex, includeValues, maxItems);
+            results.sessionStorage = await inspectSessionStorage(page, filterPattern, includeValues, maxItems);
             break;
           case 'global-variables':
-            results.globalVariables = await inspectGlobalVariables(page, filterRegex, includeValues, maxItems);
+            results.globalVariables = await inspectGlobalVariables(page, filterPattern, includeValues, maxItems);
             break;
           case 'framework-components':
             results.frameworkComponents = await inspectFrameworkComponents(
@@ -137,13 +136,16 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 
 async function inspectLocalStorage(
   page: Page,
-  filterRegex: RegExp | null,
+  filterPattern: string | null,
   includeValues: boolean,
   maxItems: number
 ): Promise<Record<string, any>> {
   return await page.evaluate(
-    ({ filterRegex, includeValues, maxItems }) => {
+    ({ filterPattern, includeValues, maxItems }) => {
       const result: Record<string, any> = {};
+      const filterRegex = filterPattern
+        ? new RegExp(filterPattern.replace(/\*/g, '.*').replace(/\?/g, '.'), 'i')
+        : null;
       try {
         for (let i = 0; i < localStorage.length && Object.keys(result).length < maxItems; i++) {
           const key = localStorage.key(i);
@@ -164,19 +166,22 @@ async function inspectLocalStorage(
       }
       return result;
     },
-    { filterRegex, includeValues, maxItems }
+    { filterPattern, includeValues, maxItems }
   );
 }
 
 async function inspectSessionStorage(
   page: Page,
-  filterRegex: RegExp | null,
+  filterPattern: string | null,
   includeValues: boolean,
   maxItems: number
 ): Promise<Record<string, any>> {
   return await page.evaluate(
-    ({ filterRegex, includeValues, maxItems }) => {
+    ({ filterPattern, includeValues, maxItems }) => {
       const result: Record<string, any> = {};
+      const filterRegex = filterPattern
+        ? new RegExp(filterPattern.replace(/\*/g, '.*').replace(/\?/g, '.'), 'i')
+        : null;
       try {
         for (let i = 0; i < sessionStorage.length && Object.keys(result).length < maxItems; i++) {
           const key = sessionStorage.key(i);
@@ -197,50 +202,62 @@ async function inspectSessionStorage(
       }
       return result;
     },
-    { filterRegex, includeValues, maxItems }
+    { filterPattern, includeValues, maxItems }
   );
 }
 
 async function inspectGlobalVariables(
   page: Page,
-  filterRegex: RegExp | null,
+  filterPattern: string | null,
   includeValues: boolean,
   maxItems: number
 ): Promise<Record<string, any>> {
   return await page.evaluate(
-    ({ filterRegex, includeValues, maxItems }) => {
+    ({ filterPattern, includeValues, maxItems }) => {
       const result: Record<string, any> = {};
+      const filterRegex = filterPattern
+        ? new RegExp(filterPattern.replace(/\*/g, '.*').replace(/\?/g, '.'), 'i')
+        : null;
       try {
         // Get all global properties
         const globals = Object.getOwnPropertyNames(window);
 
         for (const prop of globals) {
-          if (Object.keys(result).length >= maxItems) {break;}
+          if (Object.keys(result).length >= maxItems) {
+            break;
+          }
 
-          // Skip common browser globals and internal properties
           if (
             prop.startsWith('_') ||
-            ['window', 'document', 'console', 'location', 'navigator', 'history', 'screen'].includes(prop) ||
-            (!filterRegex || filterRegex.test(prop))
+            ['window', 'document', 'console', 'location', 'navigator', 'history', 'screen'].includes(prop)
           ) {
-            try {
-              const value = (window as any)[prop];
-              const type = typeof value;
+            continue;
+          }
+          if (filterRegex && !filterRegex.test(prop)) {
+            continue;
+          }
 
-              if (includeValues) {
-                if (type === 'function') {
-                  result[prop] = '[function]';
-                } else if (type === 'object' && value !== null) {
+          try {
+            const value = (window as any)[prop];
+            const type = typeof value;
+
+            if (includeValues) {
+              if (type === 'function') {
+                result[prop] = '[function]';
+              } else if (type === 'object' && value !== null) {
+                try {
+                  result[prop] = JSON.parse(JSON.stringify(value));
+                } catch {
                   result[prop] = `[${value.constructor?.name || 'Object'}]`;
-                } else {
-                  result[prop] = value;
                 }
               } else {
-                result[prop] = `[${type}]`;
+                result[prop] = value;
               }
-            } catch {
-              result[prop] = '[inaccessible]';
+            } else {
+              result[prop] = `[${type}]`;
             }
+          } catch {
+            result[prop] = '[inaccessible]';
           }
         }
       } catch (error) {
@@ -248,7 +265,7 @@ async function inspectGlobalVariables(
       }
       return result;
     },
-    { filterRegex, includeValues, maxItems }
+    { filterPattern, includeValues, maxItems }
   );
 }
 

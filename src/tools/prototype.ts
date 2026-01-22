@@ -83,7 +83,7 @@ export const exportPrototypeState = defineTool({
         const clone = document.documentElement.cloneNode(true) as HTMLElement;
         if (!includeChatbox) {
           const chat = clone.querySelector(`#${CHATBOX_ROOT_ID}`);
-          if (chat) chat.remove();
+          if (chat) {chat.remove();}
         }
 
         // Strip MCP patch attributes (keep the content).
@@ -109,12 +109,12 @@ export const exportPrototypeState = defineTool({
         const styleNodes = Array.from(document.querySelectorAll('style[data-mcp-patch-kind="css"]')) as HTMLStyleElement[];
         for (const s of styleNodes) {
           const t = (s.textContent ?? '').trim();
-          if (t) patchStyles.push(t);
+          if (t) {patchStyles.push(t);}
         }
         const scriptNodes = Array.from(document.querySelectorAll('script[data-mcp-patch-kind="js"]')) as HTMLScriptElement[];
         for (const s of scriptNodes) {
           const t = (s.textContent ?? '').trim();
-          if (t) patchScripts.push(t);
+          if (t) {patchScripts.push(t);}
         }
 
         // Serialize clone.

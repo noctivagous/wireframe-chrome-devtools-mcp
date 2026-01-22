@@ -154,35 +154,31 @@ export const jsConsole = defineTool({
 
       if (persist && actualSessionId) {
         // For persistent sessions, we need to maintain state in the page context
-        const setupScript = `
-          if (!window.__jsConsoleSessions) {
-            window.__jsConsoleSessions = {};
-          }
-          if (!window.__jsConsoleSessions['${actualSessionId}']) {
-            window.__jsConsoleSessions['${actualSessionId}'] = {};
-          }
-        `;
-
-        await page.evaluate(setupScript);
-
-        // Wrap the user script to execute in the session context
-        const wrappedScript = `
-          (function() {
-            const session = window.__jsConsoleSessions['${actualSessionId}'];
-            with (session) {
-              ${script}
-            }
-          })()
-        `;
+        const runPersistent = async () =>
+          page.evaluate(
+            ({script, sessionId}) => {
+              const root = window as any;
+              if (!root.__jsConsoleSessions) {
+                root.__jsConsoleSessions = {};
+              }
+              if (!root.__jsConsoleSessions[sessionId]) {
+                root.__jsConsoleSessions[sessionId] = {};
+              }
+              const session = root.__jsConsoleSessions[sessionId];
+              const fn = new Function(
+                'session',
+                `return (async () => { with (session) { ${script} } })()`,
+              );
+              return fn(session).catch((e: unknown) => ({
+                error: e instanceof Error ? e.message : String(e),
+                stack: e instanceof Error ? e.stack : undefined,
+              }));
+            },
+            {script, sessionId: actualSessionId},
+          );
 
         if (returnResult) {
-          const result = await page.evaluate(`(async () => {
-            try {
-              ${wrappedScript}
-            } catch (e) {
-              return { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined };
-            }
-          })()`) as { error?: string; stack?: string } | unknown;
+          const result = (await runPersistent()) as { error?: string; stack?: string } | unknown;
 
           if (result && typeof result === 'object' && 'error' in result && result.error) {
             response.appendResponseLine('Script execution error:');
@@ -200,7 +196,7 @@ export const jsConsole = defineTool({
             response.appendResponseLine('```');
           }
         } else {
-          await page.evaluate(wrappedScript);
+          await runPersistent();
           response.appendResponseLine('Script executed (no return value requested).');
         }
 
@@ -211,21 +207,26 @@ export const jsConsole = defineTool({
         // Non-persistent execution
         if (execContext === 'isolated') {
           // Execute in isolated context (clean environment)
-          const isolatedScript = `
-            (function() {
-              "use strict";
-              ${script}
-            })()
-          `;
+          const runIsolated = async () =>
+            page.evaluate(
+              ({script}) => {
+                const fn = new Function(`
+                  const window = undefined;
+                  const document = undefined;
+                  const globalThis = undefined;
+                  const self = undefined;
+                  return (async () => { ${script} })();
+                `);
+                return fn().catch((e: unknown) => ({
+                  error: e instanceof Error ? e.message : String(e),
+                  stack: e instanceof Error ? e.stack : undefined,
+                }));
+              },
+              {script},
+            );
 
           if (returnResult) {
-            const result = await page.evaluate(`(async () => {
-              try {
-                ${isolatedScript}
-              } catch (e) {
-                return { error: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined };
-              }
-            })()`) as { error?: string; stack?: string } | unknown;
+            const result = (await runIsolated()) as { error?: string; stack?: string } | unknown;
 
             if (result && typeof result === 'object' && 'error' in result && result.error) {
               response.appendResponseLine('Script execution error:');
@@ -243,8 +244,8 @@ export const jsConsole = defineTool({
               response.appendResponseLine('```');
             }
           } else {
-            await page.evaluate(isolatedScript);
-            response.appendResponseLine('Script executed in isolated context (no return value requested).');
+            await runIsolated();
+            response.appendResponseLine('Script executed (no return value requested).');
           }
         } else {
           // Execute in page context
@@ -274,7 +275,7 @@ export const jsConsole = defineTool({
             }
           } else {
             await page.evaluate(script);
-            response.appendResponseLine('Script executed in page context (no return value requested).');
+            response.appendResponseLine('Script executed (no return value requested).');
           }
         }
       }

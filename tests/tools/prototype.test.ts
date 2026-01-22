@@ -8,8 +8,8 @@ import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import {describe, it} from 'node:test';
 
-import {exportPrototypeState} from '../../src/tools/prototype.js';
 import {injectChatbox, insertCss, insertJs} from '../../src/tools/mutation.js';
+import {exportPrototypeState} from '../../src/tools/prototype.js';
 import {serverHooks} from '../server.js';
 import {html, withMcpContext} from '../utils.js';
 
