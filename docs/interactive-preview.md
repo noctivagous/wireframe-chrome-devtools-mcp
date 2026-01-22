@@ -1,6 +1,6 @@
 # Interactive preview workflows (CSS/JS) via MCP tools
 
-This repo supports a **safe, repeatable “preview → evidence → commit”** loop for live page modifications using MCP tools.
+This repo supports a **safe, repeatable “preview → commit”** loop for live page modifications using MCP tools.
 
 ## Contract: “Show me what it would look like if …”
 
@@ -9,7 +9,7 @@ When a user asks for a hypothetical UI change (e.g. “Show me what it would loo
 - **Default to non-destructive**: changes are **temporary by default** (rollback-on-complete unless the user explicitly asks to keep them).
 - **Be explicit about scope**: the user (or agent) should specify what area is affected (a `scopeSelector`/root container, or a precise selector for the component).
 - **Support variants**: allow quickly comparing multiple candidate values/snippets (A/B/C…).
-- **Return evidence**: return at least one visual artifact per variant (wireframe SVG and/or structured `wireframe_snapshot` output).
+- **Optional visual artifacts**: return snapshots when they help illustrate a change (wireframe SVG and/or structured `wireframe_snapshot` output).
 - **Separate “live preview” from “writing files”**: keep iteration fast in Chromium; write to disk only at the end via an explicit export/commit step.
 
 ## Recommended low-lag workflow (edit sessions)
@@ -20,12 +20,10 @@ Use an edit session to buffer changes during experimentation:
 - **Preview changes**: run tools with `recordToSession: true` (optionally with `targetFilePath`)
   - CSS: `insert_css_preview` (for per-property A/B testing) or `insert_css` (for full snippets)
   - JS: `insert_js_preview` (for variants) or `insert_js` / `evaluate_script`
-- **Capture evidence**:
-  - For a single “evidence bundle folder” (recommended), use `capture_evidence_bundle` (writes artifacts to a temp dir by default, and can optionally `recordToSession` so exported edit-session packages include exact evidence paths).
-  - Or capture explicit artifacts as needed: `wireframe_snapshot` / `svg_snapshot` / `take_snapshot` / `take_screenshot`.
+- **Optional snapshots**: capture artifacts as needed: `wireframe_snapshot` / `svg_snapshot` / `take_snapshot` / `take_screenshot`.
 - **End of session** (explicit):
   - **Export**: `export_edit_session` to a JSON file (for review/sharing), and/or
-  - **Commit (Level 2, recommended)**:
+  - **Commit (Level A, recommended)**:
     - `preview_commit_plan` (shows exactly what files/changes would be written)
     - `apply_commit_plan` (writes, supports `dryRun`)
   - **Commit (diff-based, advanced)**:

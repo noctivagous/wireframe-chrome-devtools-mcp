@@ -47,10 +47,24 @@ You can disable the web UI by running the server with `--no-web-ui`, but by defa
 
 Beyond wireframe-only analysis, the long-term goal is provide a **progressive “debugging → editing → refactoring” spectrum** that keeps the feedback loop fast (see changes instantly in Chromium), allowing you to choose which functions and overall process you need. You may want to just use a few tools to fix a problem, or refactor an entire codebase in the browser. The project should allow you to “graduate” changes back into the codebase as clean diffs when you’re ready.
 
-- **Level 0 — Pure debugging/preview (no repo/source edits)**: Make temporary CSS/JS/DOM changes in-browser, capture evidence (wireframes/snapshots), and rollback by default. This may write **evidence artifacts** to a temp folder or a user-specified path, but it does not modify your repo’s source files.
-- **Level 1 — Journal + export (still no repo/source edits)**: Record the exact sequence of live edits into an edit session, then export/share it as a reproducible change log (optionally as a “package folder” with a Markdown summary). Still no repo/source edits unless you explicitly commit/apply a plan.
-- **Level 2 — Targeted commits (scoped diffs back to the repo)**: Select the final “chosen” edits and apply them as small, reviewable patches to specific files—without forcing a full refactor workflow.
-- **Level 3 — Deep refactors (multi-file, clean diffs)**: Opt-in refactor mode where you can iterate/verify in-browser and then generate/apply a structured, conflict-aware refactor plan across many files.
+- **Level A — Live edits + targeted commits**: Record the exact sequence of live edits into an edit session, then preview and apply small, reviewable patches back to specific files when you explicitly opt in. Edit sessions are safe by default and do not write repo files unless you explicitly commit/apply a plan.
+- **Level B — Deep refactors (multi-file, clean diffs)**: Opt-in refactor mode where you can iterate/verify in-browser and then generate/apply a structured, conflict-aware refactor plan across many files.
+
+#### Level B workflow (draft)
+
+Level B is an opt-in, scoped refactor mode intended for multi-file changes. The core idea is: iterate/verify in Chromium, then generate clean diffs and apply them explicitly.
+
+Proposed flow:
+
+1. **Opt in + define scope**: start a refactor session and declare the file/folder scope and safety guardrails.
+2. **Iterate live**: apply changes in-browser (CSS/JS/DOM/tools), keeping a fast feedback loop.
+3. **Validate**: run checks (typecheck/build/tests where possible) to confirm behavior.
+4. **Generate a refactor plan**: produce structured, conflict-aware diffs across affected files.
+5. **Review the plan**: inspect a preview of the diffs/patches before any write occurs.
+6. **Apply explicitly**: write changes to disk only when the user approves.
+7. **Rollback path**: require a clear revert strategy (git-based recommended).
+
+This section is intentionally aspirational; tooling will be added incrementally to make each step concrete.
 
 This is aimed at reducing the friction of “edit files → reload → re-check layout/behavior” by enabling rapid in-browser iteration first, then turning the final, validated changes into minimal, reviewable filesystem diffs.
 
@@ -62,7 +76,7 @@ The **default expectation** for this branch is:
 - **No repo/source edits unless you say so**: `begin_edit_session` + `recordToSession` tools **do not modify repo files**. They only:
   - apply temporary changes in the browser, and/or
   - record what happened into an in-memory edit session, and/or
-  - write *evidence artifacts* (snapshots/wireframes/screenshots) to temp/user paths.
+- write optional artifacts (snapshots/wireframes/screenshots) to temp/user paths.
 - **Only explicit tools write repo/source files**:
   - `apply_commit_plan` / `commit_edit_session_to_files` (write to specified target paths)
   - `apply_unified_diff` (patches files)
@@ -82,11 +96,11 @@ You can run the same edit-session workflows **without a visible browser window**
 
 Headless edit sessions are especially useful for:
 
-- **CI / remote servers**: run workflows on a machine with no display, record an edit session + evidence bundle, export it, and review/apply later.
+- **CI / remote servers**: run workflows on a machine with no display, record an edit session, export it, and review/apply later.
 - **Batch experiments**: sweep many variants (CSS values, layout tweaks, toggles) across pages/breakpoints and save wireframes/snapshots as the comparison surface.
-- **Regression checking**: apply patches, capture before/after wireframe + snapshot evidence, rollback, repeat—without manual viewing.
+- **Regression checking**: apply patches, capture before/after wireframes + snapshots, rollback, repeat—without manual viewing.
 - **Performance / timing-sensitive runs**: reduce UI overhead/noise while collecting traces, wireframes, or DOM snapshots.
-- **Repro artifacts for humans**: generate a shareable package (`export_edit_session_package` + evidence files) so someone else can review diffs/evidence without an interactive session.
+- **Repro artifacts for humans**: generate a shareable package (`export_edit_session_package`) so someone else can review changes without an interactive session.
 - **Security/permissions constraints**: environments where showing a browser window is undesirable, but controlled automation and artifacts are acceptable.
 
 
@@ -144,7 +158,6 @@ Interactive workflow tools for buffering live browser edits during experimentati
 - **`begin_edit_session`**: Start a new edit session to buffer CSS/JS changes during iteration
 - **`list_edit_sessions`** / **`get_edit_session`**: View active or specific edit sessions
 - **`set_active_edit_session`**: Switch between multiple concurrent edit sessions
-- **`capture_evidence_bundle`**: Capture an evidence bundle (wireframe JSON/SVG, snapshot, optional screenshot) and optionally record artifact paths into the active edit session
 - **`export_edit_session`**: Export session changes to JSON for later review
 - **`export_edit_session_package`**: Export a small “package folder” (session JSON + Markdown summary)
 - **`summarize_edit_session`**: Produce a human-readable Markdown summary (optionally saved to disk)
@@ -155,13 +168,13 @@ Interactive workflow tools for buffering live browser edits during experimentati
 Live CSS and JavaScript injection with rollback capabilities:
 
 - **Example prompts:**
-  - “Preview three `gap` values for this grid and show me wireframe evidence for each (A/B test).”
+  - “Preview three `gap` values for this grid and show me wireframes for each (A/B test).”
   - “Inject temporary CSS to outline all clickable elements, then roll it back.”
   - “Insert a small script to label every `article` with its index so I can debug ordering.”
   - “Fix this specific overlap: the header is covering the first card. Identify the overlapping elements, preview 2–3 candidate fixes (padding-top vs sticky offset vs z-index), and keep the best one.”
   - “Prototype a ‘Settings’ button and a floating panel UI directly on this page (DOM + CSS + minimal JS), then export/commit the result when it looks right.”
 
-- These tools are best used as a safe “what if?” loop: preview a change, capture evidence (`svg_snapshot` / `wireframe_snapshot`), and either roll it back immediately (default for preview tools) or keep it applied and later `rollback_patch`/`rollback_all`. Example uses include A/B testing spacing/typography values, temporarily adding debug outlines, or injecting a small script to annotate the DOM.
+- These tools are best used as a safe “what if?” loop: preview a change, optionally capture snapshots (`svg_snapshot` / `wireframe_snapshot`), and either roll it back immediately (default for preview tools) or keep it applied and later `rollback_patch`/`rollback_all`. Example uses include A/B testing spacing/typography values, temporarily adding debug outlines, or injecting a small script to annotate the DOM.
 
 - **`insert_css`** / **`insert_js`**: Inject CSS or JavaScript with patch tracking for easy rollback
 - **`insert_css_preview`** / **`insert_js_preview`**: Test multiple CSS/JS variants with automatic visual feedback and rollback
@@ -535,8 +548,7 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 - **Network** (2 tools)
   - [`get_network_request`](docs/tool-reference.md#get_network_request)
   - [`list_network_requests`](docs/tool-reference.md#list_network_requests)
-- **Snapshot** (5 tools)
-  - [`capture_evidence_bundle`](docs/tool-reference.md#capture_evidence_bundle)
+- **Snapshot** (4 tools)
   - [`svg_snapshot`](docs/tool-reference.md#svg_snapshot)
   - [`take_screenshot`](docs/tool-reference.md#take_screenshot)
   - [`take_snapshot`](docs/tool-reference.md#take_snapshot)

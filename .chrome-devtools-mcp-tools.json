@@ -1,8 +1,9 @@
 {
   "version": 1,
-  "updatedAt": "2026-01-22T03:20:00.438Z",
+  "updatedAt": "2026-01-22T04:11:48.675Z",
   "disabledTools": [
     "analyze_js",
+    "capture_evidence_bundle",
     "chatbox_step",
     "click",
     "drag",
@@ -19,6 +20,9 @@
     "performance_stop_trace",
     "press_key",
     "simulate_event",
-    "upload_file"
+    "take_screenshot",
+    "take_snapshot",
+    "upload_file",
+    "wireframe_snapshot"
   ]
 }

@@ -85,25 +85,6 @@ function renderEditSessionMarkdownSummary(
       ? (change.payload as Record<string, unknown>)
       : null;
 
-    // Evidence bundle entries: include artifact paths for easy review.
-    if (change.type === 'capture_evidence_bundle' || payload?.kind === 'evidence_bundle') {
-      const files =
-        payload && typeof payload.files === 'object' && payload.files
-          ? (payload.files as Record<string, unknown>)
-          : null;
-      if (files) {
-        const entries = Object.entries(files).filter(
-          ([, v]) => typeof v === 'string' && v,
-        ) as Array<[string, string]>;
-        if (entries.length) {
-          lines.push(`- **Evidence files:**`);
-          for (const [k, v] of entries) {
-            lines.push(`  - **${k}**: \`${v}\``);
-          }
-        }
-      }
-    }
-
     const cssText =
       payload && typeof payload.cssText === 'string' ? payload.cssText : undefined;
     const jsText =

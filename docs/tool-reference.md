@@ -31,8 +31,7 @@
 - **[Network](#network)** (2 tools)
   - [`get_network_request`](#get_network_request)
   - [`list_network_requests`](#list_network_requests)
-- **[Snapshot](#snapshot)** (5 tools)
-  - [`capture_evidence_bundle`](#capture_evidence_bundle)
+- **[Snapshot](#snapshot)** (4 tools)
   - [`svg_snapshot`](#svg_snapshot)
   - [`take_screenshot`](#take_screenshot)
   - [`take_snapshot`](#take_snapshot)
@@ -362,44 +361,6 @@
 ---
 
 ## Snapshot
-
-### `capture_evidence_bundle`
-
-**Description:** Capture a small evidence bundle (wireframe JSON/SVG, text snapshot, optional screenshot) into a folder and optionally record the artifact paths into an edit session.
-
-This is designed for Level 0/1 workflows: collect proof of what you changed in Chromium without committing anything to the repo.
-
-**Parameters:**
-
-- **baseName** (string) _(optional)_: Base filename prefix for artifacts. If omitted, a timestamped name is generated.
-- **computedStylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Computed style preset used when includeComputedStyles=true.
-- **coordinateSpace** (enum: "viewport", "document") _(optional)_: Coordinate space for wireframe rects (viewport or document).
-- **description** (string) _(optional)_: Optional human description to store alongside the evidence bundle entry.
-- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
-- **includeComputedStyles** (boolean) _(optional)_: If true, include a computed-style whitelist for each element in the wireframe JSON.
-- **includeDescendants** (boolean) _(optional)_: When used with selectors, include descendants of matches in the wireframe capture.
-- **includeScreenshot** (boolean) _(optional)_: If true, capture a screenshot (slower, larger).
-- **includeTextSnapshot** (boolean) _(optional)_: If true, capture the a11y-tree-based text snapshot (like [`take_snapshot`](#take_snapshot)).
-- **includeWireframeJson** (boolean) _(optional)_: If true, capture a structured wireframe snapshot JSON (DOMSnapshot-based).
-- **includeWireframeSvg** (boolean) _(optional)_: If true, render and save an SVG wireframe snapshot.
-- **maxTotal** (integer) _(optional)_: Maximum number of elements to return in the wireframe snapshot (after filtering).
-- **outputDir** (string) _(optional)_: Optional output directory. If omitted, creates a temporary evidence directory under the OS temp folder.
-- **recordToSession** (boolean) _(optional)_: If true, record this evidence bundle (paths + metadata) into an edit session journal.
-- **scopeSelector** (string) _(optional)_: Optional scope selector to constrain wireframe capture to a subtree.
-- **screenshotFormat** (enum: "png", "jpeg", "webp") _(optional)_: Screenshot format (when includeScreenshot=true).
-- **screenshotFullPage** (boolean) _(optional)_: If true, capture a full-page screenshot (when includeScreenshot=true).
-- **screenshotQuality** (number) _(optional)_: Screenshot quality for jpeg/webp (ignored for png).
-- **selectors** (array) _(optional)_: Optional selectors to focus the wireframe capture on specific elements.
-- **svgBackground** (enum: "transparent", "white", "black") _(optional)_: SVG background.
-- **svgFillOpacity** (number) _(optional)_: [`Fill`](#fill) opacity for element rectangles in the SVG.
-- **svgScale** (number) _(optional)_: Scale factor for SVG output.
-- **svgShowDimensions** (boolean) _(optional)_: If true, include element dimensions (W×H) in the SVG.
-- **svgShowLabels** (boolean) _(optional)_: If true, include element labels in the SVG.
-- **svgShowSpacing** (boolean) _(optional)_: If true, render basic spacing annotations (heuristic).
-- **svgStrokeWidth** (number) _(optional)_: Stroke width for element rectangles in the SVG.
-- **textSnapshotVerbose** (boolean) _(optional)_: If true, include the verbose text snapshot payload.
-
----
 
 ### `svg_snapshot`
 
