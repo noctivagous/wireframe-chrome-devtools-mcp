@@ -182,6 +182,170 @@ function findProjectRoot(): string {
 }
 
 const projectRoot = findProjectRoot();
+
+/**
+ * Project documentation and workflow guidance exposed as MCP Resources + Prompts.
+ *
+ * Why:
+ * - Resources are ideal for static/semi-static docs like README/USAGE_GUIDE.
+ * - Prompts provide reusable workflow templates aligned with USAGE_GUIDE.md.
+ */
+const projectDocResources: Array<{
+  uri: string;
+  name: string;
+  description: string;
+  mimeType: string;
+  filePath: string;
+}> = [
+  {
+    uri: 'project://repo/README.md',
+    name: 'README',
+    description: 'Project overview, tool inventory, configuration, and concepts.',
+    mimeType: 'text/markdown',
+    filePath: path.join(projectRoot, 'README.md'),
+  },
+  {
+    uri: 'project://repo/USAGE_GUIDE.md',
+    name: 'USAGE_GUIDE',
+    description:
+      'How to use this MCP server: recommended workflows (live edit sessions, commits, debugging).',
+    mimeType: 'text/markdown',
+    filePath: path.join(projectRoot, 'USAGE_GUIDE.md'),
+  },
+  {
+    uri: 'project://repo/docs/tool-reference.md',
+    name: 'Tool reference',
+    description: 'Full tool reference for all MCP tools exposed by this server.',
+    mimeType: 'text/markdown',
+    filePath: path.join(projectRoot, 'docs', 'tool-reference.md'),
+  },
+  {
+    uri: 'project://repo/docs/tool-toggles-ui.md',
+    name: 'Tool toggles UI',
+    description: 'Docs for the local web UI used to enable/disable tools.',
+    mimeType: 'text/markdown',
+    filePath: path.join(projectRoot, 'docs', 'tool-toggles-ui.md'),
+  },
+  {
+    uri: 'project://repo/reports/software-guidance-report.md',
+    name: 'Software guidance report',
+    description:
+      'Project proposal for design/architecture/engineering guidance and how to integrate it with the web UI.',
+    mimeType: 'text/markdown',
+    filePath: path.join(projectRoot, 'reports', 'software-guidance-report.md'),
+  },
+];
+
+for (const r of projectDocResources) {
+  server.registerResource(
+    r.name,
+    r.uri,
+    {
+      title: r.name,
+      description: r.description,
+      mimeType: r.mimeType,
+    },
+    async () => {
+      const text = await fs.promises.readFile(r.filePath, 'utf8');
+      return {
+        contents: [
+          {
+            uri: r.uri,
+            mimeType: r.mimeType,
+            text,
+          },
+        ],
+      };
+    },
+  );
+}
+
+server.registerPrompt(
+  'workflow_live_edit_session',
+  {
+    title: 'Workflow: Live edit session (iterate in browser, then commit)',
+    description:
+      'Start an edit session, iterate live with recordToSession, then preview and apply a commit plan.',
+  },
+  () => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text:
+            'Follow the project live-edit workflow.\n' +
+            '\n' +
+            '- Read the workflow docs if needed: project://repo/USAGE_GUIDE.md\n' +
+            '- Start: begin_edit_session\n' +
+            '- Make changes using insert_css / insert_js / manipulate_dom with recordToSession: true\n' +
+            '- Use svg_snapshot / wireframe_snapshot to verify layout\n' +
+            '- Preview exactly what will be written: preview_commit_plan\n' +
+            '- Only when approved: apply_commit_plan (or export_edit_session_package instead)\n' +
+            '\n' +
+            'Important: keep changes live-in-browser until explicitly committing; do not write repo files unless asked.',
+        },
+      },
+    ],
+  }),
+);
+
+server.registerPrompt(
+  'workflow_debug_layout_then_fix',
+  {
+    title: 'Workflow: Debug layout (wireframes) then fix',
+    description:
+      'Use svg_snapshot/wireframe_snapshot to find overlaps/gaps, test fixes live, and commit the final patch.',
+  },
+  () => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text:
+            'Debug layout issues using wireframe tools, then fix safely.\n' +
+            '\n' +
+            '- Use svg_snapshot and wireframe_snapshot to identify overlaps, overflow, and gaps.\n' +
+            '- Start an edit session (begin_edit_session) and apply candidate fixes with recordToSession: true.\n' +
+            '- Compare before/after snapshots.\n' +
+            '- When the fix is correct, preview_commit_plan and only then apply_commit_plan to write changes.\n' +
+            '\n' +
+            'If you need the canonical workflow details, read: project://repo/USAGE_GUIDE.md',
+        },
+      },
+    ],
+  }),
+);
+
+server.registerPrompt(
+  'workflow_export_session_package',
+  {
+    title: 'Workflow: Export edit session as a package (no file writes)',
+    description:
+      'Iterate live and export an edit session package for review without modifying repo files.',
+  },
+  () => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text:
+            'Iterate live, but do not write repo files. Export a reviewable package instead.\n' +
+            '\n' +
+            '- begin_edit_session\n' +
+            '- Make changes with recordToSession: true\n' +
+            '- (Optional) summarize_edit_session for a human-readable summary\n' +
+            '- export_edit_session_package to a folder path\n' +
+            '\n' +
+            'Confirm: no apply_commit_plan / commit_edit_session_to_files unless explicitly requested.',
+        },
+      },
+    ],
+  }),
+);
+
 const toolConfigPath = path.resolve(
   (args as any).toolConfig ?? path.join(projectRoot, '.chrome-devtools-mcp-tools.json'),
 );

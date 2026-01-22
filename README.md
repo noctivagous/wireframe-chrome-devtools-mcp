@@ -127,7 +127,7 @@ window placed inside the browser produced by the mcp server and allows
 the user to make changes inside web the page by chatting there.  Eventually,
 going along with this will be the ability of the AI to seek out
 resources, like images and fonts, which means it will make 
-software development happen inside the web browser window
+software development happen inside the web browser window, front-end and back-end.
 that adds external libraries on the fly.  Then when the user approves
 of the current session, all changes can be committed from what is 
 shown in the web browser to the filesystem and the chat session
@@ -210,6 +210,7 @@ These additional tools enable powerful interactive debugging workflows, allowing
 - **Reliable automation**. Uses
   [puppeteer](https://github.com/puppeteer/puppeteer) to automate actions in
   Chrome and automatically wait for action results.
+- **Workflow guidance**: Exposes project documentation as MCP Resources and reusable workflow templates as Prompts, enabling agents to discover and follow structured workflows automatically.
 
 ## Disclaimers
 
@@ -588,6 +589,40 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`preview_diff_from_commit_plan`](docs/tool-reference.md#preview_diff_from_commit_plan)
 
 <!-- END AUTO GENERATED TOOLS -->
+
+## Resources
+
+In addition to tools, this MCP server exposes **Resources** (read-only project documentation) that agents can discover and read for workflow guidance:
+
+- **`project://repo/README.md`** - Project overview, tool inventory, configuration, and concepts
+- **`project://repo/USAGE_GUIDE.md`** - Detailed usage guide with workflow examples and best practices
+- **`project://repo/docs/tool-reference.md`** - Complete reference for all available tools
+- **`project://repo/docs/tool-toggles-ui.md`** - Documentation for the tool management web UI
+- **`project://repo/reports/software-guidance-report.md`** - Guidance on design/architecture/engineering constraints
+
+Agents can discover available resources via `resources/list` and read specific documentation via `resources/read` with the resource URI. This enables agents to proactively consult project documentation when needed, rather than relying solely on tool descriptions.
+
+**Example:**
+```
+"List available resources" → agent discovers project://repo/USAGE_GUIDE.md
+"Read the usage guide" → agent reads USAGE_GUIDE.md to understand live edit session workflows
+```
+
+## Prompts
+
+The server also provides **Prompts** (reusable workflow templates) aligned with common workflows described in `USAGE_GUIDE.md`:
+
+- **`workflow_live_edit_session`** - Template for starting a live editing session, making changes with `recordToSession: true`, and committing when ready
+- **`workflow_debug_layout_then_fix`** - Template for using wireframe tools to identify layout issues, then applying fixes
+- **`workflow_export_session_package`** - Template for exporting an edit session as a shareable package
+
+Agents can discover available prompts via `prompts/list` and retrieve structured prompt templates via `prompts/get`. These prompts provide structured guidance that helps ensure consistent workflow execution.
+
+**Example:**
+```
+"List available prompts" → agent discovers workflow_live_edit_session
+"Get the live edit session prompt" → agent receives structured instructions for the workflow
+```
 
 ## Configuration
 
