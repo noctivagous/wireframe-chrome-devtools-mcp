@@ -279,9 +279,14 @@ server.registerPrompt(
             '- Read the workflow docs if needed: project://repo/USAGE_GUIDE.md\n' +
             '- Start: begin_edit_session\n' +
             '- Make changes using insert_css / insert_js / manipulate_dom with recordToSession: true\n' +
+            '  - Or use batch_ops for applying multiple changes at once\n' +
+            '  - Use insert_css_preview / insert_js_preview for testing multiple variants (automatic rollback)\n' +
+            '  - Use insert_css / insert_js when you want to keep the final change applied\n' +
             '- Use svg_snapshot / wireframe_snapshot to verify layout\n' +
             '- Preview exactly what will be written: preview_commit_plan\n' +
-            '- Only when approved: apply_commit_plan (or export_edit_session_package instead)\n' +
+            '- Only when approved: apply_commit_plan\n' +
+            '  - Alternative: commit_edit_session_to_files (best-effort append, less safe)\n' +
+            '  - Alternative: export_edit_session_package (no file writes, for review)\n' +
             '\n' +
             'Important: keep changes live-in-browser until explicitly committing; do not write repo files unless asked.',
         },
@@ -340,6 +345,71 @@ server.registerPrompt(
             '- export_edit_session_package to a folder path\n' +
             '\n' +
             'Confirm: no apply_commit_plan / commit_edit_session_to_files unless explicitly requested.',
+        },
+      },
+    ],
+  }),
+);
+
+server.registerPrompt(
+  'workflow_build_prototype_from_scratch',
+  {
+    title: 'Workflow: Build prototype from scratch',
+    description:
+      'Start with a blank page and build a complete prototype using live editing and commits.',
+  },
+  () => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text:
+            'Build a prototype from scratch using live editing.\n' +
+            '\n' +
+            '- Read the workflow docs if needed: project://repo/USAGE_GUIDE.md\n' +
+            '- Start with a blank page (navigate to about:blank or empty HTML)\n' +
+            '- begin_edit_session\n' +
+            '- Build components step by step using insert_css / insert_js / manipulate_dom with recordToSession: true\n' +
+            '  - Or use batch_ops for applying multiple styling/layout changes at once\n' +
+            '  - Create navigation bar with logo and menu items\n' +
+            '  - Add hero section with centered text and CTA button\n' +
+            '  - Add content sections, forms, or other components\n' +
+            '- Use svg_snapshot / wireframe_snapshot to verify layout at each step\n' +
+            '- Preview the complete result: preview_commit_plan\n' +
+            '- Apply to specific files: apply_commit_plan\n' +
+            '\n' +
+            'Important: build iteratively in browser, then commit clean patches when complete.',
+        },
+      },
+    ],
+  }),
+);
+
+server.registerPrompt(
+  'workflow_chatbox_iteration',
+  {
+    title: 'Workflow: Chatbox iteration (in-browser chat)',
+    description:
+      'Use the in-browser chatbox for rapid iteration with instant visual feedback.',
+  },
+  () => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text:
+            'Use in-browser chatbox for rapid iteration.\n' +
+            '\n' +
+            '- Read the workflow docs if needed: project://repo/USAGE_GUIDE.md\n' +
+            '- Start: begin_edit_session with chatbox (inject_chatbox)\n' +
+            '- In browser chatbox: make changes using chatbox_step\n' +
+            '  - Example: "Make the cards wider", "Add more padding between sections"\n' +
+            '  - Changes apply instantly in browser\n' +
+            '- In IDE: commit this session to files when satisfied\n' +
+            '\n' +
+            'This workflow provides the fastest feedback loop - changes happen immediately in the browser.',
         },
       },
     ],
