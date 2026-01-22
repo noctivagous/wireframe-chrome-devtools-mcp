@@ -79,6 +79,25 @@ Example with arguments: \`(el) => {
         response.appendResponseLine(`${result}`);
         response.appendResponseLine('```');
       });
+
+      const activeSessionId = context.getActiveEditSessionId();
+      if (activeSessionId) {
+        const pageId = context.getPageId(context.getSelectedPage());
+        if (pageId !== undefined) {
+          context.appendEditChange(
+            {
+              type: 'evaluate_script',
+              pageId,
+              createdAt: Date.now(),
+              payload: {
+                function: request.params.function,
+                args: request.params.args ?? [],
+              },
+            },
+            {sessionId: activeSessionId},
+          );
+        }
+      }
     } finally {
       void Promise.allSettled(args.map(arg => arg.dispose()));
     }

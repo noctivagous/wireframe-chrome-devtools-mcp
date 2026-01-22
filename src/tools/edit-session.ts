@@ -561,7 +561,7 @@ export const previewCommitPlan = defineTool({
   name: 'preview_commit_plan',
   description:
     'Preview a structured commit plan for an edit session without writing any files.\n\n' +
-    'This is the recommended Level-2 workflow: preview exactly what would be written (files + change ids + chunk previews), then apply the plan explicitly via apply_commit_plan.',
+    'This is the recommended Level A workflow: preview exactly what would be written (files + change ids + chunk previews), then apply the plan explicitly via apply_commit_plan.',
   annotations: {
     category: ToolCategory.EDIT_SESSION,
     readOnlyHint: true,

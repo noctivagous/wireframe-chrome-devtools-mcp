@@ -571,7 +571,7 @@ This intentionally runs as an explicit end-of-session step to avoid editor lag d
 
 **Description:** Preview a structured commit plan for an edit session without writing any files.
 
-This is the recommended Level-2 workflow: preview exactly what would be written (files + change ids + chunk previews), then apply the plan explicitly via [`apply_commit_plan`](#apply_commit_plan).
+This is the recommended Level A workflow: preview exactly what would be written (files + change ids + chunk previews), then apply the plan explicitly via [`apply_commit_plan`](#apply_commit_plan).
 
 **Parameters:**
 
@@ -679,7 +679,7 @@ A higher-level agent can call this tool in a loop: user types → call `[`chatbo
 
 **Description:** Apply a unified diff (git-style) to local files with strict conflict detection.
 
-This is a Level-2 building block: apply small, reviewable diffs to the repo after validating changes in-browser.
+This is a Level A building block: apply small, reviewable diffs to the repo after validating changes in-browser.
 
 **Parameters:**
 
@@ -916,7 +916,7 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
 
 **Description:** Generate a unified diff (git-style) from a commit plan (typically produced by [`preview_commit_plan`](#preview_commit_plan)).
 
-This lets Level-2 workflows produce reviewable diffs: plan → diff → [`apply_unified_diff`](#apply_unified_diff) (or git apply).
+This lets Level A workflows produce reviewable diffs: plan → diff → [`apply_unified_diff`](#apply_unified_diff) (or git apply).
 
 **Parameters:**
 

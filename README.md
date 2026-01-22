@@ -147,13 +147,13 @@ with what it is.
 
 This branch includes several advanced debugging and development tools not present in the base `chrome-devtools-mcp`:
 
-#### **Edit Session Management** (9 tools)
+#### **Edit Session Management** (11 tools)
 Interactive workflow tools for buffering live browser edits during experimentation, with optional filesystem commit:
 
 - **Example prompts:**
   - “Live-edit this page: add a small UI control panel (toggle + slider) that changes the layout live, record the final version to an edit session, then roll the chosen CSS/JS into files via `commit_edit_session_to_files`.”
 
-- Typical usage is: `begin_edit_session` → run one or more tools with `recordToSession: true` → review via `get_edit_session` → finish by exporting (`export_edit_session` / `export_edit_session_package`) and/or summarizing (`summarize_edit_session`), or committing (`commit_edit_session_to_files`) the selected snippets, then `clear_edit_session` when done. This keeps iteration fast in Chromium and makes “write to disk” an explicit end-of-session step.
+- Typical usage is: `begin_edit_session` → run one or more tools with `recordToSession: true` → review via `get_edit_session` → finish by exporting (`export_edit_session` / `export_edit_session_package`) and/or summarizing (`summarize_edit_session`), or generate a plan (`preview_commit_plan` → `apply_commit_plan`) or commit (`commit_edit_session_to_files`) the selected snippets, then `clear_edit_session` when done. This keeps iteration fast in Chromium and makes “write to disk” an explicit end-of-session step.
 
 - **`begin_edit_session`**: Start a new edit session to buffer CSS/JS changes during iteration
 - **`list_edit_sessions`** / **`get_edit_session`**: View active or specific edit sessions

@@ -222,7 +222,7 @@ export const applyUnifiedDiff = defineTool({
   name: 'apply_unified_diff',
   description:
     'Apply a unified diff (git-style) to local files with strict conflict detection.\n\n' +
-    'This is a Level-2 building block: apply small, reviewable diffs to the repo after validating changes in-browser.',
+    'This is a Level A building block: apply small, reviewable diffs to the repo after validating changes in-browser.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -376,7 +376,7 @@ export const previewUnifiedDiffFromCommitPlan = defineTool({
   name: 'preview_diff_from_commit_plan',
   description:
     'Generate a unified diff (git-style) from a commit plan (typically produced by preview_commit_plan).\n\n' +
-    'This lets Level-2 workflows produce reviewable diffs: plan → diff → apply_unified_diff (or git apply).',
+    'This lets Level A workflows produce reviewable diffs: plan → diff → apply_unified_diff (or git apply).',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: true,

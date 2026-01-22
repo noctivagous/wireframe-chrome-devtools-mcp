@@ -69,6 +69,7 @@ export type EditChangeType =
   | 'insert_js_preview'
   | 'insert_css_preview'
   | 'manipulate_dom'
+  | 'evaluate_script'
   | 'rollback_patch'
   | 'rollback_all';
 
