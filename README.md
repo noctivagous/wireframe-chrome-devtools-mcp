@@ -4,37 +4,10 @@
 `wireframe-chrome-devtools-mcp` is a branch of Google's `chrome-devtools-mcp` that lets your coding agent (such as Gemini, Claude, Cursor or Copilot) control and inspect a live Chrome browser. It acts as a Model-Context-Protocol
 (MCP) server, giving your AI coding assistant access to the full power of Chrome DevTools for reliable automation, in-depth debugging, and performance analysis.
 
-## Tool Management Web UI (Noctivagous)
-
-**This MCP server automatically starts a web server when launched** to manage which tools are enabled or disabled. The web UI is available at:
-
-**http://localhost:7332** (or **http://127.0.0.1:7332**)
-
-This system is designed with many classes of tools that can be manually turned on or off by the user. The web UI provides an intuitive interface for managing tool availability:
-
-- **No server restart required**: When you enable or disable tools in the web UI, the changes are immediately communicated to your MCP client via the `tools/list_changed` notification. Your MCP client will automatically refresh its tool registry without needing to restart the MCP server.
-
-- **Persistent configuration**: Tool toggle settings are saved to `.chrome-devtools-mcp-tools.json` in the project root and tracked in git, so they serve as the default toolset for the project.
-
-- **Grouped by category**: Tools are organized into logical groups with descriptions:
-
-  - **Input automation**: Mouse, keyboard, and form input tools for interacting with web pages
-  - **Navigation automation**: Page navigation, tab management, and waiting tools
-  - **Emulation**: Network throttling, device emulation, and viewport resizing tools
-  - **Performance**: Performance monitoring, tracing, and JavaScript analysis tools
-  - **Network**: Network request inspection and debugging tools
-  - **Snapshot**: Screenshot, wireframe capture, and evidence collection tools
-  - **Edit Session**: Live editing session management tools for buffering browser changes
-  - **Patch**: Tools for rolling back injected CSS/JS/DOM changes
-  - **Chatbox**: In-page chat interface tools for interactive browser editing workflows
-  - **Debugging**: General debugging tools including script evaluation, state inspection, and DOM manipulation
-  - **Extensions**: Extension-specific tools (when enabled)
-
-You can disable the web UI by running the server with `--no-web-ui`, but by default it starts automatically to give you full control over which tools are available to your AI assistant.
-
 ## Beginning Branch Focus: Wireframe Debugging Tools
 
-First, this branch specializes in advanced layout debugging capabilities through dedicated wireframe tools. Unlike traditional screenshots, which require complex image processing to detect overlaps, gaps, and layout issues, our wireframe tools provide precise structural analysis directly from the browser's rendering engine.
+First, this branch specializes in advanced layout debugging capabilities through dedicated wireframe tools. Unlike traditional raster image screenshots, which require complex image processing to detect overlaps, gaps, and layout issues, the included wireframe tools provide structural analysis directly from the browser's rendering engine.
+
 
 ### Key Wireframe Features
 
@@ -46,6 +19,29 @@ First, this branch specializes in advanced layout debugging capabilities through
 
 
 These tools excel at detecting layout problems that are difficult to identify through image processing of regular screenshots.
+
+
+The Noctivagous Wireframe branch
+
+
+## Tool Management Web UI (wireframe-chrome-devtools-mcp)
+
+**This MCP server automatically starts a web server when launched** to manage which tools are enabled or disabled. The web UI is available at:
+
+**http://localhost:7332** (or **http://127.0.0.1:7332**)
+
+This system is designed with many classes of tools that can be manually turned on or off by the user. The web UI provides an interface for managing tool availability:
+
+- **No server restart required**: When you enable or disable tools in the web UI, the changes are immediately communicated to your MCP client via the `tools/list_changed` notification. Your MCP client will automatically refresh its tool registry without needing to restart the MCP server.
+
+- **Persistent configuration**: Tool toggle settings are saved to `.chrome-devtools-mcp-tools.json` in the project root and tracked in git, so they serve as the default toolset for the project.
+
+- **Grouped by category**: Tools are organized into logical groups with descriptions.
+
+You can disable the web UI by running the server with `--no-web-ui`, but by default it starts automatically to give you full control over which tools are available to your AI assistant.
+
+
+
 
 ### Goals of The Branch Beyond Wireframe Features
 

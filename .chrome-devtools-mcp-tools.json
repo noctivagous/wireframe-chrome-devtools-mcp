@@ -1,6 +1,24 @@
 {
   "version": 1,
-  "updatedAt": "1970-01-01T00:00:00.000Z",
-  "disabledTools": []
+  "updatedAt": "2026-01-22T03:20:00.438Z",
+  "disabledTools": [
+    "analyze_js",
+    "chatbox_step",
+    "click",
+    "drag",
+    "fill",
+    "fill_form",
+    "get_network_request",
+    "handle_dialog",
+    "hover",
+    "inject_chatbox",
+    "list_network_requests",
+    "monitor_performance",
+    "performance_analyze_insight",
+    "performance_start_trace",
+    "performance_stop_trace",
+    "press_key",
+    "simulate_event",
+    "upload_file"
+  ]
 }
-
