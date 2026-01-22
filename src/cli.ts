@@ -216,7 +216,7 @@ export const cliOptions = {
   toolConfig: {
     type: 'string',
     describe:
-      'Path to a JSON file used to persist tool enable/disable settings (used by the tool toggles web UI). Defaults to ./.chrome-devtools-mcp-tools.json',
+      'Path to a JSON file used to persist tool enable/disable settings (used by the tool toggles web UI). Defaults to .chrome-devtools-mcp-tools.json in the project root (where package.json is located).',
   },
   webUi: {
     type: 'boolean',

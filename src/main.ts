@@ -8,6 +8,8 @@ import './polyfill.js';
 
 import process from 'node:process';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import fs from 'node:fs';
 
 import type {Channel} from './browser.js';
 import {ensureBrowserConnected, ensureBrowserLaunched} from './browser.js';
@@ -135,10 +137,36 @@ type RegisteredTool = {
 
 const registeredTools = new Map<string, {tool: ToolDefinition; handle: RegisteredTool}>();
 
+/**
+ * Find the project root directory (where package.json is located).
+ * Walks up from the current file's directory until it finds package.json.
+ */
+function findProjectRoot(): string {
+  let currentDir = path.dirname(fileURLToPath(import.meta.url));
+  // Walk up from src/main.ts -> project root
+  while (currentDir !== path.dirname(currentDir)) {
+    const packageJsonPath = path.join(currentDir, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      return currentDir;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  // Fallback to process.cwd() if we can't find package.json
+  return process.cwd();
+}
+
+const projectRoot = findProjectRoot();
 const toolConfigPath = path.resolve(
-  (args as any).toolConfig ?? path.join(process.cwd(), '.chrome-devtools-mcp-tools.json'),
+  (args as any).toolConfig ?? path.join(projectRoot, '.chrome-devtools-mcp-tools.json'),
 );
-let toolToggles: ToolTogglesConfigV1 = (await loadToolTogglesConfig(toolConfigPath)).config;
+const {config: loadedConfig, existed} = await loadToolTogglesConfig(toolConfigPath);
+let toolToggles: ToolTogglesConfigV1 = loadedConfig;
+
+// Create default config file in project root if it doesn't exist (so it can be tracked in git)
+if (!existed && !(args as any).toolConfig) {
+  await saveToolTogglesConfig(toolConfigPath, []);
+  toolToggles = (await loadToolTogglesConfig(toolConfigPath)).config;
+}
 
 function registerTool(tool: ToolDefinition): void {
   if (

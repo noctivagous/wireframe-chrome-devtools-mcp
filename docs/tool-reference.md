@@ -22,7 +22,8 @@
 - **[Emulation](#emulation)** (2 tools)
   - [`emulate`](#emulate)
   - [`resize_page`](#resize_page)
-- **[Performance](#performance)** (4 tools)
+- **[Performance](#performance)** (5 tools)
+  - [`analyze_js`](#analyze_js)
   - [`monitor_performance`](#monitor_performance)
   - [`performance_analyze_insight`](#performance_analyze_insight)
   - [`performance_start_trace`](#performance_start_trace)
@@ -48,14 +49,17 @@
   - [`preview_commit_plan`](#preview_commit_plan)
   - [`set_active_edit_session`](#set_active_edit_session)
   - [`summarize_edit_session`](#summarize_edit_session)
-- **[Debugging](#debugging)** (18 tools)
-  - [`analyze_js`](#analyze_js)
-  - [`apply_unified_diff`](#apply_unified_diff)
+- **[Patch](#patch)** (2 tools)
+  - [`rollback_all`](#rollback_all)
+  - [`rollback_patch`](#rollback_patch)
+- **[Chatbox](#chatbox)** (2 tools)
   - [`chatbox_step`](#chatbox_step)
+  - [`inject_chatbox`](#inject_chatbox)
+- **[Debugging](#debugging)** (13 tools)
+  - [`apply_unified_diff`](#apply_unified_diff)
   - [`evaluate_script`](#evaluate_script)
   - [`export_prototype_state`](#export_prototype_state)
   - [`get_console_message`](#get_console_message)
-  - [`inject_chatbox`](#inject_chatbox)
   - [`insert_css`](#insert_css)
   - [`insert_css_preview`](#insert_css_preview)
   - [`insert_js`](#insert_js)
@@ -65,8 +69,6 @@
   - [`list_console_messages`](#list_console_messages)
   - [`manipulate_dom`](#manipulate_dom)
   - [`preview_diff_from_commit_plan`](#preview_diff_from_commit_plan)
-  - [`rollback_all`](#rollback_all)
-  - [`rollback_patch`](#rollback_patch)
 
 ## Input automation
 
@@ -264,6 +266,20 @@
 ---
 
 ## Performance
+
+### `analyze_js`
+
+**Description:** Analyze JavaScript code quality and detect errors on the current page. Supports various analysis types including code coverage, dependencies, errors, performance, and general issues.
+
+**Parameters:**
+
+- **analysis** (enum: "coverage", "dependencies", "errors", "performance", "issues") **(required)**: Type of JavaScript analysis to perform
+- **categories** (array) _(optional)_: Categories of issues to detect
+- **includeLibraries** (boolean) _(optional)_: Whether to include external libraries in the analysis (only applies to coverage, dependencies, and performance analysis)
+- **reportFormat** (enum: "summary", "detailed") _(optional)_: Format of the analysis report
+- **severity** (enum: "warning", "error") _(optional)_: Minimum severity level for issues
+
+---
 
 ### `monitor_performance`
 
@@ -628,36 +644,33 @@ This is the recommended Level-2 workflow: preview exactly what would be written 
 
 ---
 
-## Debugging
+## Patch
 
-### `analyze_js`
+### `rollback_all`
 
-**Description:** Analyze JavaScript code quality and detect errors on the current page. Supports various analysis types including code coverage, dependencies, errors, performance, and general issues.
-
-**Parameters:**
-
-- **analysis** (enum: "coverage", "dependencies", "errors", "performance", "issues") **(required)**: Type of JavaScript analysis to perform
-- **categories** (array) _(optional)_: Categories of issues to detect
-- **includeLibraries** (boolean) _(optional)_: Whether to include external libraries in the analysis (only applies to coverage, dependencies, and performance analysis)
-- **reportFormat** (enum: "summary", "detailed") _(optional)_: Format of the analysis report
-- **severity** (enum: "warning", "error") _(optional)_: Minimum severity level for issues
-
----
-
-### `apply_unified_diff`
-
-**Description:** Apply a unified diff (git-style) to local files with strict conflict detection.
-
-This is a Level-2 building block: apply small, reviewable diffs to the repo after validating changes in-browser.
+**Description:** Rollback (remove) all patches inserted by this MCP server in the current page.
 
 **Parameters:**
 
-- **diff** (string) **(required)**: Unified diff text to apply.
-- **allowCreate** (boolean) _(optional)_: If true, allow creating new files when the diff targets /dev/null → new file.
-- **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would change.
-- **rootDir** (string) _(optional)_: Safety root directory. All patches must target files within this directory. Defaults to the server process working directory.
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
+- **includeRegistryOnly** (boolean) _(optional)_: If true, only clears the server-side registry for the current page without touching the DOM.
+- **recordToSession** (boolean) _(optional)_: If true, record this rollback-all action into an edit session journal.
 
 ---
+
+### `rollback_patch`
+
+**Description:** Rollback (remove) a previously inserted patch by patchId in the current page.
+
+**Parameters:**
+
+- **patchId** (string) **(required)**: Patch id previously returned by [`insert_css`](#insert_css)/[`insert_js`](#insert_js).
+- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
+- **recordToSession** (boolean) _(optional)_: If true, record this rollback action into an edit session journal.
+
+---
+
+## Chatbox
 
 ### `chatbox_step`
 
@@ -671,6 +684,48 @@ A higher-level agent can call this tool in a loop: user types → call `[`chatbo
 
 - **maxMessages** (integer) _(optional)_: Maximum number of queued messages to drain in one call.
 - **patchId** (string) _(optional)_: Optional chatbox patchId to target. If omitted, uses `window.__MCP_CHATBOX__.patchId`.
+
+---
+
+### `inject_chatbox`
+
+**Description:** Inject a dockable in-page chat panel into the current page. Returns a patchId that can be removed via `[`rollback_patch`](#rollback_patch)`.
+
+**Notes:**
+- This tool injects a **Live Edit Session** panel intended for the browser-first / deferred-commit workflow (edit sessions + explicit export/commit).
+- Injection is idempotent: if the chatbox already exists and `replaceExisting=false`, the tool is a no-op and returns the existing patchId.
+
+
+**Parameters:**
+
+- **action** (enum: "inject", "remove") _(optional)_: Whether to inject the chatbox or remove it (cleanup).
+- **description** (string) _(optional)_: Optional human description to store in the patch registry.
+- **dock** (enum: "right", "left", "bottom") _(optional)_: Where to dock the chatbox UI.
+- **height** (integer) _(optional)_: Height in pixels for bottom-docked chatbox.
+- **patchId** (string) _(optional)_: Optional patch id. If omitted, the server generates a stable patch id.
+- **placeholder** (string) _(optional)_: Placeholder text for the message input.
+- **replaceExisting** (boolean) _(optional)_: If true, replaces any existing injected chatbox UI in the page (even if it was injected under a different patchId).
+- **startOpen** (boolean) _(optional)_: If false, chatbox starts collapsed (header only).
+- **title** (string) _(optional)_: Title displayed in the chatbox header.
+- **width** (integer) _(optional)_: Width in pixels for left/right docked chatbox.
+- **zIndex** (integer) _(optional)_: CSS z-index for the chatbox container.
+
+---
+
+## Debugging
+
+### `apply_unified_diff`
+
+**Description:** Apply a unified diff (git-style) to local files with strict conflict detection.
+
+This is a Level-2 building block: apply small, reviewable diffs to the repo after validating changes in-browser.
+
+**Parameters:**
+
+- **diff** (string) **(required)**: Unified diff text to apply.
+- **allowCreate** (boolean) _(optional)_: If true, allow creating new files when the diff targets /dev/null → new file.
+- **dryRun** (boolean) _(optional)_: If true, do not write files; only report what would change.
+- **rootDir** (string) _(optional)_: Safety root directory. All patches must target files within this directory. Defaults to the server process working directory.
 
 ---
 
@@ -720,31 +775,6 @@ This is intended for prototyping workflows where the browser is the source of tr
 **Parameters:**
 
 - **msgid** (number) **(required)**: The msgid of a console message on the page from the listed console messages
-
----
-
-### `inject_chatbox`
-
-**Description:** Inject a dockable in-page chat panel into the current page. Returns a patchId that can be removed via `[`rollback_patch`](#rollback_patch)`.
-
-**Notes:**
-- This tool injects a **Live Edit Session** panel intended for the browser-first / deferred-commit workflow (edit sessions + explicit export/commit).
-- Injection is idempotent: if the chatbox already exists and `replaceExisting=false`, the tool is a no-op and returns the existing patchId.
-
-
-**Parameters:**
-
-- **action** (enum: "inject", "remove") _(optional)_: Whether to inject the chatbox or remove it (cleanup).
-- **description** (string) _(optional)_: Optional human description to store in the patch registry.
-- **dock** (enum: "right", "left", "bottom") _(optional)_: Where to dock the chatbox UI.
-- **height** (integer) _(optional)_: Height in pixels for bottom-docked chatbox.
-- **patchId** (string) _(optional)_: Optional patch id. If omitted, the server generates a stable patch id.
-- **placeholder** (string) _(optional)_: Placeholder text for the message input.
-- **replaceExisting** (boolean) _(optional)_: If true, replaces any existing injected chatbox UI in the page (even if it was injected under a different patchId).
-- **startOpen** (boolean) _(optional)_: If false, chatbox starts collapsed (header only).
-- **title** (string) _(optional)_: Title displayed in the chatbox header.
-- **width** (integer) _(optional)_: Width in pixels for left/right docked chatbox.
-- **zIndex** (integer) _(optional)_: CSS z-index for the chatbox container.
 
 ---
 
@@ -934,29 +964,5 @@ This lets Level-2 workflows produce reviewable diffs: plan → diff → [`apply_
 - **contextLines** (integer) _(optional)_: Number of trailing context lines to include per file for stricter patching.
 - **rootDir** (string) _(optional)_: Safety root directory used to compute relative paths and constrain file reads. Defaults to the server process working directory.
 - **skipIfAlreadyApplied** (boolean) _(optional)_: If true, skips chunks whose marker text already exists in the target file (best-effort).
-
----
-
-### `rollback_all`
-
-**Description:** Rollback (remove) all patches inserted by this MCP server in the current page.
-
-**Parameters:**
-
-- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
-- **includeRegistryOnly** (boolean) _(optional)_: If true, only clears the server-side registry for the current page without touching the DOM.
-- **recordToSession** (boolean) _(optional)_: If true, record this rollback-all action into an edit session journal.
-
----
-
-### `rollback_patch`
-
-**Description:** Rollback (remove) a previously inserted patch by patchId in the current page.
-
-**Parameters:**
-
-- **patchId** (string) **(required)**: Patch id previously returned by [`insert_css`](#insert_css)/[`insert_js`](#insert_js).
-- **editSessionId** (string) _(optional)_: Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).
-- **recordToSession** (boolean) _(optional)_: If true, record this rollback action into an edit session journal.
 
 ---

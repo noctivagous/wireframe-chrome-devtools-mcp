@@ -65,6 +65,7 @@ function htmlPage(): string {
   <header>
     <h1>Tool toggles</h1>
     <div class="meta">
+      <div><strong id="enabledCount">0 of 0 enabled</strong></div>
       <div>Config: <span id="configPath"></span></div>
       <div>Updated: <span id="updatedAt"></span></div>
       <div class="status" id="status"></div>
@@ -113,6 +114,11 @@ function htmlPage(): string {
       const q = ($('q').value || '').toLowerCase().trim();
       const groupsEl = $('groups');
       groupsEl.innerHTML = '';
+
+      // Update enabled count
+      const totalTools = tools.length;
+      const enabledTools = tools.filter(t => t.enabled).length;
+      $('enabledCount').textContent = enabledTools + ' of ' + totalTools + ' enabled';
 
       const filtered = tools.filter(t => {
         if (!q) return true;

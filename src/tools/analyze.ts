@@ -30,7 +30,7 @@ export const analyzeJs = defineTool({
   name: 'analyze_js',
   description: `Analyze JavaScript code quality and detect errors on the current page. Supports various analysis types including code coverage, dependencies, errors, performance, and general issues.`,
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.PERFORMANCE,
     readOnlyHint: true,
   },
   schema: {

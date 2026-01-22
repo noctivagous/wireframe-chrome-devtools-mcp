@@ -175,7 +175,7 @@ export const chatboxStep = defineTool({
     '**Purpose:** This is a minimal bridge for chat-driven iteration without requiring any network wiring.\n' +
     'A higher-level agent can call this tool in a loop: user types → call `chatbox_step` → optionally call other tools → write results back.\n',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.CHATBOX,
     readOnlyHint: false,
   },
   schema: {

@@ -302,7 +302,7 @@ export const rollbackPatch = defineTool({
   description:
     'Rollback (remove) a previously inserted patch by patchId in the current page.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.PATCH,
     readOnlyHint: false,
   },
   schema: {
@@ -380,7 +380,7 @@ export const injectChatbox = defineTool({
     '- This tool injects a **Live Edit Session** panel intended for the browser-first / deferred-commit workflow (edit sessions + explicit export/commit).\n' +
     '- Injection is idempotent: if the chatbox already exists and `replaceExisting=false`, the tool is a no-op and returns the existing patchId.\n',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.CHATBOX,
     readOnlyHint: false,
   },
   schema: {
@@ -2215,7 +2215,7 @@ export const rollbackAll = defineTool({
   description:
     'Rollback (remove) all patches inserted by this MCP server in the current page.',
   annotations: {
-    category: ToolCategory.DEBUGGING,
+    category: ToolCategory.PATCH,
     readOnlyHint: false,
   },
   schema: {

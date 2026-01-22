@@ -28,7 +28,8 @@ npm run start -- --no-web-ui
 ```
 
 ### Config file location
-- Default: `./.chrome-devtools-mcp-tools.json` (relative to the server working directory)
+- Default: `.chrome-devtools-mcp-tools.json` in the project root (where `package.json` is located)
+- The config file is **tracked in git** so it serves as the default toolset for the project
 - Override:
 
 ```bash

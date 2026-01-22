@@ -1,10 +1,36 @@
 # Wireframe Chrome DevTools MCP (Noctivagous)
 
 
-
-`wireframe-chrome-devtools-mcp` is a branch of Google's `chrome-devtools-mcp` (that lets your coding agent (such as Gemini, Claude, Cursor or Copilot) control and inspect a live Chrome browser.) It acts as a Model-Context-Protocol
+`wireframe-chrome-devtools-mcp` is a branch of Google's `chrome-devtools-mcp` that lets your coding agent (such as Gemini, Claude, Cursor or Copilot) control and inspect a live Chrome browser. It acts as a Model-Context-Protocol
 (MCP) server, giving your AI coding assistant access to the full power of Chrome DevTools for reliable automation, in-depth debugging, and performance analysis.
 
+## Tool Management Web UI (Noctivagous)
+
+**This MCP server automatically starts a web server when launched** to manage which tools are enabled or disabled. The web UI is available at:
+
+**http://localhost:7332** (or **http://127.0.0.1:7332**)
+
+This system is designed with many classes of tools that can be manually turned on or off by the user. The web UI provides an intuitive interface for managing tool availability:
+
+- **No server restart required**: When you enable or disable tools in the web UI, the changes are immediately communicated to your MCP client via the `tools/list_changed` notification. Your MCP client will automatically refresh its tool registry without needing to restart the MCP server.
+
+- **Persistent configuration**: Tool toggle settings are saved to `.chrome-devtools-mcp-tools.json` in the project root and tracked in git, so they serve as the default toolset for the project.
+
+- **Grouped by category**: Tools are organized into logical groups with descriptions:
+
+  - **Input automation**: Mouse, keyboard, and form input tools for interacting with web pages
+  - **Navigation automation**: Page navigation, tab management, and waiting tools
+  - **Emulation**: Network throttling, device emulation, and viewport resizing tools
+  - **Performance**: Performance monitoring, tracing, and JavaScript analysis tools
+  - **Network**: Network request inspection and debugging tools
+  - **Snapshot**: Screenshot, wireframe capture, and evidence collection tools
+  - **Edit Session**: Live editing session management tools for buffering browser changes
+  - **Patch**: Tools for rolling back injected CSS/JS/DOM changes
+  - **Chatbox**: In-page chat interface tools for interactive browser editing workflows
+  - **Debugging**: General debugging tools including script evaluation, state inspection, and DOM manipulation
+  - **Extensions**: Extension-specific tools (when enabled)
+
+You can disable the web UI by running the server with `--no-web-ui`, but by default it starts automatically to give you full control over which tools are available to your AI assistant.
 
 ## Beginning Branch Focus: Wireframe Debugging Tools
 
@@ -504,7 +530,8 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 - **Emulation** (2 tools)
   - [`emulate`](docs/tool-reference.md#emulate)
   - [`resize_page`](docs/tool-reference.md#resize_page)
-- **Performance** (4 tools)
+- **Performance** (5 tools)
+  - [`analyze_js`](docs/tool-reference.md#analyze_js)
   - [`monitor_performance`](docs/tool-reference.md#monitor_performance)
   - [`performance_analyze_insight`](docs/tool-reference.md#performance_analyze_insight)
   - [`performance_start_trace`](docs/tool-reference.md#performance_start_trace)
@@ -530,14 +557,17 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`preview_commit_plan`](docs/tool-reference.md#preview_commit_plan)
   - [`set_active_edit_session`](docs/tool-reference.md#set_active_edit_session)
   - [`summarize_edit_session`](docs/tool-reference.md#summarize_edit_session)
-- **Debugging** (18 tools)
-  - [`analyze_js`](docs/tool-reference.md#analyze_js)
-  - [`apply_unified_diff`](docs/tool-reference.md#apply_unified_diff)
+- **Patch** (2 tools)
+  - [`rollback_all`](docs/tool-reference.md#rollback_all)
+  - [`rollback_patch`](docs/tool-reference.md#rollback_patch)
+- **Chatbox** (2 tools)
   - [`chatbox_step`](docs/tool-reference.md#chatbox_step)
+  - [`inject_chatbox`](docs/tool-reference.md#inject_chatbox)
+- **Debugging** (13 tools)
+  - [`apply_unified_diff`](docs/tool-reference.md#apply_unified_diff)
   - [`evaluate_script`](docs/tool-reference.md#evaluate_script)
   - [`export_prototype_state`](docs/tool-reference.md#export_prototype_state)
   - [`get_console_message`](docs/tool-reference.md#get_console_message)
-  - [`inject_chatbox`](docs/tool-reference.md#inject_chatbox)
   - [`insert_css`](docs/tool-reference.md#insert_css)
   - [`insert_css_preview`](docs/tool-reference.md#insert_css_preview)
   - [`insert_js`](docs/tool-reference.md#insert_js)
@@ -547,8 +577,6 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`list_console_messages`](docs/tool-reference.md#list_console_messages)
   - [`manipulate_dom`](docs/tool-reference.md#manipulate_dom)
   - [`preview_diff_from_commit_plan`](docs/tool-reference.md#preview_diff_from_commit_plan)
-  - [`rollback_all`](docs/tool-reference.md#rollback_all)
-  - [`rollback_patch`](docs/tool-reference.md#rollback_patch)
 
 <!-- END AUTO GENERATED TOOLS -->
 
@@ -637,7 +665,7 @@ The Chrome DevTools MCP server supports the following configuration option:
   - **Default:** `true`
 
 - **`--toolConfig`/ `--tool-config`**
-  Path to a JSON file used to persist tool enable/disable settings (used by the tool toggles web UI). Defaults to ./.chrome-devtools-mcp-tools.json
+  Path to a JSON file used to persist tool enable/disable settings (used by the tool toggles web UI). Defaults to .chrome-devtools-mcp-tools.json in the project root (where package.json is located).
   - **Type:** string
 
 - **`--webUi`/ `--web-ui`**
