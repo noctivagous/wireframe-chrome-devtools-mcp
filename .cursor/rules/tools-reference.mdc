@@ -1,0 +1,23 @@
+---
+description: Tool categories and capabilities reference
+---
+
+# Tool Categories
+
+## Wireframe Tools (Branch Specialization)
+
+`wireframe_snapshot` (structural data), `svg_snapshot` (visual overlays). Excel at detecting layout problems.
+
+## Edit Session Management (11 tools)
+
+`begin_edit_session`, `get_edit_session`, `list_edit_sessions`, `set_active_edit_session`, `preview_commit_plan`, `apply_commit_plan`, `commit_edit_session_to_files`, `export_edit_session`, `clear_edit_session`
+
+## Live Insertion & Manipulation
+
+`insert_css`/`insert_css_preview`, `insert_js`/`insert_js_preview`, `manipulate_dom`, `rollback_patch`/`rollback_all`
+
+## Other Categories
+
+Input automation (9), Navigation (6), Performance (5), Network (2), Snapshot (4), Debugging (14), Chatbox (2)
+
+See `docs/tool-reference.md` for complete list.

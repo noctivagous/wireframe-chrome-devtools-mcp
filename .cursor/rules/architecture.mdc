@@ -1,0 +1,23 @@
+---
+description: Code structure and architecture overview
+globs: ["src/**/*", "tests/**/*"]
+---
+
+# Architecture
+
+## Source (`src/`)
+
+**Core**: `index.ts`, `main.ts`, `cli.ts`, `browser.ts`
+**MCP**: `McpContext.ts`, `McpResponse.ts`, `DevToolsConnectionAdapter.ts`
+**Tools**: `tools/` (24 implementations)
+**Web UI**: `web-ui.ts`, `web-ui-template.ts`, `web-ui-settings.ts`
+**Utils**: `DevtoolsUtils.ts`, `PageCollector.ts`, `WaitForHelper.ts`, `Mutex.ts`
+**Other**: `formatters/`, `telemetry/`, `trace-processing/`
+
+## Build & Config
+
+`build/` contains compiled JS from TypeScript. Key configs: `package.json`, `rollup.config.mjs`, `puppeteer.config.cjs`, `tsconfig.json`, `eslint.config.mjs`
+
+## Testing
+
+Tests in `tests/` mirror `src/` structure. Use `tests/setup.ts`. Snapshot tests use `.snapshot` files.

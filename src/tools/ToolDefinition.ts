@@ -5,6 +5,7 @@
  */
 
 import type {
+  TextSnapshot,
   TextSnapshotNode,
   GeolocationOptions,
   PatchRecord,
@@ -129,6 +130,11 @@ export type Context = Readonly<{
   waitForEventsAfterAction(action: () => Promise<unknown>): Promise<void>;
   waitForTextOnPage(text: string, timeout?: number): Promise<Element>;
   getDevToolsData(): Promise<DevToolsData>;
+  createTextSnapshot(
+    verbose?: boolean,
+    devtoolsData?: DevToolsData | undefined,
+  ): Promise<void>;
+  getTextSnapshot(): TextSnapshot | null;
   /**
    * Returns a reqid for a cdpRequestId.
    */

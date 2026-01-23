@@ -1,0 +1,25 @@
+---
+description: Project overview and core philosophy for Wireframe Chrome DevTools MCP
+---
+
+# Wireframe Chrome DevTools MCP
+
+MCP server enabling AI assistants to control/inspect Chrome browser. Branch of `chrome-devtools-mcp` specializing in wireframe debugging and live editing workflows.
+
+**Core Philosophy**: Browser is a JIT execution environment. Enable rapid iteration in-browser with instant feedback, then commit clean diffs to filesystem—eliminating "edit → reload → check" loops.
+
+## Key Features
+
+- Wireframe tools: `wireframe_snapshot`, `svg_snapshot` for layout analysis
+- Live editing: Edit in browser first, commit when ready
+- Edit sessions: Track changes, preview commits, export for review
+- Tool management: Web UI at `http://localhost:7332` to enable/disable tools
+- MCP Resources/Prompts: Docs and workflow templates exposed to agents
+
+## Documentation
+
+See `USAGE_GUIDE.md`, `README.md`, `docs/tool-reference.md` for details.
+
+## Research
+
+Use `brave-search` tool (via MCP) to research problems and best practices.

@@ -6,6 +6,9 @@
 
 import {zod} from '../third_party/index.js';
 
+import {getDefaultGuidanceConfigPath, loadGuidanceConfig} from '../guidance-config.js';
+import {SnapshotFormatter} from '../formatters/SnapshotFormatter.js';
+
 import {ToolCategory} from './categories.js';
 import {defineTool, timeoutSchema} from './ToolDefinition.js';
 import {
@@ -73,6 +76,7 @@ export const beginLiveEditingSession = defineTool({
       .describe('Optional patch id for the overlay injection.'),
     snapshots: zod
       .object({
+        takeSnapshot: zod.boolean().default(true).optional(),
         wireframe: zod.boolean().default(true).optional(),
         svg: zod.boolean().default(false).optional(),
       })
@@ -271,10 +275,23 @@ export const beginLiveEditingSession = defineTool({
   color: #111827;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 6px 8px 4px;
   font-size: 12px;
   pointer-events: auto;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+#mcp-live-editing-root .mcp-le-tag-content {
+  outline: none;
+  min-height: 16px;
+  white-space: pre-wrap;
+}
+#mcp-live-editing-root .mcp-le-tag-footer {
+  margin-top: 4px;
+  font-size: 10px;
+  color: #6b7280;
+  border-top: 1px dashed #e5e7eb;
+  padding-top: 3px;
+  word-break: break-all;
 }
 #mcp-live-editing-root .mcp-le-tag button {
   margin-left: 8px;
@@ -382,12 +399,26 @@ export const beginLiveEditingSession = defineTool({
 }
 #mcp-live-editing-root .mcp-le-port {
   display: inline-flex;
-  width: 10px;
-  height: 10px;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
-  background: #ef4444;
+  background: #111827;
+  border: 2px solid #ef4444;
+  box-shadow: inset 0 0 0 2px #111827, 0 0 0 1px rgba(239,68,68,0.4);
   margin-left: 8px;
   cursor: crosshair;
+}
+#mcp-live-editing-root .mcp-le-port-inner {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #ef4444;
+}
+#mcp-live-editing-root .mcp-le-outline {
+  outline: 2px solid #f59e0b !important;
+  outline-offset: 2px;
 }
               `.trim();
               document.head.appendChild(style);
@@ -431,19 +462,35 @@ export const beginLiveEditingSession = defineTool({
             }
           };
 
+          const clearOutlines = () => {
+            for (const el of Array.from(document.querySelectorAll('.mcp-le-outline'))) {
+              el.classList.remove('mcp-le-outline');
+            }
+          };
+
           const render = () => {
             const root = createRoot();
             clearTags(root);
             renderConnectors(root);
+            clearOutlines();
             for (const annotation of state.annotations) {
               const el = document.querySelector(annotation.selector);
               if (!el) {
                 continue;
               }
               const rect = (el as HTMLElement).getBoundingClientRect();
+              el.classList.add('mcp-le-outline');
               const tag = document.createElement('div');
               tag.className = 'mcp-le-tag';
-              tag.textContent = annotation.text;
+              const content = document.createElement('div');
+              content.className = 'mcp-le-tag-content';
+              content.contentEditable = 'true';
+              content.textContent = annotation.text;
+              content.addEventListener('input', () => {
+                annotation.text = content.textContent ?? '';
+                save();
+              });
+              tag.appendChild(content);
               tag.style.left = `${Math.max(8, rect.left)}px`;
               tag.style.top = `${Math.max(8, rect.top - 28)}px`;
               tag.setAttribute('data-mcp-annotation-id', annotation.id);
@@ -453,6 +500,9 @@ export const beginLiveEditingSession = defineTool({
                 port.className = 'mcp-le-port';
                 port.setAttribute('data-mcp-annotation-id', annotation.id);
                 port.setAttribute(PATCH_ID_ATTR, patchId);
+                const inner = document.createElement('span');
+                inner.className = 'mcp-le-port-inner';
+                port.appendChild(inner);
                 port.addEventListener('mousedown', ev => {
                   ev.preventDefault();
                   ev.stopPropagation();
@@ -477,17 +527,11 @@ export const beginLiveEditingSession = defineTool({
                 save();
                 scheduleRender();
               });
-              tag.addEventListener('click', ev => {
-                ev.preventDefault();
-                ev.stopPropagation();
-                const next = window.prompt('Edit annotation', annotation.text);
-                if (typeof next === 'string') {
-                  annotation.text = next.trim();
-                  save();
-                  scheduleRender();
-                }
-              });
               tag.appendChild(close);
+              const footer = document.createElement('div');
+              footer.className = 'mcp-le-tag-footer';
+              footer.textContent = annotation.selector;
+              tag.appendChild(footer);
               root.appendChild(tag);
             }
             renderHighlight(root);
@@ -997,6 +1041,7 @@ export const beginLiveEditingSession = defineTool({
             clearAnnotations() {
               state.annotations = [];
               save();
+              clearOutlines();
               scheduleRender();
             },
             getPageNotes() {
@@ -1005,6 +1050,16 @@ export const beginLiveEditingSession = defineTool({
             setPageNotes(value: string) {
               state.pageNotes = value ?? '';
               saveNotes();
+              scheduleRender();
+            },
+            clearAll() {
+              state.annotations = [];
+              state.pageNotes = '';
+              state.notesVisible = false;
+              state.notesCollapsed = false;
+              save();
+              saveNotes();
+              clearOutlines();
               scheduleRender();
             },
           };
@@ -1024,8 +1079,128 @@ export const beginLiveEditingSession = defineTool({
       });
     }
 
-    const snapshots = request.params.snapshots ?? {wireframe: true, svg: false};
+    const snapshots = request.params.snapshots ?? {takeSnapshot: true, wireframe: true, svg: false};
     const snapshotOptions = request.params.snapshotOptions ?? {};
+
+    const artifacts: LiveEditingArtifact[] = [];
+    let baselineWireframeFile: string | undefined;
+    let baselineSnapshotFile: string | undefined;
+    let guidanceSummary:
+      | {design?: string; architecture?: string; engineering?: string}
+      | undefined;
+
+    if (snapshots.takeSnapshot ?? true) {
+      await context.createTextSnapshot(false);
+      const snapshot = context.getTextSnapshot();
+      if (snapshot) {
+        const formatter = new SnapshotFormatter(snapshot);
+        const bytes = new TextEncoder().encode(formatter.toString());
+        const {filename} = await context.saveTemporaryFile(
+          bytes,
+          'text/plain',
+          'live-editing-snapshot',
+        );
+        artifacts.push({
+          filename,
+          mimeType: 'text/plain',
+          byteLength: bytes.length,
+          summary: 'Text snapshot baseline (a11y tree)',
+        });
+        baselineSnapshotFile = filename;
+      }
+    }
+
+    if (snapshots.wireframe ?? true) {
+      const {output, bytes, json} = await captureWireframeSnapshot(
+        {params: snapshotOptions},
+        context,
+      );
+      const resolved = await resolveArtifactOutput({
+        context,
+        bytes,
+        mimeType: 'application/json',
+        baseName: 'live-editing-wireframe-baseline',
+        outputMode: 'file',
+        maxBytesInline: 200_000,
+        inlineData: output,
+        summary: 'Wireframe snapshot baseline (JSON)',
+      });
+      if (resolved.artifact) {
+        artifacts.push(resolved.artifact);
+        baselineWireframeFile = resolved.artifact.filename;
+      }
+      await page.evaluate((baselineJson: string) => {
+        const api = (window as any).__MCP_LIVE_EDITING__;
+        if (api) {
+          api.baselineWireframeJson = baselineJson;
+        } else {
+          (window as any).__MCP_LIVE_EDITING_BASELINE__ = {wireframeJson: baselineJson};
+        }
+      }, json);
+    }
+
+    if (snapshots.svg ?? false) {
+      const {output} = await captureWireframeSnapshot(
+        {params: snapshotOptions},
+        context,
+      );
+      const svg = renderSvgWireframe(output, {
+        scale: 1,
+        background: 'transparent',
+        showLabels: true,
+        showDimensions: false,
+        showSpacing: false,
+        strokeWidth: 1,
+        fillOpacity: 0.08,
+        highlightChanged: false,
+        previous: undefined,
+      });
+      const resolved = await resolveArtifactOutput({
+        context,
+        bytes: new TextEncoder().encode(svg),
+        mimeType: 'text/plain',
+        baseName: 'live-editing-svg-baseline',
+        outputMode: 'file',
+        maxBytesInline: 200_000,
+        inlineData: svg,
+        summary: 'Wireframe SVG baseline',
+      });
+      if (resolved.artifact) {
+        artifacts.push(resolved.artifact);
+      }
+    }
+
+    const guidance = await loadGuidanceConfig(getDefaultGuidanceConfigPath());
+    const guides = guidance?.config?.guides ?? {};
+    const summarize = (value?: string) => {
+      if (!value) {
+        return undefined;
+      }
+      const trimmed = value.trim().replace(/\s+/g, ' ');
+      return trimmed.length > 600 ? `${trimmed.slice(0, 600)}…` : trimmed;
+    };
+    guidanceSummary = {
+      design: summarize(guides.design?.content),
+      architecture: summarize(guides.architecture?.content),
+      engineering: summarize(guides.engineering?.content),
+    };
+    for (const [label, guide] of Object.entries(guides)) {
+      const content = (guide as any)?.content;
+      if (typeof content === 'string' && content.trim()) {
+        const bytes = new TextEncoder().encode(content);
+        const {filename} = await context.saveTemporaryFile(
+          bytes,
+          'text/plain',
+          `guidance-${label}`,
+        );
+        artifacts.push({
+          filename,
+          mimeType: 'text/plain',
+          byteLength: bytes.length,
+          summary: `Guidance: ${label}`,
+        });
+      }
+    }
     const nextToolCalls = [
       ...(snapshots.wireframe
         ? [
@@ -1055,6 +1230,11 @@ export const beginLiveEditingSession = defineTool({
       };
       editSession?: {sessionId: string; label?: string};
       overlay?: {installed: boolean; patchId?: string};
+      baseline?: {
+        textSnapshotFile?: string;
+        wireframeFile?: string;
+      };
+      guidanceSummary?: {design?: string; architecture?: string; engineering?: string};
     }> = {
       kind: 'live_editing_session',
       version: LIVE_EDITING_SCHEMA_VERSION,
@@ -1072,12 +1252,17 @@ export const beginLiveEditingSession = defineTool({
         overlay: request.params.injectOverlay
           ? {installed: overlayInstalled, patchId: overlayPatchId}
           : undefined,
+        baseline: {
+          textSnapshotFile: baselineSnapshotFile,
+          wireframeFile: baselineWireframeFile,
+        },
+        guidanceSummary,
       },
-      artifacts: [],
+      artifacts,
       instructions: {
         ordered_steps: [
           'Confirm the page is correct and ready for live editing.',
-          'Use the live-editing snapshot tools to get a baseline (see next_tool_calls).',
+          'Use the live-editing snapshot tools to get a baseline (see next_tool_calls) if you need more detail.',
           'Wait for the user to annotate or make changes.',
           'When the user says “update from my changes”, call update_from_user_changes.',
         ],
@@ -1145,18 +1330,27 @@ export const updateFromUserChanges = defineTool({
       const result = await page.evaluate(() => {
         const api = (window as any).__MCP_LIVE_EDITING__;
         if (api?.exportAnnotations) {
-          return {
+          const payload = {
             annotations: api.exportAnnotations(),
             source: 'api',
             pageNotes: api.getPageNotes ? api.getPageNotes() : '',
           };
+          if (api.clearAll) {
+            api.clearAll();
+          }
+          return payload;
         }
         if (Array.isArray(api?.state?.annotations)) {
-          return {
+          const payload = {
             annotations: api.state.annotations,
             source: 'state',
             pageNotes: typeof api.state.pageNotes === 'string' ? api.state.pageNotes : '',
           };
+          api.state.annotations = [];
+          api.state.pageNotes = '';
+          api.state.notesVisible = false;
+          api.state.notesCollapsed = false;
+          return payload;
         }
         const storageKey = 'mcp_live_editing_annotations';
         const raw =
@@ -1168,11 +1362,15 @@ export const updateFromUserChanges = defineTool({
           '';
         if (raw) {
           try {
-            return {annotations: JSON.parse(raw), source: 'storage', pageNotes: notes};
+            const parsed = JSON.parse(raw);
+            window.sessionStorage?.removeItem(storageKey);
+            window.sessionStorage?.removeItem('mcp_live_editing_page_notes');
+            return {annotations: parsed, source: 'storage', pageNotes: notes};
           } catch {
             return {annotations: [], source: 'storage_parse_error', pageNotes: notes};
           }
         }
+        window.sessionStorage?.removeItem('mcp_live_editing_page_notes');
         return {annotations: [], source: 'none', pageNotes: notes};
       });
       annotations = Array.isArray(result?.annotations) ? result.annotations : [];
@@ -1189,6 +1387,7 @@ export const updateFromUserChanges = defineTool({
           outputMode: string;
           inline?: WireframeSnapshotOutput;
           inlineSkipped?: {reason: string; maxBytesInline: number; byteLength: number};
+          diffSummary?: {changed: number; added: number; removed: number};
         }
       | undefined;
     let svgData:
@@ -1204,11 +1403,23 @@ export const updateFromUserChanges = defineTool({
       | (ReturnType<typeof captureWireframeSnapshot> extends Promise<infer R> ? R : never)
       | undefined;
 
+    let baselineCompareWith = request.params.compareWith;
+    if (!baselineCompareWith) {
+      baselineCompareWith = await page.evaluate(() => {
+        const api = (window as any).__MCP_LIVE_EDITING__;
+        if (typeof api?.baselineWireframeJson === 'string') {
+          return api.baselineWireframeJson;
+        }
+        const fallback = (window as any).__MCP_LIVE_EDITING_BASELINE__;
+        return typeof fallback?.wireframeJson === 'string' ? fallback.wireframeJson : undefined;
+      });
+    }
+
     if (includeSnapshots.wireframe || includeSnapshots.svg) {
       const wireframeParams = {
         ...(request.params.wireframeOptions ?? {}),
-        compareWith: request.params.compareWith,
-        includeDiff: request.params.compareWith ? true : undefined,
+        compareWith: baselineCompareWith,
+        includeDiff: baselineCompareWith ? true : undefined,
       };
       snapshotOutput = await captureWireframeSnapshot(
         {params: wireframeParams},
@@ -1236,15 +1447,22 @@ export const updateFromUserChanges = defineTool({
         outputMode: resolved.effectiveOutputMode,
         inline: resolved.inline,
         inlineSkipped: resolved.inlineSkipped,
+        diffSummary: snapshotOutput.output.diff
+          ? {
+              changed: snapshotOutput.output.diff.changedElements.length,
+              added: snapshotOutput.output.diff.addedElements.length,
+              removed: snapshotOutput.output.diff.removedElements.length,
+            }
+          : undefined,
       };
     }
 
     if (includeSnapshots.svg && snapshotOutput) {
       const svgOptions = request.params.svgOptions ?? {};
       let previous: WireframeSnapshotOutput | undefined;
-      if (typeof request.params.compareWith === 'string' && request.params.compareWith) {
+      if (typeof baselineCompareWith === 'string' && baselineCompareWith) {
         try {
-          previous = JSON.parse(request.params.compareWith) as WireframeSnapshotOutput;
+          previous = JSON.parse(baselineCompareWith) as WireframeSnapshotOutput;
         } catch {
           previous = undefined;
         }
@@ -1282,6 +1500,81 @@ export const updateFromUserChanges = defineTool({
       };
     }
 
+    const classifyIntent = (annotation: any): string => {
+      if (annotation?.type === 'move') {
+        return 'move';
+      }
+      const text = String(annotation?.text ?? '').toLowerCase();
+      if (text.match(/\b(bug|broken|issue|fix|error)\b/)) {
+        return 'bug';
+      }
+      if (text.match(/\b(copy|text|wording|typo|label)\b/)) {
+        return 'copy';
+      }
+      if (text.match(/\b(layout|align|spacing|margin|padding|gap|grid|flex|position|width|height)\b/)) {
+        return 'layout';
+      }
+      if (text.match(/\b(color|typography|font|size|weight|style)\b/)) {
+        return 'style';
+      }
+      return 'note';
+    };
+
+    const parseStyleHint = (annotation: any): {selector: string; properties: Record<string, string>} | null => {
+      const selector = annotation?.selector;
+      if (!selector) {
+        return null;
+      }
+      const text = String(annotation?.text ?? '').toLowerCase();
+      const properties: Record<string, string> = {};
+      const matchValue = (keyword: string) => {
+        const re = new RegExp(`${keyword}\\s+(-?\\d+(?:\\.\\d+)?)`, 'i');
+        const match = text.match(re);
+        if (match?.[1]) {
+          return `${match[1]}px`;
+        }
+        return null;
+      };
+      const padding = matchValue('padding');
+      if (padding) {
+        properties['padding'] = padding;
+      }
+      const margin = matchValue('margin');
+      if (margin) {
+        properties['margin'] = margin;
+      }
+      const gap = matchValue('gap');
+      if (gap) {
+        properties['gap'] = gap;
+      }
+      const width = matchValue('width');
+      if (width) {
+        properties['width'] = width;
+      }
+      const height = matchValue('height');
+      if (height) {
+        properties['height'] = height;
+      }
+      if (Object.keys(properties).length === 0) {
+        return null;
+      }
+      return {selector, properties};
+    };
+
+    const annotationInsights = annotations.map((ann: any) => ({
+      id: ann?.id,
+      type: ann?.type,
+      selector: ann?.selector,
+      text: ann?.text,
+      intent: classifyIntent(ann),
+    }));
+    const priorityOrder = ['bug', 'move', 'layout', 'style', 'copy', 'note'];
+    const prioritizedAnnotationIds = annotationInsights
+      .slice()
+      .sort((a, b) => priorityOrder.indexOf(a.intent) - priorityOrder.indexOf(b.intent))
+      .map(item => item.id)
+      .filter(Boolean);
+
     const moveLinks = annotations
       .filter((ann: any) => ann?.type === 'move' && ann?.selector && ann?.targetSelector)
       .map((ann: any) => ({
@@ -1310,11 +1603,36 @@ export const updateFromUserChanges = defineTool({
       };
     });
 
+    const styleHints = annotations
+      .filter((ann: any) => classifyIntent(ann) === 'layout' || classifyIntent(ann) === 'style')
+      .map(parseStyleHint)
+      .filter(Boolean) as Array<{selector: string; properties: Record<string, string>}>;
+    const styleOps = styleHints.map(hint => ({
+      tool: 'manipulate_dom',
+      params: {
+        operations: [
+          {
+            action: 'set-style',
+            selector: hint.selector,
+            properties: hint.properties,
+          },
+        ],
+      },
+    }));
+
     const payload: LiveEditingToolResponse<{
       page: {url: string; title?: string};
       annotations: unknown[];
       annotationSource: string;
       pageNotes: string;
+      annotationInsights: Array<{
+        id?: string;
+        type?: string;
+        selector?: string;
+        text?: string;
+        intent: string;
+      }>;
+      prioritizedAnnotationIds: Array<string>;
       moveLinks: Array<{
         id: string;
         text: string;
@@ -1333,6 +1651,8 @@ export const updateFromUserChanges = defineTool({
         annotations,
         annotationSource,
         pageNotes,
+        annotationInsights,
+        prioritizedAnnotationIds,
         moveLinks,
         snapshots:
           includeSnapshots.wireframe || includeSnapshots.svg
@@ -1342,7 +1662,7 @@ export const updateFromUserChanges = defineTool({
       artifacts,
       instructions: {
         ordered_steps: [
-          'Review annotations and prioritize changes.',
+          'Review annotations and prioritize changes (bug → move → layout → style → copy → note).',
           'Apply edits in the browser using batch_ops/insert_css/manipulate_dom.',
           ...(moveLinks.length
             ? ['Apply move links using the provided batch_ops_plan (evaluate_script).']
@@ -1351,17 +1671,17 @@ export const updateFromUserChanges = defineTool({
         ],
         constraints: ['Do not write repo files unless explicitly requested.'],
       },
-      batch_ops_plan: moveOps.length
+      batch_ops_plan: moveOps.length || styleOps.length
         ? {
             tool: 'batch_ops',
             params: {
-              operations: moveOps,
+              operations: [...moveOps, ...styleOps],
               executionMode: 'sequential',
               stopOnError: true,
               shareContext: true,
             },
             notes:
-              'Move operations insert the source element before the target element. Review before executing.',
+              'Move operations insert the source element before the target element. Style ops are heuristic (padding/margin/gap/width/height). Review before executing.',
           }
         : undefined,
     };

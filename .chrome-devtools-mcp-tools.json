@@ -1,11 +1,14 @@
 {
   "version": 1,
-  "updatedAt": "2026-01-23T13:13:55.206Z",
+  "updatedAt": "2026-01-23T17:17:11.811Z",
   "disabledTools": [
     "analyze_js",
     "apply_commit_plan",
     "apply_unified_diff",
+    "begin_edit_session",
+    "begin_live_editing_session",
     "clear_edit_session",
+    "commit_edit_session_to_files",
     "drag",
     "emulate",
     "export_edit_session",
@@ -15,6 +18,7 @@
     "get_console_message",
     "get_edit_session",
     "get_network_request",
+    "guidance_config",
     "handle_dialog",
     "inspect_state",
     "js_console",

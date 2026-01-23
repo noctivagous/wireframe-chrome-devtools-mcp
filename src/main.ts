@@ -29,6 +29,13 @@ import {
   SetLevelRequestSchema,
   zod,
 } from './third_party/index.js';
+import {
+  getDefaultGuidanceConfigPath,
+  loadGuidanceConfig,
+  saveGuidanceConfig,
+  type GuidanceConfigInput,
+  type GuidanceConfigV1,
+} from './guidance-config.js';
 import {loadToolTogglesConfig, saveToolTogglesConfig, type ToolTogglesConfigV1} from './tool-toggles.js';
 import {setBatchOpsExecutor} from './tools/batch-ops.js';
 import {ToolCategory} from './tools/categories.js';
@@ -215,6 +222,19 @@ let toolToggles: ToolTogglesConfigV1 = loadedConfig;
 if (!existed && !(args as any).toolConfig) {
   await saveToolTogglesConfig(toolConfigPath, []);
   toolToggles = (await loadToolTogglesConfig(toolConfigPath)).config;
+}
+
+const guidanceConfigPath = getDefaultGuidanceConfigPath();
+const {
+  config: loadedGuidanceConfig,
+  existed: guidanceConfigExisted,
+} = await loadGuidanceConfig(guidanceConfigPath);
+let guidanceConfig: GuidanceConfigV1 = loadedGuidanceConfig;
+
+if (!guidanceConfigExisted) {
+  guidanceConfig = await saveGuidanceConfig(guidanceConfigPath, {
+    guides: guidanceConfig.guides,
+  } satisfies GuidanceConfigInput);
 }
 
 function registerTool(tool: ToolDefinition): void {
@@ -426,6 +446,7 @@ if ((args as any).webUi) {
     port,
     log: logger,
     getConfigMeta: () => ({configPath: toolConfigPath, updatedAt: toolToggles.updatedAt}),
+    getGuidance: () => ({configPath: guidanceConfigPath, config: guidanceConfig}),
     getTools: (): ToolToggleView[] => {
       return Array.from(registeredTools.values()).map(({tool, handle}) => {
         // Extract parameters from schema
@@ -454,6 +475,10 @@ if ((args as any).webUi) {
         if (shouldEnable && !entry.handle.enabled) {entry.handle.enable();}
         if (!shouldEnable && entry.handle.enabled) {entry.handle.disable();}
       }
+    },
+    setGuidance: async (input: GuidanceConfigInput) => {
+      guidanceConfig = await saveGuidanceConfig(guidanceConfigPath, input);
+      return guidanceConfig;
     },
   });
 }

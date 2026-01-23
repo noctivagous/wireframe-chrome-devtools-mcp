@@ -10,6 +10,7 @@ import {URL} from 'node:url';
 import {promisify} from 'node:util';
 
 import {htmlPage} from './web-ui-template.js';
+import type {GuidanceConfigInput, GuidanceConfigV1} from './guidance-config.js';
 
 const execAsync = promisify(exec);
 
@@ -34,7 +35,9 @@ export interface WebUiDeps {
   port: number;
   getTools(): ToolToggleView[];
   getConfigMeta(): {configPath: string; updatedAt: string};
+  getGuidance(): {configPath: string; config: GuidanceConfigV1};
   setDisabledTools(disabledTools: string[]): Promise<void>;
+  setGuidance(input: GuidanceConfigInput): Promise<GuidanceConfigV1>;
   log: (...args: any[]) => void;
 }
 
@@ -170,6 +173,27 @@ export function startWebUi(deps: WebUiDeps): http.Server {
         await deps.setDisabledTools(disabledTools);
         const meta = deps.getConfigMeta();
         return sendJson(res, 200, {ok: true, updatedAt: meta.updatedAt});
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/guidance') {
+        const guidance = deps.getGuidance();
+        return sendJson(res, 200, {
+          ...guidance.config,
+          configPath: guidance.configPath,
+        });
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/guidance') {
+        try {
+          const body = await readJsonBody(req);
+          const next = await deps.setGuidance(body);
+          return sendJson(res, 200, {ok: true, updatedAt: next.updatedAt});
+        } catch (e) {
+          return sendJson(res, 400, {
+            ok: false,
+            error: String((e as Error)?.message ?? e),
+          });
+        }
       }
 
       // Simple health check.

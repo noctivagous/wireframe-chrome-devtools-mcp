@@ -61,6 +61,7 @@ export function htmlPage(): string {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 16px;
     }
 
     header h1 {
@@ -68,6 +69,39 @@ export function htmlPage(): string {
       font-size: 18px;
       font-weight: 700;
       letter-spacing: -0.025em;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .top-tabs {
+      display: inline-flex;
+      gap: 6px;
+      padding: 4px;
+      border-radius: 10px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+    }
+
+    .top-tab {
+      border: none;
+      background: transparent;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .top-tab.active {
+      background: var(--bg-primary);
+      color: var(--accent);
+      box-shadow: var(--card-shadow);
     }
 
     header .meta {
@@ -97,6 +131,19 @@ export function htmlPage(): string {
     main {
       flex: 1;
       display: flex;
+      overflow: hidden;
+    }
+
+    #tools-view {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    #guidance-view {
+      flex: 1;
+      display: none;
+      flex-direction: column;
       overflow: hidden;
     }
 
@@ -586,15 +633,104 @@ export function htmlPage(): string {
     #status-toast.visible {
       transform: translateY(0);
     }
+
+    .guidance-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-primary);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .guidance-warning {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fcd34d;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .guidance-warning {
+        background: #3f2d13;
+        color: #fcd34d;
+        border-color: #d97706;
+      }
+    }
+
+    .guidance-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .guidance-body {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      align-content: start;
+      background: var(--bg-secondary);
+    }
+
+    .guidance-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 320px;
+    }
+
+    .guidance-card h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .guidance-card p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .guidance-card textarea {
+      flex: 1;
+      resize: vertical;
+      min-height: 220px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>Tool toggles</h1>
-    <div class="meta">
+    <div class="header-left">
+      <h1 id="pageTitle">Tool toggles</h1>
+      <div class="top-tabs">
+        <button class="top-tab active" data-view="tools">Tools</button>
+        <button class="top-tab" data-view="guidance">Guidance</button>
+      </div>
+    </div>
+    <div class="meta" id="toolsMeta">
       <div class="meta-item">
         <span class="meta-label">Enabled</span>
-        <span class="meta-value" id="enabledCount">0 of 0</span>
+        <span class="meta-value" id="enabledCount">0</span>
       </div>
       <div class="meta-item">
         <span class="meta-label">Config</span>
@@ -605,31 +741,73 @@ export function htmlPage(): string {
         <span class="meta-value" id="updatedAt">...</span>
       </div>
     </div>
-  </header>
-  <main>
-    <div id="sidebar">
-      <div class="sidebar-tabs">
-        <div class="sidebar-tab active" data-tab="workflows">Workflow Groups</div>
-        <div class="sidebar-tab" data-tab="tools">Tools</div>
+    <div class="meta" id="guidanceMeta" style="display:none;">
+      <div class="meta-item">
+        <span class="meta-label">Config</span>
+        <span class="meta-value" id="guidanceConfigPath">...</span>
       </div>
-      <div class="sidebar-content">
-        <div id="workflow-groups" class="sidebar-pane active"></div>
-        <div id="tool-categories" class="sidebar-pane"></div>
+      <div class="meta-item">
+        <span class="meta-label">Version</span>
+        <span class="meta-value" id="guidanceVersion">v1</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Last Updated</span>
+        <span class="meta-value" id="guidanceUpdatedAt">...</span>
       </div>
     </div>
-    <div id="content-area">
-      <div class="controls-bar">
-        <div class="search-wrapper">
-          <input id="q" type="search" placeholder="Filter tools (name/category/description)..." />
+  </header>
+  <main>
+    <div id="tools-view">
+      <div id="sidebar">
+        <div class="sidebar-tabs">
+          <div class="sidebar-tab active" data-tab="workflows">Workflow Groups</div>
+          <div class="sidebar-tab" data-tab="tools">Tools</div>
         </div>
-        <div class="btn-group">
-          <button id="enableAll">Enable all</button>
-          <button id="disableAll">Disable all</button>
-          <button class="primary" id="save">Save Changes</button>
-          <button id="reload">Reload</button>
+        <div class="sidebar-content">
+          <div id="workflow-groups" class="sidebar-pane active"></div>
+          <div id="tool-categories" class="sidebar-pane"></div>
         </div>
       </div>
-      <div id="tools-grid"></div>
+      <div id="content-area">
+        <div class="controls-bar">
+          <div class="search-wrapper">
+            <input id="q" type="search" placeholder="Filter tools (name/category/description)..." />
+          </div>
+          <div class="btn-group">
+            <button id="enableAll">Enable all</button>
+            <button id="disableAll">Disable all</button>
+            <button class="primary" id="save">Save Changes</button>
+            <button id="reload">Reload</button>
+          </div>
+        </div>
+        <div id="tools-grid"></div>
+      </div>
+    </div>
+    <div id="guidance-view">
+      <div class="guidance-header">
+        <div class="guidance-warning">Do not store secrets or tokens here. This file may be tracked in git.</div>
+        <div class="guidance-actions">
+          <button id="guidanceReload">Reload</button>
+          <button class="primary" id="guidanceSave">Save Guidance</button>
+        </div>
+      </div>
+      <div class="guidance-body">
+        <div class="guidance-card">
+          <h2>Design Guide</h2>
+          <p>Design system rules, UI patterns, spacing, typography.</p>
+          <textarea id="designGuide" placeholder="Markdown guidance for design decisions..."></textarea>
+        </div>
+        <div class="guidance-card">
+          <h2>Architecture Guide</h2>
+          <p>System boundaries, data flow, decisions, ADRs.</p>
+          <textarea id="architectureGuide" placeholder="Markdown guidance for architecture decisions..."></textarea>
+        </div>
+        <div class="guidance-card">
+          <h2>Engineering Guide</h2>
+          <p>Tooling, code style, testing, repo conventions.</p>
+          <textarea id="engineeringGuide" placeholder="Markdown guidance for engineering decisions..."></textarea>
+        </div>
+      </div>
     </div>
   </main>
   <div id="status-toast"></div>
@@ -641,6 +819,7 @@ export function htmlPage(): string {
     let selectedCategory = 'all';
     let currentView = 'workflows'; // 'workflows' or 'tools'
     let selectedWorkflow = 'all';
+    let guidanceLoaded = false;
 
     function setStatus(msg) {
       const toast = $('status-toast');
@@ -651,7 +830,7 @@ export function htmlPage(): string {
       }
     }
 
-    async function load() {
+    async function loadTools() {
       const r = await fetch('/api/tools');
       const j = await r.json();
       tools = j.tools || [];
@@ -659,6 +838,23 @@ export function htmlPage(): string {
       $('configPath').title = j.configPath;
       $('updatedAt').textContent = new Date(j.updatedAt).toLocaleTimeString();
       render();
+    }
+
+    async function loadGuidance() {
+      const r = await fetch('/api/guidance');
+      if (!r.ok) {
+        setStatus('Failed to load guidance.');
+        return;
+      }
+      const j = await r.json();
+      $('guidanceConfigPath').textContent = (j.configPath || '').split('/').pop() || '';
+      $('guidanceConfigPath').title = j.configPath || '';
+      $('guidanceUpdatedAt').textContent = j.updatedAt ? new Date(j.updatedAt).toLocaleTimeString() : '...';
+      $('guidanceVersion').textContent = 'v' + (j.version || 1);
+      $('designGuide').value = j.guides?.design?.content ?? '';
+      $('architectureGuide').value = j.guides?.architecture?.content ?? '';
+      $('engineeringGuide').value = j.guides?.engineering?.content ?? '';
+      guidanceLoaded = true;
     }
 
     function render() {
@@ -678,7 +874,7 @@ export function htmlPage(): string {
 
       const totalTools = tools.length;
       const enabledTools = tools.filter(t => t.enabled).length;
-      $('enabledCount').textContent = enabledTools + ' of ' + totalTools;
+      $('enabledCount').textContent = enabledTools.toString();
 
       let filtered = [];
       let allowedCategories = [];
@@ -954,7 +1150,7 @@ export function htmlPage(): string {
     });
 
     $('q').oninput = render;
-    $('reload').onclick = load;
+    $('reload').onclick = loadTools;
     $('enableAll').onclick = () => { tools.forEach(t => t.enabled = true); render(); };
     $('disableAll').onclick = () => { tools.forEach(t => t.enabled = false); render(); };
 
@@ -975,7 +1171,58 @@ export function htmlPage(): string {
       }
     };
 
-    load();
+    $('guidanceReload').onclick = () => {
+      setStatus('Reloading guidance...');
+      loadGuidance();
+    };
+
+    $('guidanceSave').onclick = async () => {
+      setStatus('Saving guidance...');
+      const payload = {
+        guides: {
+          design: {title: 'Design Guide', format: 'markdown', content: $('designGuide').value || ''},
+          architecture: {title: 'Architecture Guide', format: 'markdown', content: $('architectureGuide').value || ''},
+          engineering: {title: 'Engineering Guide', format: 'markdown', content: $('engineeringGuide').value || ''},
+        },
+      };
+      const r = await fetch('/api/guidance', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        $('guidanceUpdatedAt').textContent = new Date(j.updatedAt || Date.now()).toLocaleTimeString();
+        setStatus('Guidance saved successfully!');
+      } else {
+        const j = await r.json().catch(() => ({}));
+        setStatus(j.error || 'Failed to save guidance.');
+      }
+    };
+
+    document.querySelectorAll('.top-tab').forEach(tab => {
+      tab.onclick = (e) => {
+        const target = e.target;
+        const view = target.getAttribute('data-view');
+        if (!view) {
+          return;
+        }
+        document.querySelectorAll('.top-tab').forEach(t => t.classList.remove('active'));
+        target.classList.add('active');
+        const showTools = view === 'tools';
+        $('tools-view').style.display = showTools ? 'flex' : 'none';
+        $('guidance-view').style.display = showTools ? 'none' : 'flex';
+        $('toolsMeta').style.display = showTools ? 'flex' : 'none';
+        $('guidanceMeta').style.display = showTools ? 'none' : 'flex';
+        $('pageTitle').textContent = showTools ? 'Tool toggles' : 'Guidance';
+        if (!showTools && !guidanceLoaded) {
+          loadGuidance();
+        }
+      };
+    });
+
+    loadTools();
+    loadGuidance();
   </script>
 </body>
 </html>`;

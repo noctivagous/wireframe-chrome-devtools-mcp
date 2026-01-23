@@ -26,9 +26,10 @@ export const WORKFLOW_GROUPS: WorkflowGroup[] = [
     description: 'Essential tools for live prototyping and committing changes',
     toolCategories: [],
     tools: [
-      'begin_live_editing_session',
+      // A single consolidated session tool to keep tool count low.
+      // Use begin/edit/export params to start, export prototype state, and export/commit/clear a session.
+      'live_editing_session',
       'update_from_user_changes',
-      'begin_edit_session',
       'batch_ops',
       'insert_css',
       'insert_js',
@@ -45,7 +46,6 @@ export const WORKFLOW_GROUPS: WorkflowGroup[] = [
       'new_page',
       'navigate_page',
       'get_tab_id',
-      'commit_edit_session_to_files'
     ]
   },
   {

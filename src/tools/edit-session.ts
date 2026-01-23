@@ -11,6 +11,8 @@ import type {EditSession} from '../McpContext.js';
 import {zod} from '../third_party/index.js';
 
 import {ToolCategory} from './categories.js';
+import {beginLiveEditingSession} from './live-editing.js';
+import {exportPrototypeState} from './prototype.js';
 import {defineTool} from './ToolDefinition.js';
 
 function getEditSessionOrThrow(
@@ -53,6 +55,7 @@ export const beginEditSession = defineTool({
     // Return AI instructions for live editing mode
     response.appendResponseLine('\n**AI instructions:** The chat is now in live editing mode. This mode is about editing exclusively in the browser, navigated with _page tools. Do not make any files. Do not make any file edits until the user finalizes by saying something sounding like `commit_edit_session_to_files`.  After you receive this, affirm it to the user in the chat that you won\'t.\n');
     response.appendResponseLine('Here are the tools to use during the session that let you prototype, fix, and edit live:\n');
+    response.appendResponseLine('- **`live_editing_session`** - Minimal session lifecycle tool (begin/edit/export) that wraps: begin live editing, export prototype state, export/commit/clear edit sessions.\n');
     response.appendResponseLine('- **`batch_ops`** - Execute multiple tool operations in a single call to reduce round-trips. Supports sequential execution and returns structured results for observability. Use this to chain multiple operations efficiently.\n');
     response.appendResponseLine('- **`insert_css`** - Insert a `<style>` tag into the current page with a patch id for later rollback. Supports preview mode for testing multiple CSS values with visual wireframe feedback, responsive breakpoints, and before/after comparisons. Can optionally return wireframe results as SVG or JSON.\n');
     response.appendResponseLine('- **`insert_js`** - Insert a `<script>` tag into the current page with a patch id for later rollback. Supports preview mode for testing multiple script variants with visual wireframe feedback, responsive breakpoints, and before/after comparisons. Can optionally return wireframe results as SVG or JSON. Note: rollback removes script tags but cannot reliably undo side-effects like DOM mutations, timers, or event listeners.\n');
@@ -711,6 +714,96 @@ export const commitEditSessionToFiles = defineTool({
       ),
     );
     response.appendResponseLine('```');
+  },
+});
+
+export const liveEditingSession = defineTool({
+  name: 'live_editing_session',
+  description:
+    'Minimal session lifecycle tool for the Live Editing Minimal workflow.\n\n' +
+    'Use exactly one of: `begin`, `edit`, or `export`.\n\n' +
+    '- `begin`: start a live editing session (wraps `begin_live_editing_session`).\n' +
+    '- `edit`: session-adjacent utilities (currently wraps `export_prototype_state`).\n' +
+    '- `export`: export/commit/clear session data (wraps `export_edit_session`, `commit_edit_session_to_files`, `clear_edit_session`).',
+  annotations: {
+    category: ToolCategory.EDIT_SESSION,
+    readOnlyHint: false,
+  },
+  schema: {
+    begin: zod
+      .object(beginLiveEditingSession.schema as Record<string, any>)
+      .optional()
+      .describe(
+        'Begin a live editing session (opens a URL, optionally injects overlay, optionally creates an edit session).',
+      ),
+    edit: zod
+      .discriminatedUnion('action', [
+        zod.object({
+          action: zod.literal('export_prototype_state'),
+          ...(exportPrototypeState.schema as Record<string, any>),
+        }),
+      ])
+      .optional()
+      .describe(
+        'Session-adjacent operations during iteration (e.g. export prototype state from the browser).',
+      ),
+    export: zod
+      .discriminatedUnion('action', [
+        zod.object({
+          action: zod.literal('export_edit_session'),
+          ...(exportEditSession.schema as Record<string, any>),
+        }),
+        zod.object({
+          action: zod.literal('commit_edit_session_to_files'),
+          ...(commitEditSessionToFiles.schema as Record<string, any>),
+        }),
+        zod.object({
+          action: zod.literal('clear_edit_session'),
+          ...(clearEditSession.schema as Record<string, any>),
+        }),
+      ])
+      .optional()
+      .describe('Export/commit/clear session state. This is the explicit write/export step.'),
+  },
+  handler: async (request, response, context) => {
+    const begin = (request.params as any).begin;
+    const edit = (request.params as any).edit;
+    const exportOp = (request.params as any).export;
+    const provided = [begin, edit, exportOp].filter(Boolean).length;
+    if (provided !== 1) {
+      throw new Error('Provide exactly one of: begin, edit, export.');
+    }
+
+    if (begin) {
+      await beginLiveEditingSession.handler({params: begin as any}, response, context);
+      return;
+    }
+
+    if (edit) {
+      const {action, ...rest} = edit as Record<string, unknown>;
+      if (action === 'export_prototype_state') {
+        await exportPrototypeState.handler({params: rest as any}, response, context);
+        return;
+      }
+      throw new Error(`Unsupported edit action: ${String(action)}`);
+    }
+
+    if (exportOp) {
+      const {action, ...rest} = exportOp as Record<string, unknown>;
+      if (action === 'export_edit_session') {
+        await exportEditSession.handler({params: rest as any}, response, context);
+        return;
+      }
+      if (action === 'commit_edit_session_to_files') {
+        await commitEditSessionToFiles.handler({params: rest as any}, response, context);
+        return;
+      }
+      if (action === 'clear_edit_session') {
+        await clearEditSession.handler({params: rest as any}, response, context);
+        return;
+      }
+      throw new Error(`Unsupported export action: ${String(action)}`);
+    }
   },
 });
 

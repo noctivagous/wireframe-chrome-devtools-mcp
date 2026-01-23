@@ -1,0 +1,24 @@
+---
+description: MCP server configuration and setup options
+---
+
+# Configuration & Setup
+
+## MCP Server Configuration
+
+The server supports many CLI options:
+
+- `--headless` - Run without UI
+- `--browser-url` - Connect to existing Chrome instance
+- `--web-ui` - Enable tool toggles web UI (default: true, port 7332)
+- `--tool-config` - Path to tool enable/disable JSON
+- `--channel` - Chrome channel (stable, canary, beta, dev)
+- `--user-data-dir` - Chrome profile directory
+- `--isolated` - Use temporary profile (cleaned up after)
+
+## Tool Management Web UI
+
+- Automatically starts at `http://localhost:7332`
+- Manage which tools are enabled/disabled
+- Settings persisted to `.chrome-devtools-mcp-tools.json`
+- Changes communicated via `tools/list_changed` notification (no restart needed)

@@ -1,0 +1,24 @@
+---
+description: Development guidelines and best practices
+globs: ["src/**/*", "tests/**/*"]
+---
+
+# Development Guidelines
+
+## Live Editing
+Use `begin_edit_session` for browser iteration. Set `recordToSession: true` to track changes. Preview with `preview_commit_plan` before applying. Only write files when explicitly requested.
+
+## Wireframe Tools
+Use `svg_snapshot` (visual) and `wireframe_snapshot` (structural). Prefer these over image processing.
+
+## Tool Development
+Tools in `src/tools/`. Follow existing patterns. Enable/disable via web UI. Dependencies in `tool-dependencies.ts`.
+
+## Testing
+Tests mirror `src/` structure. Use `tests/setup.ts`. Snapshot tests use `.snapshot` files.
+
+## Important Notes
+- Edit sessions visible by default (use `--headless=true` for headless)
+- No repo files modified unless using commit/apply tools
+- Tool toggles via web UI at `http://localhost:7332`
+- Can connect to existing Chrome or launch new instance

@@ -52,6 +52,15 @@ Together, these tools enable a workflow where the AI can **see** layout structur
 "begin live editing session" (shorthand: "ble.")
 ```
 
+**Live editing minimal (low tool count):**
+Use a single session tool for begin/edit/export:
+```
+"live_editing_session" with begin: { url: "https://example.com" }
+... iterate with insert_css / manipulate_dom / insert_js ...
+"update_from_user_changes"
+"live_editing_session" with export: { action: "commit_edit_session_to_files", rootDir: "...", dryRun: true }
+```
+
 **Direct file edits (traditional approach):**
 Just ask the AI to fix something—it will edit files and you can reload to see changes.
 
@@ -208,6 +217,7 @@ Much safer than blind commits!
 ## Tools Overview
 
 ### Edit Session Tools
+- `live_editing_session` - **Minimal** session lifecycle wrapper (begin/edit/export) that covers starting live editing, exporting prototype state, and exporting/committing/clearing edit sessions
 - `begin_edit_session` - Start recording changes
 - `preview_commit_plan` - See what will be written
 - `apply_commit_plan` - Write changes to files

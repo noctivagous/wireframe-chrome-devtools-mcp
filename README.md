@@ -40,6 +40,37 @@ This system is designed with many classes of tools that can be manually turned o
 
 You can disable the web UI by running the server with `--no-web-ui`, but by default it starts automatically to give you full control over which tools are available to your AI assistant.
 
+## Live Editing Workflow (Experimental)
+
+Use the live-editing tools to annotate and iterate inside the browser before committing changes to files.
+
+- **Start (minimal)**: `live_editing_session` with `begin` opens a URL, injects the overlay, and returns a structured payload.
+- **Start (full toolset)**: `begin_live_editing_session` does the same, but is intended for the non-minimal workflow groups.
+- **Annotate**: right-click to enter picker mode, add notes/move links, and use the notes panel for page-wide notes.
+- **Update**: when the user says “update from my changes”, call `update_from_user_changes`.
+
+### Live Editing Response Contract
+
+Live editing tools return a structured JSON payload:
+
+```json
+{
+  "kind": "live_editing_session|live_editing_update|live_editing_snapshot",
+  "version": 1,
+  "data": {},
+  "artifacts": [],
+  "instructions": {},
+  "next_tool_calls": [],
+  "batch_ops_plan": {}
+}
+```
+
+Notes:
+
+- **`artifacts`** contain large payloads (snapshots, guidance, SVG) to avoid context bloat.
+- **`batch_ops_plan`** is optional and may include suggested operations (e.g., move links, layout hints).
+- `update_from_user_changes` clears annotations and page notes after returning them.
+
 
 
 
@@ -73,12 +104,13 @@ This is aimed at reducing the friction of “edit files → reload → re-check 
 The **default expectation** for this branch is:
 
 - **Visible by default**: if you start an edit session and use preview tools, you should see changes applied live in Chromium (unless you explicitly enable headless mode).
-- **No repo/source edits unless you say so**: `begin_edit_session` + `recordToSession` tools **do not modify repo files**. They only:
+- **No repo/source edits unless you say so**: `live_editing_session` (begin/edit) and `begin_edit_session` + `recordToSession` tools **do not modify repo files**. They only:
   - apply temporary changes in the browser, and/or
   - record what happened into an in-memory edit session, and/or
 - write optional artifacts (snapshots/wireframes/screenshots) to temp/user paths.
 - **Only explicit tools write repo/source files**:
   - `apply_commit_plan` / `commit_edit_session_to_files` (write to specified target paths)
+  - `live_editing_session` with `export.action="commit_edit_session_to_files"` (write to specified target paths)
   - `apply_unified_diff` (patches files)
 
 If you want the agent to keep iterating in-browser, say: **“keep it live; don’t write files yet.”**

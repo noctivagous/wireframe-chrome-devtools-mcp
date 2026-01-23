@@ -1,0 +1,26 @@
+---
+description: Workflow approaches and edit session patterns
+---
+
+# Workflow Approaches
+
+## Two Approaches
+
+1. **Live Editing** (recommended): `begin_edit_session` → changes with `recordToSession: true` → preview/commit. Shorthand: "ble."
+2. **Traditional**: Edit files directly, reload browser.
+
+## Edit Session Contract
+
+**Default**: Edit sessions are live-in-browser and do NOT write repo files unless explicitly committed.
+
+**Key Principle**: Changes happen in browser first. Files only written when explicitly requested.
+
+**Tools**: `begin_edit_session`, `preview_commit_plan`, `apply_commit_plan`, `commit_edit_session_to_files`, `export_edit_session`
+
+## Common Workflows
+
+**Prototype**: `begin_edit_session` → `manipulate_dom`/`insert_css`/`insert_js` → `preview_commit_plan` → `apply_commit_plan`
+
+**Debug**: Load → `begin_edit_session` → `svg_snapshot`/`wireframe_snapshot` → fix → commit
+
+**A/B test**: `insert_css_preview` → compare wireframes → keep best, rollback

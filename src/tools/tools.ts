@@ -11,6 +11,7 @@ import * as diffTools from './diff.js';
 import * as editSessionTools from './edit-session.js';
 import * as emulationTools from './emulation.js';
 import * as extensionTools from './extensions.js';
+import * as guidanceTools from './guidance.js';
 import * as inputTools from './input.js';
 import * as liveEditingTools from './live-editing.js';
 import * as mutationTools from './mutation.js';
@@ -38,6 +39,7 @@ const tools = [
   ...Object.values(emulationTools),
   ...Object.values(editSessionTools),
   ...Object.values(extensionTools),
+  ...Object.values(guidanceTools),
   ...Object.values(inputTools),
   ...Object.values(liveEditingTools),
   ...Object.values(mutationTools),
