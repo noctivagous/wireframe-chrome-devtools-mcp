@@ -348,25 +348,61 @@ export function htmlPage(): string {
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex;
       align-items: center;
       gap: 6px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+      position: relative;
+      overflow: hidden;
+    }
+
+    button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), transparent);
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
     }
 
     button:hover {
       background: var(--bg-secondary);
-      border-color: var(--text-secondary);
+      border-color: rgba(0, 0, 0, 0.15);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    button:hover::before {
+      opacity: 1;
+    }
+
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
 
     button.primary {
-      background: var(--accent);
+      background: linear-gradient(to bottom, #3b82f6, var(--accent));
       color: white;
       border-color: var(--accent);
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3), 0 1px 2px rgba(37, 99, 235, 0.2);
     }
 
     button.primary:hover {
-      opacity: 0.9;
+      background: linear-gradient(to bottom, var(--accent), #1d4ed8);
+      box-shadow: 0 4px 8px rgba(37, 99, 235, 0.4), 0 2px 4px rgba(37, 99, 235, 0.3);
+      transform: translateY(-1px);
+      opacity: 1;
+    }
+
+    button.primary:active {
+      background: linear-gradient(to bottom, #1d4ed8, #1e40af);
+      box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
     }
 
     #tools-grid {
@@ -715,6 +751,349 @@ export function htmlPage(): string {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       background: var(--bg-secondary);
       color: var(--text-primary);
+    }
+
+    /* Workflow-first reorganization styles */
+    #tools-view {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .workflow-selection-view {
+      flex: 1;
+      padding: 32px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .workflow-selection-view.hidden {
+      display: none;
+    }
+
+    .workflow-selection-header {
+      margin-bottom: 24px;
+    }
+
+    .workflow-selection-header h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: var(--text-primary);
+    }
+
+    .workflow-selection-header p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .workflows-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+      margin-top: 16px;
+    }
+
+    .workflow-card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: var(--card-shadow);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+      min-height: 140px;
+    }
+
+    .workflow-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transition: transform 0.2s;
+    }
+
+    .workflow-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.15);
+      border-color: var(--accent);
+    }
+
+    .workflow-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    .workflow-card:active {
+      transform: translateY(-2px);
+    }
+
+    .workflow-card.selected {
+      border-color: var(--accent);
+      background: linear-gradient(to bottom, rgba(37, 99, 235, 0.05), var(--card-bg));
+    }
+
+    .workflow-card.selected::before {
+      transform: scaleX(1);
+    }
+
+    .workflow-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .workflow-card-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0;
+      flex: 1;
+    }
+
+    .workflow-card-count {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      background: rgba(37, 99, 235, 0.1);
+      padding: 4px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+
+    .workflow-card-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin: 0;
+      flex: 1;
+    }
+
+    .workflow-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .workflow-card-action {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .workflow-card-action::after {
+      content: '→';
+      transition: transform 0.2s;
+    }
+
+    .workflow-card:hover .workflow-card-action::after {
+      transform: translateX(4px);
+    }
+
+    /* Hide sidebar by default, show only when needed */
+    #sidebar {
+      display: none;
+    }
+
+    #sidebar.visible {
+      display: flex;
+    }
+
+    /* Tool selection view */
+    .tool-selection-view {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .tool-selection-view.hidden {
+      display: none;
+    }
+
+    .workflow-context-bar {
+      padding: 16px 24px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      z-index: 5;
+      position: relative;
+    }
+
+    .workflow-context-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .workflow-context-info h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--text-primary);
+    }
+
+    .workflow-context-info .workflow-badge {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      background: rgba(37, 99, 235, 0.1);
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+
+    .back-to-workflows {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .back-to-workflows:hover {
+      background: var(--bg-secondary);
+      border-color: var(--accent);
+    }
+
+    .back-to-workflows::before {
+      content: '←';
+    }
+
+    /* Add tools section */
+    .add-tools-section {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-primary);
+    }
+
+    .add-tools-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+    }
+
+    .add-tools-toggle:hover {
+      background: var(--border);
+      border-color: var(--accent);
+    }
+
+    .add-tools-panel {
+      margin-top: 12px;
+      padding: 16px;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: none;
+    }
+
+    .add-tools-panel.visible {
+      display: block;
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .add-tools-panel h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: var(--text-primary);
+    }
+
+    .other-workflows-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .other-workflow-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: var(--bg-primary);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .other-workflow-item:hover {
+      border-color: var(--accent);
+      background: var(--bg-secondary);
+    }
+
+    .other-workflow-item-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .other-workflow-item-count {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Update content area to work with new structure */
+    #content-area.workflow-mode {
+      display: none;
+    }
+
+    #content-area.tool-mode {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
     }
   </style>
 </head>
@@ -1220,6 +1599,271 @@ export function htmlPage(): string {
         }
       };
     });
+
+    // Workflow-first reorganization JavaScript
+    (function() {
+      'use strict';
+      
+      // Get workflow data from existing DOM
+      function getWorkflowData() {
+        const workflowItems = document.querySelectorAll('#workflow-groups .workflow-radio-item');
+        const workflows = [];
+        
+        workflowItems.forEach(item => {
+          const radio = item.querySelector('input[type="radio"]');
+          const label = item.querySelector('label');
+          const count = item.querySelector('.count');
+          const title = item.getAttribute('title') || '';
+          
+          if (radio && label) {
+            workflows.push({
+              id: radio.id.replace('workflow-', ''),
+              value: radio.value,
+              name: label.textContent.trim(),
+              count: count ? count.textContent.trim() : '',
+              description: title,
+              enabled: radio.checked
+            });
+          }
+        });
+        
+        return workflows;
+      }
+      
+      // Create workflow selection view
+      function createWorkflowSelectionView(workflows) {
+        const container = document.createElement('div');
+        container.className = 'workflow-selection-view';
+        container.id = 'workflow-selection-view';
+        
+        const header = document.createElement('div');
+        header.className = 'workflow-selection-header';
+        header.innerHTML = \`
+          <h2>Choose a Workflow</h2>
+          <p>Start by selecting a workflow that matches your task. You can add tools from other workflows later.</p>
+        \`;
+        
+        const grid = document.createElement('div');
+        grid.className = 'workflows-grid';
+        
+        workflows.forEach(workflow => {
+          if (workflow.value === 'all') return; // Skip "All Workflows"
+          
+          const card = document.createElement('div');
+          card.className = 'workflow-card';
+          card.dataset.workflowId = workflow.id;
+          card.dataset.workflowValue = workflow.value;
+          
+          card.innerHTML = \`
+            <div class="workflow-card-header">
+              <h3 class="workflow-card-title">\${workflow.name}</h3>
+              <span class="workflow-card-count">\${workflow.count}</span>
+            </div>
+            \${workflow.description ? \`<p class="workflow-card-desc">\${workflow.description}</p>\` : ''}
+            <div class="workflow-card-footer">
+              <span class="workflow-card-action">Select workflow</span>
+            </div>
+          \`;
+          
+          card.addEventListener('click', () => {
+            selectWorkflow(workflow.value, workflow.name);
+          });
+          
+          grid.appendChild(card);
+        });
+        
+        container.appendChild(header);
+        container.appendChild(grid);
+        
+        return container;
+      }
+      
+      // Create tool selection view
+      function createToolSelectionView(workflowValue, workflowName) {
+        const container = document.createElement('div');
+        container.className = 'tool-selection-view';
+        container.id = 'tool-selection-view';
+        
+        // Context bar
+        const contextBar = document.createElement('div');
+        contextBar.className = 'workflow-context-bar';
+        contextBar.innerHTML = \`
+          <div class="workflow-context-info">
+            <button class="back-to-workflows">Back</button>
+            <h3>\${workflowName}</h3>
+            <span class="workflow-badge">\${workflowValue}</span>
+          </div>
+        \`;
+        
+        contextBar.querySelector('.back-to-workflows').addEventListener('click', () => {
+          showWorkflowSelection();
+        });
+        
+        // Add tools section
+        const addToolsSection = document.createElement('div');
+        addToolsSection.className = 'add-tools-section';
+        addToolsSection.innerHTML = \`
+          <button class="add-tools-toggle">
+            <span>+ Add tools from other workflows</span>
+          </button>
+          <div class="add-tools-panel">
+            <h4>Other Workflows</h4>
+            <div class="other-workflows-list" id="other-workflows-list"></div>
+          </div>
+        \`;
+        
+        const toggle = addToolsSection.querySelector('.add-tools-toggle');
+        const panel = addToolsSection.querySelector('.add-tools-panel');
+        
+        toggle.addEventListener('click', () => {
+          panel.classList.toggle('visible');
+        });
+        
+        // Content area (reuse existing)
+        const contentArea = document.getElementById('content-area');
+        if (contentArea) {
+          contentArea.className = 'content-area tool-mode';
+        }
+        
+        container.appendChild(contextBar);
+        container.appendChild(addToolsSection);
+        if (contentArea) {
+          container.appendChild(contentArea);
+        }
+        
+        return container;
+      }
+      
+      // Select workflow and show tools
+      function selectWorkflow(workflowValue, workflowName) {
+        // Hide workflow selection
+        const workflowView = document.getElementById('workflow-selection-view');
+        if (workflowView) {
+          workflowView.classList.add('hidden');
+        }
+        
+        // Show tool selection
+        let toolView = document.getElementById('tool-selection-view');
+        if (!toolView) {
+          toolView = createToolSelectionView(workflowValue, workflowName);
+          const toolsView = document.getElementById('tools-view');
+          if (toolsView) {
+            toolsView.appendChild(toolView);
+          }
+        } else {
+          toolView.classList.remove('hidden');
+          // Update context
+          const contextInfo = toolView.querySelector('.workflow-context-info h3');
+          const badge = toolView.querySelector('.workflow-badge');
+          if (contextInfo) contextInfo.textContent = workflowName;
+          if (badge) badge.textContent = workflowValue;
+        }
+        
+        // Trigger workflow selection in existing code
+        const radio = document.querySelector(\`input[type="radio"][value="\${workflowValue}"]\`);
+        if (radio) {
+          radio.click();
+        }
+        
+        // Populate other workflows list
+        populateOtherWorkflows(workflowValue);
+      }
+      
+      // Show workflow selection
+      function showWorkflowSelection() {
+        const workflowView = document.getElementById('workflow-selection-view');
+        const toolView = document.getElementById('tool-selection-view');
+        
+        if (workflowView) {
+          workflowView.classList.remove('hidden');
+        }
+        if (toolView) {
+          toolView.classList.add('hidden');
+        }
+        
+        // Reset to "all" workflow
+        const allRadio = document.querySelector('input[type="radio"][value="all"]');
+        if (allRadio) {
+          allRadio.click();
+        }
+      }
+      
+      // Populate other workflows list
+      function populateOtherWorkflows(currentWorkflowValue) {
+        const list = document.getElementById('other-workflows-list');
+        if (!list) return;
+        
+        list.innerHTML = '';
+        const workflows = getWorkflowData();
+        
+        workflows.forEach(workflow => {
+          if (workflow.value === 'all' || workflow.value === currentWorkflowValue) return;
+          
+          const item = document.createElement('div');
+          item.className = 'other-workflow-item';
+          item.innerHTML = \`
+            <span class="other-workflow-item-name">\${workflow.name}</span>
+            <span class="other-workflow-item-count">\${workflow.count}</span>
+          \`;
+          
+          item.addEventListener('click', () => {
+            // Add tools from this workflow
+            const radio = document.querySelector(\`input[type="radio"][value="\${workflow.value}"]\`);
+            if (radio) {
+              radio.click();
+              // Then switch back to current workflow
+              setTimeout(() => {
+                const currentRadio = document.querySelector(\`input[type="radio"][value="\${currentWorkflowValue}"]\`);
+                if (currentRadio) {
+                  currentRadio.click();
+                }
+              }, 100);
+            }
+          });
+          
+          list.appendChild(item);
+        });
+      }
+      
+      // Initialize workflow-first UI
+      function initWorkflowFirstUI() {
+        const workflows = getWorkflowData();
+        const toolsView = document.getElementById('tools-view');
+        
+        if (!toolsView) return;
+        
+        // Check if already initialized
+        if (document.getElementById('workflow-selection-view')) return;
+        
+        // Hide sidebar
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) {
+          sidebar.classList.remove('visible');
+        }
+        
+        // Hide content area initially
+        const contentArea = document.getElementById('content-area');
+        if (contentArea) {
+          contentArea.classList.add('workflow-mode');
+        }
+        
+        // Create and show workflow selection
+        const workflowView = createWorkflowSelectionView(workflows);
+        toolsView.insertBefore(workflowView, toolsView.firstChild);
+      }
+      
+      // Hook into render to initialize after first render
+      const originalRender = render;
+      render = function() {
+        originalRender();
+        // Initialize workflow-first UI after first render
+        if (!document.getElementById('workflow-selection-view')) {
+          setTimeout(() => {
+            initWorkflowFirstUI();
+          }, 50);
+        }
+      };
+    })();
 
     loadTools();
     loadGuidance();
