@@ -17,6 +17,7 @@ so returned values have to JSON-serializable.`,
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
+    isOriginal: true,
   },
   schema: {
     function: zod.string().describe(

@@ -36,6 +36,7 @@ Supports filtering by patterns and framework-specific inspection for React, Vue,
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: true,
+    isOriginal: true,
   },
   schema: {
     targets: zod

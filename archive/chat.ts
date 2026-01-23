@@ -16,7 +16,6 @@ import {
 import {
   beginEditSession,
   exportEditSession,
-  summarizeEditSession,
   previewCommitPlan,
   applyCommitPlan,
 } from './edit-session.js';
@@ -35,7 +34,6 @@ type ChatboxCommand =
   | {kind: 'status'}
   | {kind: 'begin_session'; label?: string}
   | {kind: 'export_session'; filePath?: string}
-  | {kind: 'summarize_session'; filePath?: string; maxSnippetLength?: number}
   | {kind: 'export_prototype_state'; outputDir?: string; baseName?: string; mode?: 'single_html' | 'split_files'; includeExternal?: boolean; includeChatbox?: boolean}
   | {kind: 'insert_css'; cssText: string; targetFilePath?: string; patchId?: string; replaceExisting?: boolean}
   | {kind: 'insert_js'; jsText: string; targetFilePath?: string; patchId?: string; replaceExisting?: boolean}
@@ -128,7 +126,6 @@ function parseCommandFromMessage(text: string): ChatboxCommand | null {
     return {kind: 'insert_js', jsText: raw.slice(4)};
   }
   if (raw === '/export') {return {kind: 'export_session'};}
-  if (raw === '/summary') {return {kind: 'summarize_session'};}
   if (raw === '/plan') {return {kind: 'preview_commit_plan'};}
   if (raw === '/diff') {return {kind: 'preview_diff_from_commit_plan'};}
   if (raw === '/apply') {return {kind: 'apply_commit_plan', dryRun: true, confirm: false};}
@@ -363,20 +360,6 @@ export const chatboxStep = defineTool({
           const {lines} = await runTool(
             exportEditSession,
             {sessionId: context.getActiveEditSessionId(), filePath: cmd.filePath},
-            context,
-          );
-          await appendAssistant(page, usedPatchId, lines.join('\n'));
-          continue;
-        }
-
-        if (cmd.kind === 'summarize_session') {
-          const {lines} = await runTool(
-            summarizeEditSession,
-            {
-              sessionId: context.getActiveEditSessionId(),
-              filePath: cmd.filePath,
-              maxSnippetLength: cmd.maxSnippetLength ?? 600,
-            },
             context,
           );
           await appendAssistant(page, usedPatchId, lines.join('\n'));

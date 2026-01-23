@@ -44,6 +44,7 @@ export const listConsoleMessages = defineTool({
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: true,
+    isOriginal: true,
   },
   schema: {
     pageSize: zod
@@ -92,6 +93,7 @@ export const getConsoleMessage = defineTool({
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: true,
+    isOriginal: true,
   },
   schema: {
     msgid: zod

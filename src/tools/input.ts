@@ -23,6 +23,7 @@ export const click = defineTool({
   annotations: {
     category: ToolCategory.INPUT,
     readOnlyHint: false,
+    isOriginal: true,
   },
   schema: {
     uid: zod
@@ -88,6 +89,7 @@ export const hover = defineTool({
   annotations: {
     category: ToolCategory.INPUT,
     readOnlyHint: false,
+    isOriginal: true,
   },
   schema: {
     uid: zod
@@ -194,6 +196,7 @@ export const fill = defineTool({
   annotations: {
     category: ToolCategory.INPUT,
     readOnlyHint: false,
+    isOriginal: true,
   },
   schema: {
     uid: zod
@@ -222,6 +225,7 @@ export const drag = defineTool({
   annotations: {
     category: ToolCategory.INPUT,
     readOnlyHint: false,
+    isOriginal: true,
   },
   schema: {
     from_uid: zod.string().describe('The uid of the element to drag'),
@@ -251,6 +255,7 @@ export const fillForm = defineTool({
   annotations: {
     category: ToolCategory.INPUT,
     readOnlyHint: false,
+    isOriginal: true,
   },
   schema: {
     elements: zod
@@ -283,6 +288,7 @@ export const uploadFile = defineTool({
   annotations: {
     category: ToolCategory.INPUT,
     readOnlyHint: false,
+    isOriginal: true,
   },
   schema: {
     uid: zod
@@ -331,6 +337,7 @@ export const pressKey = defineTool({
   annotations: {
     category: ToolCategory.INPUT,
     readOnlyHint: false,
+    isOriginal: true,
   },
   schema: {
     key: zod
@@ -363,7 +370,7 @@ export const pressKey = defineTool({
 
 export const simulateEvent = defineTool({
   name: 'simulate_event',
-  description: `Simulate user interactions for testing by dispatching DOM events. Supports basic events, complex input sequences, and mouse interactions with coordinates.`,
+  description: `Simulate user interactions for testing by dispatching DOM events. Returns complete page snapshots after each interaction, providing rich accessibility information and state tracking. Supports CSS selector targeting, coordinate-based clicking, event sequences, and complex input scenarios. Essential for automated UI testing, workflow validation, and interactive feature verification.`,
   annotations: {
     category: ToolCategory.INPUT,
     readOnlyHint: false,
@@ -372,7 +379,7 @@ export const simulateEvent = defineTool({
     selector: zod
       .string()
       .optional()
-      .describe('CSS selector for the target element. Optional when using coordinates.'),
+      .describe('CSS selector for the target element. Works well for properly styled elements. Optional when using coordinates for elements with zero dimensions or complex layouts.'),
     eventType: zod
       .string()
       .describe('The type of event to simulate (e.g., "click", "input", "mousedown", "mouseup", "mousemove")'),
@@ -391,14 +398,14 @@ export const simulateEvent = defineTool({
     sequence: zod
       .array(zod.string())
       .optional()
-      .describe('Sequence of events to dispatch in order (e.g., ["focus", "input", "change", "blur"])'),
+      .describe('Sequence of events to dispatch in order for complex interactions (e.g., ["focus", "input", "change", "blur"] for form field updates, or ["mousedown", "mousemove", "mouseup"] for drag operations)'),
     coordinates: zod
       .object({
         x: zod.number().describe('X coordinate relative to the element or viewport'),
         y: zod.number().describe('Y coordinate relative to the element or viewport'),
       })
       .optional()
-      .describe('Coordinates for mouse events. If selector is provided, coordinates are relative to the element; otherwise relative to viewport.'),
+      .describe('Coordinates for mouse events when CSS selectors aren\'t available. Essential for elements with zero dimensions or complex layouts. If selector is provided, coordinates are relative to the element; otherwise relative to viewport.'),
     dragTo: zod
       .object({
         x: zod.number().describe('X coordinate to drag to'),

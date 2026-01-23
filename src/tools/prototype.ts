@@ -30,7 +30,7 @@ export const exportPrototypeState = defineTool({
   description:
     'Export the current page into prototype files (HTML/CSS/JS) for browser-first iteration.\n\n' +
     'This is intended for prototyping workflows where the browser is the source of truth: the export captures current DOM plus injected CSS/JS patches, and writes files only when explicitly requested.\n\n' +
-    '**Note:** The injected chatbox UI is excluded from the export by default.',
+    '**Note:** The injected chatbox UI (if present) is excluded from the export.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -57,11 +57,6 @@ export const exportPrototypeState = defineTool({
       .optional()
       .default(true)
       .describe('If true, keep existing external <link> and <script src> references in the exported HTML.'),
-    includeChatbox: zod
-      .boolean()
-      .optional()
-      .default(false)
-      .describe('If true, include the injected chatbox UI in the exported HTML. Default false.'),
   },
   handler: async (request, response, context) => {
     const page = context.getSelectedPage();
@@ -74,17 +69,16 @@ export const exportPrototypeState = defineTool({
     const mode = request.params.mode ?? 'single_html';
 
     const payload = await page.evaluate(
-      ({includeExternal, includeChatbox}) => {
+      ({includeExternal}) => {
         const CHATBOX_ROOT_ID = 'mcp-chatbox-root';
         const PATCH_ID_ATTR = 'data-mcp-patch-id';
         const PATCH_OWNER_ATTR = 'data-mcp-patch-owner';
         const PATCH_KIND_ATTR = 'data-mcp-patch-kind';
 
         const clone = document.documentElement.cloneNode(true) as HTMLElement;
-        if (!includeChatbox) {
-          const chat = clone.querySelector(`#${CHATBOX_ROOT_ID}`);
-          if (chat) {chat.remove();}
-        }
+        // Always exclude chatbox UI from exports (chatbox tools are archived)
+        const chat = clone.querySelector(`#${CHATBOX_ROOT_ID}`);
+        if (chat) {chat.remove();}
 
         // Strip MCP patch attributes (keep the content).
         for (const el of Array.from(clone.querySelectorAll(`[${PATCH_ID_ATTR}], [${PATCH_OWNER_ATTR}], [${PATCH_KIND_ATTR}]`))) {
@@ -131,7 +125,6 @@ export const exportPrototypeState = defineTool({
       },
       {
         includeExternal: request.params.includeExternal ?? true,
-        includeChatbox: request.params.includeChatbox ?? false,
       },
     );
 

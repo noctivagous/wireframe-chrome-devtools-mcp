@@ -42,12 +42,10 @@
   - [`clear_edit_session`](#clear_edit_session)
   - [`commit_edit_session_to_files`](#commit_edit_session_to_files)
   - [`export_edit_session`](#export_edit_session)
-  - [`export_edit_session_package`](#export_edit_session_package)
   - [`get_edit_session`](#get_edit_session)
   - [`list_edit_sessions`](#list_edit_sessions)
   - [`preview_commit_plan`](#preview_commit_plan)
   - [`set_active_edit_session`](#set_active_edit_session)
-  - [`summarize_edit_session`](#summarize_edit_session)
 - **[Patch](#patch)** (2 tools)
   - [`rollback_all`](#rollback_all)
   - [`rollback_patch`](#rollback_patch)
@@ -538,18 +536,6 @@ This intentionally runs as an explicit end-of-session step to avoid editor lag d
 
 ---
 
-### `export_edit_session_package`
-
-**Description:** Export an edit session as a small “package folder”: JSON session log + a Markdown summary. This is Level-1 friendly (shareable) and still makes no repo edits.
-
-**Parameters:**
-
-- **maxSnippetLength** (integer) _(optional)_: Maximum length of CSS/JS snippet previews included in the generated summary markdown (0 disables snippet previews).
-- **outputDir** (string) _(optional)_: Optional output directory to write the package into. If omitted, creates a temporary directory.
-- **sessionId** (string) _(optional)_: Optional session id. If omitted, exports the active session.
-
----
-
 ### `get_edit_session`
 
 **Description:** Get a specific edit session (or the active session if sessionId is omitted).
@@ -591,18 +577,6 @@ This is the recommended Level A workflow: preview exactly what would be written 
 **Parameters:**
 
 - **sessionId** (unknown) **(required)**: Session id to activate. Use null to clear the active session.
-
----
-
-### `summarize_edit_session`
-
-**Description:** Summarize an edit session into human-readable Markdown (optionally saving it to disk). Useful for sharing/PR prep without committing any changes.
-
-**Parameters:**
-
-- **filePath** (string) _(optional)_: Optional output path. If provided, writes the markdown summary to this file.
-- **maxSnippetLength** (integer) _(optional)_: Maximum length of CSS/JS snippet previews included per change (0 disables snippet previews).
-- **sessionId** (string) _(optional)_: Optional session id. If omitted, summarizes the active session.
 
 ---
 

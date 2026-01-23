@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import {describe, it} from 'node:test';
 
-import {injectChatbox, insertCss, insertJs} from '../../src/tools/mutation.js';
+import {insertCss, insertJs} from '../../src/tools/mutation.js';
 import {exportPrototypeState} from '../../src/tools/prototype.js';
 import {serverHooks} from '../server.js';
 import {html, withMcpContext} from '../utils.js';
@@ -16,7 +16,7 @@ import {html, withMcpContext} from '../utils.js';
 describe('prototype export', () => {
   const server = serverHooks();
 
-  it('exports a single HTML prototype without the chatbox UI but with injected patches', async () => {
+  it('exports a single HTML prototype with injected patches', async () => {
     await withMcpContext(async (response, context) => {
       const page = await context.newPage();
       await page.setContent(html`
@@ -30,26 +30,7 @@ describe('prototype export', () => {
         context,
       );
       await insertJs.handler(
-        {params: {jsText: 'document.body.setAttribute("data-js","1")', replaceExisting: false, patchId: 'p2'}},
-        response,
-        context,
-      );
-
-      // Inject chatbox (should be excluded from export).
-      await injectChatbox.handler(
-        {
-          params: {
-            action: 'inject',
-            patchId: 'chatbox-patch',
-            replaceExisting: false,
-            dock: 'right',
-            width: 380,
-            zIndex: 2147483647,
-            title: 'Live Edit Session',
-            placeholder: 'ignored',
-            startOpen: true,
-          },
-        },
+        {params: {jsText: 'document.body.setAttribute("data-js","1")', replaceExisting: false, patchId: 'p2'} as any},
         response,
         context,
       );
@@ -59,7 +40,6 @@ describe('prototype export', () => {
         {
           params: {
             mode: 'single_html',
-            includeChatbox: false,
             baseName: 'prototype',
             includeExternal: true,
           },
@@ -77,7 +57,6 @@ describe('prototype export', () => {
       assert.ok(htmlPath, 'expected files.html in output');
 
       const exported = await fs.readFile(htmlPath, 'utf8');
-      assert.ok(!exported.includes('mcp-chatbox-root'), 'export should not include chatbox root');
       assert.ok(exported.includes('.x { color: red; }'), 'export should include injected CSS');
       assert.ok(exported.includes('data-js'), 'export should include injected JS');
     });

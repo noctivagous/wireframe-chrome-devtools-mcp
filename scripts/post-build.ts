@@ -72,6 +72,7 @@ export const experiments = {
   writeFile(runtimeFile, runtimeContent);
 
   copyDevToolsDescriptionFiles();
+  copyMcpPromptsFile();
 }
 
 function copyDevToolsDescriptionFiles() {
@@ -85,6 +86,14 @@ function copyDevToolsDescriptionFiles() {
     'issue-descriptions',
   );
   fs.cpSync(sourceDir, destDir, {recursive: true});
+}
+
+function copyMcpPromptsFile() {
+  const sourceFile = path.join(process.cwd(), 'src', 'mcp-prompts.yaml');
+  const destFile = path.join(BUILD_DIR, 'src', 'mcp-prompts.yaml');
+  if (fs.existsSync(sourceFile)) {
+    fs.copyFileSync(sourceFile, destFile);
+  }
 }
 
 main();

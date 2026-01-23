@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "updatedAt": "2026-01-22T22:04:19.665Z",
+  "guides": {
+    "design": {
+      "title": "Design Guide",
+      "format": "markdown",
+      "content": "# Design Guide\n\n## Typography\n- Font Family: Inter\n- Headings: 700 weight, -0.025em tracking\n\n## Colors\n- Accent: #2563eb (Blue 600)\n- Text: #111827 (Gray 900)\n\n## Spacing\n- Unit: 4px\n- Scale: 4, 8, 12, 16, 24, 32, 40, 48, 64"
+    },
+    "architecture": {
+      "title": "Architecture Guide",
+      "format": "markdown",
+      "content": "# Architecture Guide\n\n## Core Principles\n- Client-server separation\n- Unidirectional data flow\n\n## Directory Structure\n- `src/tools/`: Individual tool definitions\n- `src/utils/`: Shared helpers"
+    },
+    "engineering": {
+      "title": "Engineering Guide",
+      "format": "markdown",
+      "content": "# Engineering Guide\n\n## Coding Standards\n- Use TypeScript for all new code\n- Prefer async/await over raw promises\n\n## Workflow\n- Iterate live in browser first\n- Use recordToSession for all DOM/CSS/JS changes"
+    }
+  },
+  "kits": {
+    "defaultKitId": "web-minimal-2026",
+    "items": [
+      {
+        "id": "web-minimal-2026",
+        "name": "Web Minimal Kit",
+        "purpose": "Fast prototyping in live browser sessions",
+        "fonts": [
+          "Inter"
+        ],
+        "icons": [
+          "Lucide"
+        ],
+        "designSystem": "Project tokens (DTCG-style)",
+        "notes": "Prefer CSS variables + small component primitives."
+      }
+    ]
+  }
+}

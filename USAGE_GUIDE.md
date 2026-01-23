@@ -25,8 +25,7 @@ The system provides specialized tools across four categories:
 **📝 Session Tracking**
 - `begin_edit_session` - Start recording changes
 - `get_edit_session` / `list_edit_sessions` - Review recorded changes
-- `export_edit_session` / `export_edit_session_package` - Export for review/sharing
-- `summarize_edit_session` - Generate human-readable summary
+- `export_edit_session` - Export for review/sharing
 
 **💾 Commit & Apply**
 - `preview_commit_plan` - Preview exactly what will be written to files
@@ -214,7 +213,6 @@ Much safer than blind commits!
 - `apply_commit_plan` - Write changes to files
 - `commit_edit_session_to_files` - Best-effort append to target files
 - `export_edit_session` - Save session as JSON
-- `summarize_edit_session` - Human-readable summary
 
 ### Live Editing Tools
 - `insert_css` / `insert_js` - Inject code with rollback

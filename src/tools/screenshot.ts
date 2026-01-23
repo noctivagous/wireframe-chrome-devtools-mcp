@@ -17,6 +17,7 @@ export const screenshot = defineTool({
     category: ToolCategory.SNAPSHOT,
     // Not read-only due to filePath param.
     readOnlyHint: false,
+    isOriginal: true,
   },
   schema: {
     format: zod

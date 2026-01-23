@@ -100,7 +100,7 @@ Headless edit sessions are especially useful for:
 - **Batch experiments**: sweep many variants (CSS values, layout tweaks, toggles) across pages/breakpoints and save wireframes/snapshots as the comparison surface.
 - **Regression checking**: apply patches, capture before/after wireframes + snapshots, rollback, repeat—without manual viewing.
 - **Performance / timing-sensitive runs**: reduce UI overhead/noise while collecting traces, wireframes, or DOM snapshots.
-- **Repro artifacts for humans**: generate a shareable package (`export_edit_session_package`) so someone else can review changes without an interactive session.
+- **Repro artifacts for humans**: generate a shareable export (`export_edit_session`) so someone else can review changes without an interactive session.
 - **Security/permissions constraints**: environments where showing a browser window is undesirable, but controlled automation and artifacts are acceptable.
 
 
@@ -153,14 +153,12 @@ Interactive workflow tools for buffering live browser edits during experimentati
 - **Example prompts:**
   - “Live-edit this page: add a small UI control panel (toggle + slider) that changes the layout live, record the final version to an edit session, then roll the chosen CSS/JS into files via `commit_edit_session_to_files`.”
 
-- Typical usage is: `begin_edit_session` → run one or more tools with `recordToSession: true` → review via `get_edit_session` → finish by exporting (`export_edit_session` / `export_edit_session_package`) and/or summarizing (`summarize_edit_session`), or generate a plan (`preview_commit_plan` → `apply_commit_plan`) or commit (`commit_edit_session_to_files`) the selected snippets, then `clear_edit_session` when done. This keeps iteration fast in Chromium and makes “write to disk” an explicit end-of-session step.
+- Typical usage is: `begin_edit_session` → run one or more tools with `recordToSession: true` → review via `get_edit_session` → finish by exporting (`export_edit_session`), or generate a plan (`preview_commit_plan` → `apply_commit_plan`) or commit (`commit_edit_session_to_files`) the selected snippets, then `clear_edit_session` when done. This keeps iteration fast in Chromium and makes "write to disk" an explicit end-of-session step.
 
 - **`begin_edit_session`**: Start a new edit session to buffer CSS/JS changes during iteration
 - **`list_edit_sessions`** / **`get_edit_session`**: View active or specific edit sessions
 - **`set_active_edit_session`**: Switch between multiple concurrent edit sessions
 - **`export_edit_session`**: Export session changes to JSON for later review
-- **`export_edit_session_package`**: Export a small “package folder” (session JSON + Markdown summary)
-- **`summarize_edit_session`**: Produce a human-readable Markdown summary (optionally saved to disk)
 - **`commit_edit_session_to_files`**: Commit recorded changes directly to local CSS/JS files
 - **`clear_edit_session`**: Clean up completed edit sessions
 
@@ -560,12 +558,10 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`clear_edit_session`](docs/tool-reference.md#clear_edit_session)
   - [`commit_edit_session_to_files`](docs/tool-reference.md#commit_edit_session_to_files)
   - [`export_edit_session`](docs/tool-reference.md#export_edit_session)
-  - [`export_edit_session_package`](docs/tool-reference.md#export_edit_session_package)
   - [`get_edit_session`](docs/tool-reference.md#get_edit_session)
   - [`list_edit_sessions`](docs/tool-reference.md#list_edit_sessions)
   - [`preview_commit_plan`](docs/tool-reference.md#preview_commit_plan)
   - [`set_active_edit_session`](docs/tool-reference.md#set_active_edit_session)
-  - [`summarize_edit_session`](docs/tool-reference.md#summarize_edit_session)
 - **Patch** (2 tools)
   - [`rollback_all`](docs/tool-reference.md#rollback_all)
   - [`rollback_patch`](docs/tool-reference.md#rollback_patch)
@@ -615,6 +611,8 @@ The server also provides **Prompts** (reusable workflow templates) aligned with 
 - **`workflow_live_edit_session`** - Template for starting a live editing session, making changes with `recordToSession: true`, and committing when ready
 - **`workflow_debug_layout_then_fix`** - Template for using wireframe tools to identify layout issues, then applying fixes
 - **`workflow_export_session_package`** - Template for exporting an edit session as a shareable package
+- **`workflow_build_prototype_from_scratch`** - Template for building complete prototypes from blank pages using live editing
+- **`workflow_chatbox_iteration`** - Template for using in-browser chatbox for rapid iteration with instant feedback
 
 Agents can discover available prompts via `prompts/list` and retrieve structured prompt templates via `prompts/get`. These prompts provide structured guidance that helps ensure consistent workflow execution.
 

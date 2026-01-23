@@ -32,6 +32,11 @@ export interface ToolDefinition<
      */
     readOnlyHint: boolean;
     conditions?: string[];
+    /**
+     * If true, this tool came from the original chrome-devtools-mcp repo.
+     * If false or undefined, it was added in this branch.
+     */
+    isOriginal?: boolean;
   };
   schema: Schema;
   handler: (

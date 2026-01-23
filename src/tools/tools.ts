@@ -6,7 +6,6 @@
 
 import {analyzeJs} from './analyze.js';
 import {batchOps} from './batch-ops.js';
-import * as chatTools from './chat.js';
 import * as consoleTools from './console.js';
 import * as diffTools from './diff.js';
 import * as editSessionTools from './edit-session.js';
@@ -28,7 +27,6 @@ import {wireframeSnapshot, svgSnapshot} from './wireframe.js';
 const tools = [
   analyzeJs,
   batchOps,
-  ...Object.values(chatTools),
   ...Object.values(consoleTools),
   ...Object.values(diffTools),
   ...Object.values(emulationTools),

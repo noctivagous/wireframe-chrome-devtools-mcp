@@ -16,6 +16,7 @@ import {ensureBrowserConnected, ensureBrowserLaunched} from './browser.js';
 import {cliOptions, parseArguments} from './cli.js';
 import {loadIssueDescriptions} from './issue-descriptions.js';
 import {logger, saveLogsToFile} from './logger.js';
+import {registerPrompts, registerResources} from './mcp-resources.js';
 import {McpContext} from './McpContext.js';
 import {McpResponse} from './McpResponse.js';
 import {Mutex} from './Mutex.js';
@@ -26,13 +27,14 @@ import {
   StdioServerTransport,
   type CallToolResult,
   SetLevelRequestSchema,
+  zod,
 } from './third_party/index.js';
 import {loadToolTogglesConfig, saveToolTogglesConfig, type ToolTogglesConfigV1} from './tool-toggles.js';
 import {setBatchOpsExecutor} from './tools/batch-ops.js';
 import {ToolCategory} from './tools/categories.js';
 import type {ToolDefinition} from './tools/ToolDefinition.js';
 import {tools} from './tools/tools.js';
-import {startWebUi, type ToolToggleView} from './web-ui.js';
+import {startWebUi, type ToolToggleView, type ParameterInfo} from './web-ui.js';
 
 // If moved update release-please config
 // x-release-please-start-version
@@ -55,11 +57,27 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 logger(`Starting Chrome DevTools MCP Server v${VERSION}`);
+
+// Load server instructions from file
+function loadServerInstructions(): string {
+  const sourceDir = path.dirname(fileURLToPath(import.meta.url));
+  const instructionsPath = path.join(sourceDir, 'server-instructions.txt');
+  try {
+    return fs.readFileSync(instructionsPath, 'utf8');
+  } catch (e) {
+    logger('Warning: Could not load server instructions file', e);
+    return '';
+  }
+}
+
+const serverInstructions = loadServerInstructions();
+
 const server = new McpServer(
   {
     name: 'chrome_devtools',
     title: 'Chrome DevTools MCP server',
     version: VERSION,
+    ...(serverInstructions ? {instructions: serverInstructions} : {}),
   },
   {capabilities: {logging: {}}},
 );
@@ -183,238 +201,9 @@ function findProjectRoot(): string {
 
 const projectRoot = findProjectRoot();
 
-/**
- * Project documentation and workflow guidance exposed as MCP Resources + Prompts.
- *
- * Why:
- * - Resources are ideal for static/semi-static docs like README/USAGE_GUIDE.
- * - Prompts provide reusable workflow templates aligned with USAGE_GUIDE.md.
- */
-const projectDocResources: Array<{
-  uri: string;
-  name: string;
-  description: string;
-  mimeType: string;
-  filePath: string;
-}> = [
-  {
-    uri: 'project://repo/README.md',
-    name: 'README',
-    description: 'Project overview, tool inventory, configuration, and concepts.',
-    mimeType: 'text/markdown',
-    filePath: path.join(projectRoot, 'README.md'),
-  },
-  {
-    uri: 'project://repo/USAGE_GUIDE.md',
-    name: 'USAGE_GUIDE',
-    description:
-      'How to use this MCP server: recommended workflows (live edit sessions, commits, debugging).',
-    mimeType: 'text/markdown',
-    filePath: path.join(projectRoot, 'USAGE_GUIDE.md'),
-  },
-  {
-    uri: 'project://repo/docs/tool-reference.md',
-    name: 'Tool reference',
-    description: 'Full tool reference for all MCP tools exposed by this server.',
-    mimeType: 'text/markdown',
-    filePath: path.join(projectRoot, 'docs', 'tool-reference.md'),
-  },
-  {
-    uri: 'project://repo/docs/tool-toggles-ui.md',
-    name: 'Tool toggles UI',
-    description: 'Docs for the local web UI used to enable/disable tools.',
-    mimeType: 'text/markdown',
-    filePath: path.join(projectRoot, 'docs', 'tool-toggles-ui.md'),
-  },
-  {
-    uri: 'project://repo/reports/software-guidance-report.md',
-    name: 'Software guidance report',
-    description:
-      'Project proposal for design/architecture/engineering guidance and how to integrate it with the web UI.',
-    mimeType: 'text/markdown',
-    filePath: path.join(projectRoot, 'reports', 'software-guidance-report.md'),
-  },
-];
-
-for (const r of projectDocResources) {
-  server.registerResource(
-    r.name,
-    r.uri,
-    {
-      title: r.name,
-      description: r.description,
-      mimeType: r.mimeType,
-    },
-    async () => {
-      const text = await fs.promises.readFile(r.filePath, 'utf8');
-      return {
-        contents: [
-          {
-            uri: r.uri,
-            mimeType: r.mimeType,
-            text,
-          },
-        ],
-      };
-    },
-  );
-}
-
-server.registerPrompt(
-  'workflow_live_edit_session',
-  {
-    title: 'Workflow: Live edit session (iterate in browser, then commit)',
-    description:
-      'Start an edit session, iterate live with recordToSession, then preview and apply a commit plan.',
-  },
-  () => ({
-    messages: [
-      {
-        role: 'user',
-        content: {
-          type: 'text',
-          text:
-            'Follow the project live-edit workflow.\n' +
-            '\n' +
-            '- Read the workflow docs if needed: project://repo/USAGE_GUIDE.md\n' +
-            '- Start: begin_edit_session\n' +
-            '- Make changes using insert_css / insert_js / manipulate_dom with recordToSession: true\n' +
-            '  - Or use batch_ops for applying multiple changes at once\n' +
-            '  - Use insert_css_preview / insert_js_preview for testing multiple variants (automatic rollback)\n' +
-            '  - Use insert_css / insert_js when you want to keep the final change applied\n' +
-            '- Use svg_snapshot / wireframe_snapshot to verify layout\n' +
-            '- Preview exactly what will be written: preview_commit_plan\n' +
-            '- Only when approved: apply_commit_plan\n' +
-            '  - Alternative: commit_edit_session_to_files (best-effort append, less safe)\n' +
-            '  - Alternative: export_edit_session_package (no file writes, for review)\n' +
-            '\n' +
-            'Important: keep changes live-in-browser until explicitly committing; do not write repo files unless asked.',
-        },
-      },
-    ],
-  }),
-);
-
-server.registerPrompt(
-  'workflow_debug_layout_then_fix',
-  {
-    title: 'Workflow: Debug layout (wireframes) then fix',
-    description:
-      'Use svg_snapshot/wireframe_snapshot to find overlaps/gaps, test fixes live, and commit the final patch.',
-  },
-  () => ({
-    messages: [
-      {
-        role: 'user',
-        content: {
-          type: 'text',
-          text:
-            'Debug layout issues using wireframe tools, then fix safely.\n' +
-            '\n' +
-            '- Use svg_snapshot and wireframe_snapshot to identify overlaps, overflow, and gaps.\n' +
-            '- Start an edit session (begin_edit_session) and apply candidate fixes with recordToSession: true.\n' +
-            '- Compare before/after snapshots.\n' +
-            '- When the fix is correct, preview_commit_plan and only then apply_commit_plan to write changes.\n' +
-            '\n' +
-            'If you need the canonical workflow details, read: project://repo/USAGE_GUIDE.md',
-        },
-      },
-    ],
-  }),
-);
-
-server.registerPrompt(
-  'workflow_export_session_package',
-  {
-    title: 'Workflow: Export edit session as a package (no file writes)',
-    description:
-      'Iterate live and export an edit session package for review without modifying repo files.',
-  },
-  () => ({
-    messages: [
-      {
-        role: 'user',
-        content: {
-          type: 'text',
-          text:
-            'Iterate live, but do not write repo files. Export a reviewable package instead.\n' +
-            '\n' +
-            '- begin_edit_session\n' +
-            '- Make changes with recordToSession: true\n' +
-            '- (Optional) summarize_edit_session for a human-readable summary\n' +
-            '- export_edit_session_package to a folder path\n' +
-            '\n' +
-            'Confirm: no apply_commit_plan / commit_edit_session_to_files unless explicitly requested.',
-        },
-      },
-    ],
-  }),
-);
-
-server.registerPrompt(
-  'workflow_build_prototype_from_scratch',
-  {
-    title: 'Workflow: Build prototype from scratch',
-    description:
-      'Start with a blank page and build a complete prototype using live editing and commits.',
-  },
-  () => ({
-    messages: [
-      {
-        role: 'user',
-        content: {
-          type: 'text',
-          text:
-            'Build a prototype from scratch using live editing.\n' +
-            '\n' +
-            '- Read the workflow docs if needed: project://repo/USAGE_GUIDE.md\n' +
-            '- Start with a blank page (navigate to about:blank or empty HTML)\n' +
-            '- begin_edit_session\n' +
-            '- Build components step by step using insert_css / insert_js / manipulate_dom with recordToSession: true\n' +
-            '  - Or use batch_ops for applying multiple styling/layout changes at once\n' +
-            '  - Create navigation bar with logo and menu items\n' +
-            '  - Add hero section with centered text and CTA button\n' +
-            '  - Add content sections, forms, or other components\n' +
-            '- Use svg_snapshot / wireframe_snapshot to verify layout at each step\n' +
-            '- Preview the complete result: preview_commit_plan\n' +
-            '- Apply to specific files: apply_commit_plan\n' +
-            '\n' +
-            'Important: build iteratively in browser, then commit clean patches when complete.',
-        },
-      },
-    ],
-  }),
-);
-
-server.registerPrompt(
-  'workflow_chatbox_iteration',
-  {
-    title: 'Workflow: Chatbox iteration (in-browser chat)',
-    description:
-      'Use the in-browser chatbox for rapid iteration with instant visual feedback.',
-  },
-  () => ({
-    messages: [
-      {
-        role: 'user',
-        content: {
-          type: 'text',
-          text:
-            'Use in-browser chatbox for rapid iteration.\n' +
-            '\n' +
-            '- Read the workflow docs if needed: project://repo/USAGE_GUIDE.md\n' +
-            '- Start: begin_edit_session with chatbox (inject_chatbox)\n' +
-            '- In browser chatbox: make changes using chatbox_step\n' +
-            '  - Example: "Make the cards wider", "Add more padding between sections"\n' +
-            '  - Changes apply instantly in browser\n' +
-            '- In IDE: commit this session to files when satisfied\n' +
-            '\n' +
-            'This workflow provides the fastest feedback loop - changes happen immediately in the browser.',
-        },
-      },
-    ],
-  }),
-);
+// Register MCP resources (project documentation) and prompts (workflow templates)
+registerResources(server, projectRoot);
+registerPrompts(server);
 
 const toolConfigPath = path.resolve(
   (args as any).toolConfig ?? path.join(projectRoot, '.chrome-devtools-mcp-tools.json'),
@@ -556,6 +345,77 @@ logDisclaimers();
 void clearcutLogger?.logDailyActiveIfNeeded();
 void clearcutLogger?.logServerStart(computeFlagUsage(args, cliOptions));
 
+// Helper to extract parameter information from Zod schema
+function extractParameterInfo(schema: zod.ZodTypeAny): ParameterInfo {
+  let description: string | undefined;
+  let def = (schema as any)._def;
+  let isOptional = false;
+
+  // Unwrap optional/default/effects to get description and determine if required
+  while (
+    def?.typeName === 'ZodOptional' ||
+    def?.typeName === 'ZodDefault' ||
+    def?.typeName === 'ZodEffects'
+  ) {
+    if (def.typeName === 'ZodOptional') {
+      isOptional = true;
+    }
+    const next = def.innerType || def.schema;
+    if (!next) {
+      break;
+    }
+    schema = next;
+    def = (schema as any)._def;
+    if (!description && (schema as any).description) {
+      description = (schema as any).description;
+    }
+  }
+
+  if (!description && (schema as any).description) {
+    description = (schema as any).description;
+  }
+
+  // Determine type
+  let type = 'unknown';
+  let enumValues: string[] | undefined;
+
+  switch (def?.typeName) {
+    case 'ZodString':
+      type = 'string';
+      break;
+    case 'ZodNumber':
+      type = def.checks?.some((c: any) => c.kind === 'int') ? 'integer' : 'number';
+      break;
+    case 'ZodBoolean':
+      type = 'boolean';
+      break;
+    case 'ZodEnum':
+      type = 'string';
+      enumValues = def.values;
+      break;
+    case 'ZodArray':
+      const itemType = def.type ? extractParameterInfo(def.type).type : 'unknown';
+      type = `array<${itemType}>`;
+      break;
+    case 'ZodObject':
+      type = 'object';
+      break;
+    case 'ZodNullable':
+    case 'ZodNull':
+      type = 'null';
+      break;
+    default:
+      type = def?.typeName?.replace('Zod', '').toLowerCase() || 'unknown';
+  }
+
+  return {
+    type,
+    required: !isOptional,
+    description,
+    enum: enumValues,
+  };
+}
+
 // Optional local web UI for tool toggles (persistent JSON on disk).
 if ((args as any).webUi) {
   const host = String((args as any).webUiHost ?? '127.0.0.1');
@@ -567,12 +427,24 @@ if ((args as any).webUi) {
     log: logger,
     getConfigMeta: () => ({configPath: toolConfigPath, updatedAt: toolToggles.updatedAt}),
     getTools: (): ToolToggleView[] => {
-      return Array.from(registeredTools.values()).map(({tool, handle}) => ({
-        name: tool.name,
-        description: tool.description,
-        category: String(tool.annotations.category ?? 'unknown'),
-        enabled: Boolean(handle.enabled),
-      }));
+      return Array.from(registeredTools.values()).map(({tool, handle}) => {
+        // Extract parameters from schema
+        const parameters: Record<string, ParameterInfo> = {};
+        if (tool.schema && typeof tool.schema === 'object') {
+          for (const [key, schema] of Object.entries(tool.schema as Record<string, zod.ZodTypeAny>)) {
+            parameters[key] = extractParameterInfo(schema);
+          }
+        }
+
+        return {
+          name: tool.name,
+          description: tool.description,
+          category: String(tool.annotations.category ?? 'unknown'),
+          enabled: Boolean(handle.enabled),
+          isOriginal: tool.annotations.isOriginal ?? false,
+          parameters: Object.keys(parameters).length > 0 ? parameters : undefined,
+        };
+      });
     },
     setDisabledTools: async (disabledTools: string[]) => {
       toolToggles = await saveToolTogglesConfig(toolConfigPath, disabledTools);

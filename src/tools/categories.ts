@@ -13,7 +13,6 @@ export enum ToolCategory {
   SNAPSHOT = 'snapshot',
   EDIT_SESSION = 'edit_session',
   PATCH = 'patch',
-  CHATBOX = 'chatbox',
   DEBUGGING = 'debugging',
   EXTENSIONS = 'extensions',
 }
@@ -27,7 +26,6 @@ export const labels = {
   [ToolCategory.SNAPSHOT]: 'Snapshot',
   [ToolCategory.EDIT_SESSION]: 'Edit Session',
   [ToolCategory.PATCH]: 'Patch',
-  [ToolCategory.CHATBOX]: 'Chatbox',
   [ToolCategory.DEBUGGING]: 'Debugging',
   [ToolCategory.EXTENSIONS]: 'Extensions',
 };

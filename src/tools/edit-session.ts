@@ -5,7 +5,6 @@
  */
 
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
 import type {EditSession} from '../McpContext.js';
@@ -26,83 +25,6 @@ function getEditSessionOrThrow(
     throw new Error('No active edit session. Call begin_edit_session first (or pass sessionId).');
   }
   return context.getEditSession(resolvedSessionId);
-}
-
-function toIso(ms: number): string {
-  try {
-    return new Date(ms).toISOString();
-  } catch {
-    return String(ms);
-  }
-}
-
-function truncate(text: string, maxLen: number): string {
-  if (maxLen <= 0) {
-    return '';
-  }
-  if (text.length <= maxLen) {
-    return text;
-  }
-  return text.slice(0, maxLen - 1) + '…';
-}
-
-function renderEditSessionMarkdownSummary(
-  session: EditSession,
-  options?: {maxSnippetLength?: number},
-): string {
-  const maxSnippetLength = options?.maxSnippetLength ?? 600;
-  const lines: string[] = [];
-  lines.push(`# Edit Session Summary: ${session.sessionId}`);
-  if (session.label) {
-    lines.push(`- **Label:** ${session.label}`);
-  }
-  lines.push(`- **Created:** ${toIso(session.createdAt)}`);
-  lines.push(`- **Changes:** ${session.changes.length}`);
-  lines.push('');
-  lines.push('## Changes');
-  lines.push('');
-
-  if (session.changes.length === 0) {
-    lines.push('_No recorded changes._');
-    return lines.join('\n');
-  }
-
-  for (const change of session.changes) {
-    lines.push(`### ${change.changeId} — ${change.type}`);
-    lines.push(`- **Time:** ${toIso(change.createdAt)}`);
-    lines.push(`- **Page:** ${change.pageId}`);
-    if (change.patchId) {
-      lines.push(`- **Patch:** ${change.patchId}`);
-    }
-    if (change.targetFilePath) {
-      lines.push(`- **Target file:** \`${change.targetFilePath}\``);
-    }
-    if (change.description) {
-      lines.push(`- **Description:** ${change.description}`);
-    }
-
-    const payload = change.payload && typeof change.payload === 'object'
-      ? (change.payload as Record<string, unknown>)
-      : null;
-
-    const cssText =
-      payload && typeof payload.cssText === 'string' ? payload.cssText : undefined;
-    const jsText =
-      payload && typeof payload.jsText === 'string' ? payload.jsText : undefined;
-
-    const snippet = cssText ?? jsText;
-    if (snippet && snippet.trim()) {
-      const fence = cssText ? 'css' : 'javascript';
-      lines.push('');
-      lines.push('```' + fence);
-      lines.push(truncate(snippet.trim(), maxSnippetLength));
-      lines.push('```');
-    }
-
-    lines.push('');
-  }
-
-  return lines.join('\n').trimEnd() + '\n';
 }
 
 export const beginEditSession = defineTool({
@@ -127,6 +49,18 @@ export const beginEditSession = defineTool({
     response.appendResponseLine('```json');
     response.appendResponseLine(JSON.stringify(session, null, 2));
     response.appendResponseLine('```');
+    
+    // Return AI instructions for live editing mode
+    response.appendResponseLine('\n**AI instructions:** The chat is now in live editing mode. This mode is about editing exclusively in the browser, navigated with _page tools. Do not make any files. Do not make any file edits until the user finalizes by saying something sounding like `commit_edit_session_to_files`.  After you receive this, affirm it to the user in the chat that you won\'t.\n');
+    response.appendResponseLine('Here are the tools to use during the session that let you prototype, fix, and edit live:\n');
+    response.appendResponseLine('- **`batch_ops`** - Execute multiple tool operations in a single call to reduce round-trips. Supports sequential execution and returns structured results for observability. Use this to chain multiple operations efficiently.\n');
+    response.appendResponseLine('- **`insert_css`** - Insert a `<style>` tag into the current page with a patch id for later rollback. Supports preview mode for testing multiple CSS values with visual wireframe feedback, responsive breakpoints, and before/after comparisons. Can optionally return wireframe results as SVG or JSON.\n');
+    response.appendResponseLine('- **`insert_js`** - Insert a `<script>` tag into the current page with a patch id for later rollback. Supports preview mode for testing multiple script variants with visual wireframe feedback, responsive breakpoints, and before/after comparisons. Can optionally return wireframe results as SVG or JSON. Note: rollback removes script tags but cannot reliably undo side-effects like DOM mutations, timers, or event listeners.\n');
+    response.appendResponseLine('- **`evaluate_script`** - Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON (returned values must be JSON-serializable). Useful for querying page state, extracting data, or testing JavaScript logic.\n');
+    response.appendResponseLine('- **`wireframe_snapshot`** - Capture a compact, deterministic wireframe snapshot of the current page using CDP DOMSnapshot. Returns element rects (and optionally computed styles) suitable for overlap/gap analysis. Use this for programmatic layout analysis and detecting layout issues.\n');
+    response.appendResponseLine('- **`svg_snapshot`** - Render a visual SVG wireframe of the current page (or a subset of elements). Uses the same underlying snapshot as `wireframe_snapshot`, but returns the SVG content wrapped in JSON for better parseability. Use this for visual layout debugging and human-readable wireframe representations.\n');
+    response.appendResponseLine('- **`manipulate_dom`** - Perform DOM manipulations on web pages including setting styles, adding/removing classes, inserting/removing elements, and batch operations. Supports single actions or batch mode for multiple operations. Changes can be recorded to the edit session for later commit.\n');
+    response.appendResponseLine('- **`simulate_event`** - Simulate user interactions for testing by dispatching DOM events. Returns complete page snapshots after each interaction with rich accessibility information and state tracking. Supports CSS selector targeting, coordinate-based clicking, event sequences, and complex input scenarios. Essential for automated UI testing and workflow validation.\n');
   },
 });
 
@@ -235,135 +169,6 @@ export const exportEditSession = defineTool({
         {
           sessionId: session.sessionId,
           filename,
-          changeCount: session.changes.length,
-        },
-        null,
-        2,
-      ),
-    );
-    response.appendResponseLine('```');
-  },
-});
-
-export const summarizeEditSession = defineTool({
-  name: 'summarize_edit_session',
-  description:
-    'Summarize an edit session into human-readable Markdown (optionally saving it to disk). Useful for sharing/PR prep without committing any changes.',
-  annotations: {
-    category: ToolCategory.EDIT_SESSION,
-    readOnlyHint: true,
-  },
-  schema: {
-    sessionId: zod
-      .string()
-      .optional()
-      .describe('Optional session id. If omitted, summarizes the active session.'),
-    maxSnippetLength: zod
-      .number()
-      .int()
-      .min(0)
-      .optional()
-      .default(600)
-      .describe(
-        'Maximum length of CSS/JS snippet previews included per change (0 disables snippet previews).',
-      ),
-    filePath: zod
-      .string()
-      .optional()
-      .describe(
-        'Optional output path. If provided, writes the markdown summary to this file.',
-      ),
-  },
-  handler: async (request, response, context) => {
-    const session = getEditSessionOrThrow(context, request.params.sessionId);
-    const markdown = renderEditSessionMarkdownSummary(session, {
-      maxSnippetLength: request.params.maxSnippetLength,
-    });
-
-    const filename = request.params.filePath
-      ? (await context.saveFile(new TextEncoder().encode(markdown), request.params.filePath))
-          .filename
-      : undefined;
-
-    response.appendResponseLine('```json');
-    response.appendResponseLine(
-      JSON.stringify(
-        {
-          sessionId: session.sessionId,
-          label: session.label ?? null,
-          createdAt: session.createdAt,
-          changeCount: session.changes.length,
-          filename: filename ?? null,
-          markdown,
-        },
-        null,
-        2,
-      ),
-    );
-    response.appendResponseLine('```');
-  },
-});
-
-export const exportEditSessionPackage = defineTool({
-  name: 'export_edit_session_package',
-  description:
-    'Export an edit session as a small “package folder”: JSON session log + a Markdown summary. This is Level-1 friendly (shareable) and still makes no repo edits.',
-  annotations: {
-    category: ToolCategory.EDIT_SESSION,
-    readOnlyHint: true,
-  },
-  schema: {
-    sessionId: zod
-      .string()
-      .optional()
-      .describe('Optional session id. If omitted, exports the active session.'),
-    outputDir: zod
-      .string()
-      .optional()
-      .describe(
-        'Optional output directory to write the package into. If omitted, creates a temporary directory.',
-      ),
-    maxSnippetLength: zod
-      .number()
-      .int()
-      .min(0)
-      .optional()
-      .default(600)
-      .describe(
-        'Maximum length of CSS/JS snippet previews included in the generated summary markdown (0 disables snippet previews).',
-      ),
-  },
-  handler: async (request, response, context) => {
-    const session = getEditSessionOrThrow(context, request.params.sessionId);
-    const outputDir = request.params.outputDir
-      ? path.resolve(request.params.outputDir)
-      : await fs.mkdtemp(
-          path.join(os.tmpdir(), `chrome-devtools-mcp-edit-session-${session.sessionId}-`),
-        );
-
-    await fs.mkdir(outputDir, {recursive: true});
-
-    const sessionJsonPath = path.join(outputDir, 'edit-session.json');
-    const summaryPath = path.join(outputDir, 'edit-session-summary.md');
-
-    const sessionJson = JSON.stringify(session, null, 2);
-    const summaryMarkdown = renderEditSessionMarkdownSummary(session, {
-      maxSnippetLength: request.params.maxSnippetLength,
-    });
-
-    await fs.writeFile(sessionJsonPath, sessionJson, 'utf8');
-    await fs.writeFile(summaryPath, summaryMarkdown, 'utf8');
-
-    response.appendResponseLine('```json');
-    response.appendResponseLine(
-      JSON.stringify(
-        {
-          sessionId: session.sessionId,
-          outputDir,
-          files: {
-            sessionJson: sessionJsonPath,
-            summaryMarkdown: summaryPath,
-          },
           changeCount: session.changes.length,
         },
         null,

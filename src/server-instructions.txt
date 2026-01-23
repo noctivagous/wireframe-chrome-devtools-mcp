@@ -1,0 +1,67 @@
+# Server Instructions for Chrome DevTools MCP
+
+## Live Edit Session Workflow (Recommended)
+
+When working on web pages, follow the live-edit workflow:
+
+1. **Start an edit session**: Use `begin_edit_session` to start recording changes
+2. **Make changes live in browser**: Use `insert_css` / `insert_js` / `manipulate_dom` with `recordToSession: true`
+   - Use `batch_ops` for applying multiple changes at once
+   - Use `insert_css` / `insert_js` with preview parameters (selector, property, values for CSS; scripts array for JS) for testing multiple variants (automatic rollback)
+   - Preview mode lets you get a snapshot as return value
+   - Use `insert_css` / `insert_js` without preview parameters when you want to keep the final change applied
+3. **Verify layout**: Use `svg_snapshot` / `wireframe_snapshot` to verify layout
+4. **Preview changes**: Use `preview_commit_plan` to see exactly what will be written
+5. **Commit only when approved**: Use `apply_commit_plan` only when explicitly requested
+   - Alternative: `commit_edit_session_to_files` (best-effort append, less safe)
+
+**IMPORTANT**: Keep changes live-in-browser until explicitly committing. Do NOT write repo files unless explicitly asked.
+
+## Debug Layout Then Fix Workflow
+
+Debug layout issues using wireframe tools, then fix safely:
+
+1. Use `svg_snapshot` and `wireframe_snapshot` to identify overlaps, overflow, and gaps
+2. Start an edit session (`begin_edit_session`) and apply candidate fixes with `recordToSession: true`
+3. Compare before/after snapshots
+4. When the fix is correct, `preview_commit_plan` and only then `apply_commit_plan` to write changes
+
+## Export Session Workflow
+
+Iterate live, but do not write repo files. Export a reviewable package instead:
+
+1. `begin_edit_session`
+2. Make changes with `recordToSession: true`
+3. `export_edit_session` to export the session JSON
+
+**Confirm**: No `apply_commit_plan` / `commit_edit_session_to_files` unless explicitly requested.
+
+## Build Prototype From Scratch Workflow
+
+Build a prototype from scratch using live editing:
+
+1. Start with a blank page (navigate to `about:blank` or empty HTML)
+2. `begin_edit_session`
+3. Build components step by step using `insert_css` / `insert_js` / `manipulate_dom` with `recordToSession: true`
+   - Or use `batch_ops` for applying multiple styling/layout changes at once
+   - Create navigation bar with logo and menu items
+   - Add hero section with centered text and CTA button
+   - Add content sections, forms, or other components
+4. Use `svg_snapshot` / `wireframe_snapshot` to verify layout at each step
+5. Preview the complete result: `preview_commit_plan`
+6. Apply to specific files: `apply_commit_plan`
+
+**Important**: Build iteratively in browser, then commit clean patches when complete.
+
+## Chatbox Iteration Workflow
+
+Use in-browser chatbox for rapid iteration:
+
+1. Start: `begin_edit_session` with chatbox (`inject_chatbox`)
+2. In browser chatbox: make changes using `chatbox_step`
+   - Example: "Make the cards wider", "Add more padding between sections"
+   - Changes apply instantly in browser
+3. In IDE: commit this session to files when satisfied
+
+This workflow provides the fastest feedback loop - changes happen immediately in the browser.
+

@@ -9,9 +9,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {describe, it} from 'node:test';
 
-import {chatboxStep} from '../../src/tools/chat.js';
 import {
-  injectChatbox,
   insertCss,
   insertJs,
   manipulateDom,
@@ -286,7 +284,7 @@ describe('mutation', () => {
             params: {
               jsText: 'document.getElementById("test").textContent = "Changed";',
               replaceExisting: false,
-            },
+            } as any,
           },
           response,
           context,
@@ -296,152 +294,6 @@ describe('mutation', () => {
           return document.getElementById('test')!.textContent;
         });
         assert.strictEqual(text, 'Changed');
-      });
-    });
-  });
-
-  describe('inject_chatbox', () => {
-    it('injects the workflow chatbox UI, runs workflow commands via chatbox_step, and can be rolled back', async () => {
-      await withMcpContext(async (response, context) => {
-        const page = await context.newPage();
-        await page.setContent(html`
-          <div id="app">Hello</div>
-        `);
-
-        await injectChatbox.handler(
-          {
-            params: {
-              action: 'inject',
-              patchId: 'chatbox-patch',
-              dock: 'right',
-              width: 380,
-              zIndex: 2147483647,
-              replaceExisting: false,
-              title: 'Live Edit Session',
-              placeholder: 'ignored',
-              startOpen: true,
-            },
-          },
-          response,
-          context,
-        );
-
-        const exists = await page.evaluate(() => {
-          return document.getElementById('mcp-chatbox-root') !== null;
-        });
-        assert.strictEqual(exists, true);
-
-        // Start an edit session via workflow button.
-        await page.evaluate(() => {
-          const host = document.getElementById('mcp-chatbox-root') as any;
-          const sr = host.shadowRoot as ShadowRoot;
-          const begin = sr.querySelector('[data-role="begin"]') as HTMLButtonElement;
-          begin.click();
-        });
-
-        // Drain queued command and execute it.
-        response.resetResponseLineForTesting();
-        await chatboxStep.handler(
-          {
-            params: {
-              patchId: 'chatbox-patch',
-              maxMessages: 10,
-            },
-          },
-          response,
-          context,
-        );
-
-        const activeSessionId = context.getActiveEditSessionId();
-        assert.ok(activeSessionId);
-
-        // Set a target file path, then send a /css command which the UI converts to a structured command.
-        // Put the target file inside the repo root so commit-plan/diff safety checks pass.
-        const tmpDir = await fs.mkdtemp(path.join(process.cwd(), 'mcp-chatbox-workflow-'));
-        const targetFile = path.join(tmpDir, 'styles.css');
-        await fs.writeFile(targetFile, '/* initial */\n', 'utf8');
-
-        await page.evaluate((targetFile) => {
-          const host = document.getElementById('mcp-chatbox-root') as any;
-          const sr = host.shadowRoot as ShadowRoot;
-          const tf = sr.querySelector('[data-role="targetFile"]') as HTMLInputElement;
-          const input = sr.querySelector('[data-role="input"]') as HTMLInputElement;
-          const send = sr.querySelector('[data-role="send"]') as HTMLButtonElement;
-          tf.value = targetFile;
-          input.value = '/css .x { color: red; }';
-          send.click();
-        }, targetFile);
-
-        response.resetResponseLineForTesting();
-        await chatboxStep.handler(
-          {
-            params: {
-              patchId: 'chatbox-patch',
-              maxMessages: 10,
-            },
-          },
-          response,
-          context,
-        );
-
-        // Verify CSS patch was applied in the page.
-        const color = await page.evaluate(() => {
-          const el = document.createElement('div');
-          el.className = 'x';
-          el.textContent = 'x';
-          document.body.appendChild(el);
-          return window.getComputedStyle(el).color;
-        });
-        assert.strictEqual(color, 'rgb(255, 0, 0)');
-
-        // Verify edit session recorded the change (and the target file path was included).
-        const session = context.getEditSession(activeSessionId!);
-        assert.ok(session.changes.length >= 1);
-        assert.strictEqual(session.changes[session.changes.length - 1].type, 'insert_css');
-        assert.strictEqual(session.changes[session.changes.length - 1].targetFilePath, targetFile);
-
-        // Preview plan and then preview diff (caches plan/diff into chatbox state).
-        await page.evaluate(() => {
-          const host = document.getElementById('mcp-chatbox-root') as any;
-          const sr = host.shadowRoot as ShadowRoot;
-          (sr.querySelector('[data-role="plan"]') as HTMLButtonElement).click();
-        });
-        response.resetResponseLineForTesting();
-        await chatboxStep.handler({params: {patchId: 'chatbox-patch', maxMessages: 10}}, response, context);
-
-        await page.evaluate(() => {
-          const host = document.getElementById('mcp-chatbox-root') as any;
-          const sr = host.shadowRoot as ShadowRoot;
-          (sr.querySelector('[data-role="diff"]') as HTMLButtonElement).click();
-        });
-        response.resetResponseLineForTesting();
-        await chatboxStep.handler({params: {patchId: 'chatbox-patch', maxMessages: 10}}, response, context);
-
-        const cached = await page.evaluate(() => {
-          const host = document.getElementById('mcp-chatbox-root') as any;
-          const sr = host.shadowRoot as ShadowRoot;
-          const api = (window as any).__MCP_CHATBOX__;
-          return {
-            assistantCount: sr.querySelectorAll('.msg.assistant').length,
-            hasPlan: Boolean(api?.state?.lastPlanJson),
-            hasDiff: Boolean(api?.state?.lastDiff),
-          };
-        });
-        assert.ok(cached.assistantCount >= 2);
-        assert.strictEqual(cached.hasPlan, true);
-        assert.strictEqual(cached.hasDiff, true);
-
-        response.resetResponseLineForTesting();
-        await rollbackPatch.handler(
-          {params: {patchId: 'chatbox-patch'}},
-          response,
-          context,
-        );
-
-        const removed = await page.evaluate(() => {
-          return document.getElementById('mcp-chatbox-root') === null;
-        });
-        assert.strictEqual(removed, true);
       });
     });
   });
