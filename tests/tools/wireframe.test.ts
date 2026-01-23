@@ -7,7 +7,12 @@
 import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
-import {svgSnapshot, wireframeSnapshot} from '../../src/tools/wireframe.js';
+import {
+  svgSnapshot,
+  svgSnapshotLiveEditing,
+  wireframeSnapshot,
+  wireframeSnapshotLiveEditing,
+} from '../../src/tools/wireframe.js';
 import {html, withMcpContext} from '../utils.js';
 
 describe('wireframe', () => {
@@ -75,6 +80,62 @@ describe('wireframe', () => {
         assert.ok(result.elementCount >= 2);
         assert.equal(result.truncated, false);
         assert.ok(result.viewport);
+      });
+    });
+  });
+
+  describe('wireframe_snapshot_live_editing', () => {
+    it('returns a summary and artifact by default', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(
+          html`<main>
+            <div id="a" style="width: 120px; height: 40px; margin: 10px">A</div>
+            <div class="b" style="width: 80px; height: 30px">B</div>
+          </main>`,
+        );
+
+        await wireframeSnapshotLiveEditing.handler({params: {}}, response, context);
+
+        const responseText = response.responseLines.join('\n');
+        const jsonMatch = responseText.match(/```json\s*\n(.*)\n```/s);
+        assert.ok(jsonMatch);
+        const result = JSON.parse(jsonMatch[1]);
+        assert.equal(result.kind, 'live_editing_snapshot');
+        assert.equal(result.version, 1);
+        assert.ok(result.data?.summary);
+        assert.equal(result.data?.outputMode, 'summary');
+        assert.ok(result.artifacts?.[0]?.filename);
+        assert.equal(result.artifacts?.[0]?.mimeType, 'application/json');
+        assert.equal(result.data?.inline, undefined);
+      });
+    });
+  });
+
+  describe('svg_snapshot_live_editing', () => {
+    it('returns a summary and artifact by default', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(
+          html`<main>
+            <div id="a" style="width: 120px; height: 40px; margin: 10px">A</div>
+            <div class="b" style="width: 80px; height: 30px">B</div>
+          </main>`,
+        );
+
+        await svgSnapshotLiveEditing.handler({params: {}}, response, context);
+
+        const responseText = response.responseLines.join('\n');
+        const jsonMatch = responseText.match(/```json\s*\n(.*)\n```/s);
+        assert.ok(jsonMatch);
+        const result = JSON.parse(jsonMatch[1]);
+        assert.equal(result.kind, 'live_editing_snapshot');
+        assert.equal(result.version, 1);
+        assert.ok(result.data?.summary);
+        assert.equal(result.data?.outputMode, 'file');
+        assert.ok(result.artifacts?.[0]?.filename);
+        assert.equal(result.artifacts?.[0]?.mimeType, 'text/plain');
+        assert.equal(result.data?.svg, undefined);
       });
     });
   });

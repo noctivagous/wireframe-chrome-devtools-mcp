@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-01-23T02:25:22.591Z",
+  "updatedAt": "2026-01-23T13:13:55.206Z",
   "disabledTools": [
     "analyze_js",
     "apply_commit_plan",
@@ -32,9 +32,11 @@
     "rollback_all",
     "rollback_patch",
     "set_active_edit_session",
+    "svg_snapshot",
     "take_screenshot",
     "take_snapshot",
     "upload_file",
-    "wait_for"
+    "wait_for",
+    "wireframe_snapshot"
   ]
 }

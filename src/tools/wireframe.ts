@@ -9,6 +9,12 @@ import type {Page} from '../third_party/index.js';
 
 import {ToolCategory} from './categories.js';
 import {defineTool} from './ToolDefinition.js';
+import {
+  appendLiveEditingResponse,
+  LIVE_EDITING_SCHEMA_VERSION,
+  type LiveEditingToolResponse,
+  resolveArtifactOutput,
+} from './live-editing/types.js';
 
 type CoordinateSpace = 'viewport' | 'document';
 type ComputedStylePreset =
@@ -440,7 +446,7 @@ async function getViewportAndScroll(page: Page): Promise<{
   });
 }
 
-interface WireframeSnapshotOutput {
+export interface WireframeSnapshotOutput {
   schemaVersion: number;
   coordinateSpace: CoordinateSpace;
   page: {
@@ -1591,6 +1597,38 @@ function renderSvgWireframe(
 
 export { captureWireframeSnapshot, renderSvgWireframe };
 
+export function summarizeWireframeSnapshot(output: WireframeSnapshotOutput) {
+  return {
+    schemaVersion: output.schemaVersion,
+    coordinateSpace: output.coordinateSpace,
+    elementCount: output.elements.length,
+    truncated: output.truncated,
+    returnedElementCount: output.returnedElementCount,
+    estimatedTotalElementsInScope: output.estimatedTotalElementsInScope,
+    whyTruncated: output.whyTruncated,
+    viewport: output.page.viewport,
+    scroll: output.page.scroll,
+    hasComputedStyles: output.computedStyleWhitelist.length > 0,
+    computedStyleCount: output.computedStyleWhitelist.length,
+  };
+}
+
+const liveEditingOutputModeSchema = zod
+  .enum(['summary', 'inline', 'file'])
+  .default('summary')
+  .optional()
+  .describe(
+    'Controls how output is returned. summary: inline summary + artifact. inline: embed full payload when small. file: always save to a file.',
+  );
+
+const liveEditingMaxBytesInlineSchema = zod
+  .number()
+  .int()
+  .positive()
+  .default(200_000)
+  .optional()
+  .describe('Maximum inline payload size (bytes) before falling back to an artifact file.');
+
 export const svgSnapshot = defineTool({
   name: 'svg_snapshot',
   description:
@@ -1853,6 +1891,158 @@ export const svgSnapshot = defineTool({
   },
 });
 
+export const wireframeSnapshotLiveEditing = defineTool({
+  name: 'wireframe_snapshot_live_editing',
+  description:
+    `Capture a compact wireframe snapshot optimized for live editing workflows. ` +
+    `Returns a small summary inline and stores the full JSON snapshot as an artifact by default.`,
+  annotations: {
+    category: ToolCategory.SNAPSHOT,
+    readOnlyHint: false,
+  },
+  schema: {
+    ...wireframeSnapshot.schema,
+    outputMode: liveEditingOutputModeSchema,
+    maxBytesInline: liveEditingMaxBytesInlineSchema,
+  },
+  handler: async (request, response, context) => {
+    const {output, json, bytes} = await captureWireframeSnapshot(request as any, context);
+    const summary = summarizeWireframeSnapshot(output);
+    const outputMode = request.params.outputMode ?? 'summary';
+    const maxBytesInline = request.params.maxBytesInline ?? 200_000;
+    const filePath = request.params.filePath;
+
+    const resolved = await resolveArtifactOutput({
+      context,
+      bytes,
+      mimeType: 'application/json',
+      baseName: 'wireframe_snapshot_live_editing',
+      outputMode,
+      maxBytesInline,
+      filePath,
+      inlineData: output,
+      summary: 'Wireframe snapshot JSON (full)',
+    });
+
+    const payload: LiveEditingToolResponse<{
+      summary: ReturnType<typeof summarizeWireframeSnapshot>;
+      outputMode: string;
+      inline?: WireframeSnapshotOutput;
+      inlineSkipped?: {reason: string; maxBytesInline: number; byteLength: number};
+    }> = {
+      kind: 'live_editing_snapshot',
+      version: LIVE_EDITING_SCHEMA_VERSION,
+      data: {
+        summary,
+        outputMode: resolved.effectiveOutputMode,
+        inline: resolved.inline,
+        inlineSkipped: resolved.inlineSkipped,
+      },
+      artifacts: resolved.artifact ? [resolved.artifact] : [],
+      instructions: {
+        ordered_steps: [
+          'Use data.summary for quick reasoning.',
+          'Open the artifact file for full snapshot details when needed.',
+        ],
+        constraints: ['Avoid requesting large inline snapshots; prefer artifacts.'],
+      },
+    };
+
+    appendLiveEditingResponse(response, payload);
+  },
+});
+
+export const svgSnapshotLiveEditing = defineTool({
+  name: 'svg_snapshot_live_editing',
+  description:
+    `Render an SVG wireframe optimized for live editing workflows. ` +
+    `Stores the SVG as an artifact by default and returns only a summary inline.`,
+  annotations: {
+    category: ToolCategory.SNAPSHOT,
+    readOnlyHint: false,
+  },
+  schema: {
+    ...svgSnapshot.schema,
+    outputMode: zod
+      .enum(['summary', 'inline', 'file'])
+      .default('file')
+      .optional()
+      .describe(
+        'Controls how output is returned. summary/file save SVG to an artifact; inline embeds SVG when small.',
+      ),
+    maxBytesInline: liveEditingMaxBytesInlineSchema,
+  },
+  handler: async (request, response, context) => {
+    const {output} = await captureWireframeSnapshot(request as any, context);
+    const summary = summarizeWireframeSnapshot(output);
+
+    let previous: WireframeSnapshotOutput | undefined;
+    if (typeof request.params.compareWith === 'string' && request.params.compareWith) {
+      try {
+        previous = JSON.parse(request.params.compareWith) as WireframeSnapshotOutput;
+      } catch (e) {
+        throw new Error(
+          `Invalid compareWith JSON provided: ${(e as Error).message ?? String(e)}`,
+        );
+      }
+    }
+
+    const svg = renderSvgWireframe(output, {
+      scale: request.params.scale ?? 1,
+      background: request.params.background ?? 'transparent',
+      showLabels: request.params.showLabels ?? true,
+      showDimensions: request.params.showDimensions ?? false,
+      showSpacing: request.params.showSpacing ?? false,
+      strokeWidth: request.params.strokeWidth ?? 1,
+      fillOpacity: request.params.fillOpacity ?? 0.08,
+      highlightChanged: request.params.highlightChanged ?? false,
+      previous,
+    });
+
+    const bytes = new TextEncoder().encode(svg);
+    const outputMode = request.params.outputMode ?? 'file';
+    const maxBytesInline = request.params.maxBytesInline ?? 200_000;
+    const filePath = request.params.filePath;
+
+    const resolved = await resolveArtifactOutput({
+      context,
+      bytes,
+      mimeType: 'text/plain',
+      baseName: 'svg_snapshot_live_editing',
+      outputMode,
+      maxBytesInline,
+      filePath,
+      inlineData: svg,
+      summary: 'SVG wireframe (full)',
+    });
+
+    const payload: LiveEditingToolResponse<{
+      summary: ReturnType<typeof summarizeWireframeSnapshot>;
+      outputMode: string;
+      svg?: string;
+      inlineSkipped?: {reason: string; maxBytesInline: number; byteLength: number};
+    }> = {
+      kind: 'live_editing_snapshot',
+      version: LIVE_EDITING_SCHEMA_VERSION,
+      data: {
+        summary,
+        outputMode: resolved.effectiveOutputMode,
+        svg: resolved.inline,
+        inlineSkipped: resolved.inlineSkipped,
+      },
+      artifacts: resolved.artifact ? [resolved.artifact] : [],
+      instructions: {
+        ordered_steps: [
+          'Use data.summary for quick reasoning.',
+          'Open the artifact file for the full SVG when needed.',
+        ],
+        constraints: ['Avoid requesting large inline SVG payloads; prefer artifacts.'],
+      },
+    };
+
+    appendLiveEditingResponse(response, payload);
+  },
+});
 
 
 

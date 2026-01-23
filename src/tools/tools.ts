@@ -12,6 +12,7 @@ import * as editSessionTools from './edit-session.js';
 import * as emulationTools from './emulation.js';
 import * as extensionTools from './extensions.js';
 import * as inputTools from './input.js';
+import * as liveEditingTools from './live-editing.js';
 import * as mutationTools from './mutation.js';
 import * as networkTools from './network.js';
 import * as pagesTools from './pages.js';
@@ -22,7 +23,12 @@ import * as scriptTools from './script.js';
 import * as snapshotTools from './snapshot.js';
 import * as stateTools from './state.js';
 import type {ToolDefinition} from './ToolDefinition.js';
-import {wireframeSnapshot, svgSnapshot} from './wireframe.js';
+import {
+  svgSnapshot,
+  svgSnapshotLiveEditing,
+  wireframeSnapshot,
+  wireframeSnapshotLiveEditing,
+} from './wireframe.js';
 
 const tools = [
   analyzeJs,
@@ -33,6 +39,7 @@ const tools = [
   ...Object.values(editSessionTools),
   ...Object.values(extensionTools),
   ...Object.values(inputTools),
+  ...Object.values(liveEditingTools),
   ...Object.values(mutationTools),
   ...Object.values(networkTools),
   ...Object.values(pagesTools),
@@ -44,6 +51,8 @@ const tools = [
   ...Object.values(stateTools),
   wireframeSnapshot,
   svgSnapshot,
+  wireframeSnapshotLiveEditing,
+  svgSnapshotLiveEditing,
 ] as ToolDefinition[];
 
 tools.sort((a, b) => {

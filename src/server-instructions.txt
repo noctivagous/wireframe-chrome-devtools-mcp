@@ -10,7 +10,7 @@ When working on web pages, follow the live-edit workflow:
    - Use `insert_css` / `insert_js` with preview parameters (selector, property, values for CSS; scripts array for JS) for testing multiple variants (automatic rollback)
    - Preview mode lets you get a snapshot as return value
    - Use `insert_css` / `insert_js` without preview parameters when you want to keep the final change applied
-3. **Verify layout**: Use `svg_snapshot` / `wireframe_snapshot` to verify layout
+3. **Verify layout**: Use `svg_snapshot_live_editing` / `wireframe_snapshot_live_editing` to verify layout (artifacts avoid context bloat)
 4. **Preview changes**: Use `preview_commit_plan` to see exactly what will be written
 5. **Commit only when approved**: Use `apply_commit_plan` only when explicitly requested
    - Alternative: `commit_edit_session_to_files` (best-effort append, less safe)
@@ -47,7 +47,7 @@ Build a prototype from scratch using live editing:
    - Create navigation bar with logo and menu items
    - Add hero section with centered text and CTA button
    - Add content sections, forms, or other components
-4. Use `svg_snapshot` / `wireframe_snapshot` to verify layout at each step
+4. Use `svg_snapshot_live_editing` / `wireframe_snapshot_live_editing` to verify layout at each step (artifacts avoid context bloat)
 5. Preview the complete result: `preview_commit_plan`
 6. Apply to specific files: `apply_commit_plan`
 
