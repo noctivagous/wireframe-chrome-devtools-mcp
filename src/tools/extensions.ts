@@ -15,7 +15,7 @@ export const installExtension = defineTool({
   annotations: {
     category: ToolCategory.EXTENSIONS,
     readOnlyHint: false,
-    isOriginal: true,
+    isOriginal: false,
   },
   schema: {
     path: zod
@@ -35,7 +35,7 @@ export const uninstallExtension = defineTool({
   annotations: {
     category: ToolCategory.EXTENSIONS,
     readOnlyHint: false,
-    isOriginal: true,
+    isOriginal: false,
   },
   schema: {
     id: zod.string().describe('Extension ID to uninstall.'),
@@ -53,7 +53,7 @@ export const reloadExtension = defineTool({
   annotations: {
     category: ToolCategory.EXTENSIONS,
     readOnlyHint: false,
-    isOriginal: true,
+    isOriginal: false,
   },
   schema: {
     id: zod.string().describe('Extension ID to reload.'),
@@ -71,7 +71,7 @@ export const reinstallExtension = defineTool({
   annotations: {
     category: ToolCategory.EXTENSIONS,
     readOnlyHint: false,
-    isOriginal: true,
+    isOriginal: false,
   },
   schema: {
     id: zod.string().describe('Extension ID to reinstall.'),

@@ -256,9 +256,12 @@ function registerTool(tool: ToolDefinition): void {
   ) {
     return;
   }
+  // Always register extension tools when web UI is enabled so they can be shown
+  // in the UI even if disabled by default (categoryExtensions defaults to false)
   if (
     tool.annotations.category === ToolCategory.EXTENSIONS &&
-    args.categoryExtensions === false
+    args.categoryExtensions === false &&
+    (args as any).webUi === false
   ) {
     return;
   }
@@ -352,6 +355,15 @@ for (const tool of tools) {
   const disabled = new Set(toolToggles.disabledTools ?? []);
   for (const [name, entry] of registeredTools.entries()) {
     if (disabled.has(name)) {
+      entry.handle.disable();
+    }
+    // Disable extension tools by default if categoryExtensions is false
+    // (they're still registered when web UI is enabled so they can be shown in the UI)
+    if (
+      entry.tool.annotations.category === ToolCategory.EXTENSIONS &&
+      args.categoryExtensions === false &&
+      !disabled.has(name)
+    ) {
       entry.handle.disable();
     }
   }
