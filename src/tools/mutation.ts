@@ -1355,7 +1355,7 @@ export const rollbackPatch = defineTool({
 export const manipulateDom = defineTool({
   name: 'manipulate_dom',
   description:
-    'Perform DOM manipulations on web pages including setting styles, adding/removing classes, inserting/removing elements, and batch operations.',
+    'Perform DOM manipulations on web pages including setting styles, adding/removing classes, inserting/removing elements, and batch operations. Also supports querying elements to retrieve their properties, styles, and other information.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -1363,15 +1363,15 @@ export const manipulateDom = defineTool({
   schema: {
     // Single action mode
     action: zod
-      .enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html'])
+      .enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html', 'query'])
       .optional()
-      .describe('Single DOM manipulation action to perform.'),
+      .describe('Single DOM manipulation action to perform. Use "query" to retrieve element information without modifying the DOM.'),
 
     // Action parameters
     selector: zod
       .string()
       .optional()
-      .describe('CSS selector to target elements for the action.'),
+      .describe('CSS selector to target elements for the action or query.'),
 
     properties: zod
       .record(zod.string())
@@ -1393,15 +1393,22 @@ export const manipulateDom = defineTool({
       .optional()
       .describe('Position for insert-html action relative to the selected element. Defaults to "beforeend".'),
 
+    // Query parameters
+    queryFields: zod
+      .array(zod.enum(['tagName', 'id', 'className', 'textContent', 'innerHTML', 'attributes', 'computedStyles', 'boundingRect', 'classes']))
+      .optional()
+      .describe('Fields to include in query results. If omitted, returns all available fields.'),
+
     // Batch operations mode
     operations: zod
       .array(zod.object({
-        action: zod.enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html']).describe('DOM manipulation action.'),
+        action: zod.enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html', 'query']).describe('DOM manipulation action. Use "query" to retrieve element information.'),
         selector: zod.string().describe('CSS selector to target elements.'),
         properties: zod.record(zod.string()).optional().describe('CSS properties for set-style action.'),
         className: zod.string().optional().describe('CSS class name for add-class/remove-class actions.'),
         html: zod.string().optional().describe('HTML content for insert-html action.'),
         position: zod.enum(['beforebegin', 'afterbegin', 'beforeend', 'afterend']).optional().describe('Position for insert-html action. Defaults to "beforeend".'),
+        queryFields: zod.array(zod.enum(['tagName', 'id', 'className', 'textContent', 'innerHTML', 'attributes', 'computedStyles', 'boundingRect', 'classes'])).optional().describe('Fields to include in query results (for query action).'),
       }))
       .optional()
       .describe('Array of DOM operations to perform in batch.'),
@@ -1410,25 +1417,25 @@ export const manipulateDom = defineTool({
     patchId: zod
       .string()
       .optional()
-      .describe('Optional patch id for rollback. If omitted, generates a stable patch id.'),
+      .describe('Optional patch id for rollback. If omitted, generates a stable patch id. Not used for query operations.'),
 
     description: zod
       .string()
       .optional()
-      .describe('Optional human description for the patch registry.'),
+      .describe('Optional human description for the patch registry. Not used for query operations.'),
 
     // Optional change journaling (buffer edits during interactive sessions; commit/export later).
     recordToSession: zod
       .boolean()
       .optional()
       .describe(
-        'If true, record this change into an edit session journal so it can be exported/committed later (useful to keep live iteration fast and delay filesystem writes).',
+        'If true, record this change into an edit session journal so it can be exported/committed later (useful to keep live iteration fast and delay filesystem writes). Not used for query operations.',
       ),
     editSessionId: zod
       .string()
       .optional()
       .describe(
-        'Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true).',
+        'Optional edit session id to record to. If omitted, uses the active session (or auto-creates one when recordToSession=true). Not used for query operations.',
       ),
   },
   handler: async (request, response, context) => {
@@ -1456,6 +1463,7 @@ export const manipulateDom = defineTool({
       className?: string;
       html?: string;
       position?: string;
+      queryFields?: string[];
     }> = [];
 
     if (isSingleMode) {
@@ -1466,10 +1474,14 @@ export const manipulateDom = defineTool({
         className,
         html,
         position,
+        queryFields: request.params.queryFields,
       }];
     } else if (isBatchMode) {
       domOperations = operations;
     }
+
+    // Check if this is a query-only operation
+    const isQueryOnly = domOperations.every(op => op.action === 'query');
 
     // Validate operations
     for (const op of domOperations) {
@@ -1482,6 +1494,7 @@ export const manipulateDom = defineTool({
       if (op.action === 'insert-html' && !op.html) {
         throw new Error('insert-html action requires html parameter.');
       }
+      // Query action doesn't require any additional parameters
     }
 
     const patchId = requestedPatchId ?? context.createPatchId('dom-manipulate');
@@ -1494,9 +1507,29 @@ export const manipulateDom = defineTool({
       success?: boolean;
       message?: string;
       elementIndex?: number;
+      data?: {
+        tagName?: string;
+        id?: string;
+        className?: string;
+        classes?: string[];
+        textContent?: string;
+        innerHTML?: string;
+        attributes?: Record<string, string>;
+        computedStyles?: Record<string, string>;
+        boundingRect?: {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          top: number;
+          left: number;
+          right: number;
+          bottom: number;
+        };
+      };
     }
     interface DomManipulationEvalResult {
-      patchId: string;
+      patchId?: string;
       success: boolean;
       operations: DomManipulationOpResult[];
       executedOperations: unknown[];
@@ -1504,7 +1537,7 @@ export const manipulateDom = defineTool({
     }
 
     const result: DomManipulationEvalResult = await page.evaluate(
-      ({operations, patchId, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE}) => {
+      ({operations, patchId, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE, isQueryOnly}) => {
         const results = [];
         const executedOperations = [];
 
@@ -1525,9 +1558,72 @@ export const manipulateDom = defineTool({
                 const element = elements[i];
                 let success = true;
                 let message = '';
+                let elementData: DomManipulationOpResult['data'] | undefined;
 
                 try {
                   switch (op.action) {
+                    case 'query': {
+                      const fields = op.queryFields || ['tagName', 'id', 'className', 'textContent', 'innerHTML', 'attributes', 'computedStyles', 'boundingRect', 'classes'];
+                      const data: DomManipulationOpResult['data'] = {};
+
+                      if (fields.includes('tagName')) {
+                        data.tagName = element.tagName.toLowerCase();
+                      }
+                      if (fields.includes('id')) {
+                        data.id = element.id || undefined;
+                      }
+                      if (fields.includes('className')) {
+                        data.className = element.className || undefined;
+                      }
+                      if (fields.includes('classes')) {
+                        data.classes = Array.from(element.classList);
+                      }
+                      if (fields.includes('textContent')) {
+                        data.textContent = element.textContent || undefined;
+                      }
+                      if (fields.includes('innerHTML')) {
+                        data.innerHTML = element.innerHTML || undefined;
+                      }
+                      if (fields.includes('attributes')) {
+                        const attrs: Record<string, string> = {};
+                        for (let j = 0; j < element.attributes.length; j++) {
+                          const attr = element.attributes[j];
+                          attrs[attr.name] = attr.value;
+                        }
+                        data.attributes = Object.keys(attrs).length > 0 ? attrs : undefined;
+                      }
+                      if (fields.includes('computedStyles')) {
+                        const styles = window.getComputedStyle(element);
+                        const computed: Record<string, string> = {};
+                        // Get common CSS properties
+                        const commonProps = [
+                          'display', 'position', 'width', 'height', 'margin', 'padding', 'border',
+                          'color', 'backgroundColor', 'fontSize', 'fontFamily', 'fontWeight',
+                          'textAlign', 'lineHeight', 'opacity', 'zIndex', 'overflow', 'flexDirection',
+                          'justifyContent', 'alignItems', 'gap', 'gridTemplateColumns', 'gridTemplateRows'
+                        ];
+                        for (const prop of commonProps) {
+                          computed[prop] = styles.getPropertyValue(prop);
+                        }
+                        data.computedStyles = computed;
+                      }
+                      if (fields.includes('boundingRect')) {
+                        const rect = element.getBoundingClientRect();
+                        data.boundingRect = {
+                          x: rect.x,
+                          y: rect.y,
+                          width: rect.width,
+                          height: rect.height,
+                          top: rect.top,
+                          left: rect.left,
+                          right: rect.right,
+                          bottom: rect.bottom,
+                        };
+                      }
+                      elementData = data;
+                      break;
+                    }
+
                     case 'set-style':
                       if (op.properties) {
                         for (const [prop, value] of Object.entries(op.properties)) {
@@ -1568,14 +1664,18 @@ export const manipulateDom = defineTool({
                   message = error.message;
                 }
 
-                opResults.push({
+                const opResult: DomManipulationOpResult = {
                   selector: op.selector,
                   elementIndex: i,
                   found: true,
                   action: op.action,
                   success,
                   message,
-                });
+                };
+                if (elementData) {
+                  opResult.data = elementData;
+                }
+                opResults.push(opResult);
               }
             }
 
@@ -1583,17 +1683,18 @@ export const manipulateDom = defineTool({
             executedOperations.push(op);
           }
 
-          // Mark successful execution with patch attributes
-          // We'll use a hidden div to track this manipulation
-          const marker = document.createElement('div');
-          marker.style.display = 'none';
-          marker.setAttribute(PATCH_ID_ATTR, patchId);
-          marker.setAttribute(PATCH_OWNER_ATTR, PATCH_OWNER_VALUE);
-          marker.setAttribute(PATCH_KIND_ATTR, 'dom-manipulation');
-          document.head.appendChild(marker);
+          // Mark successful execution with patch attributes (only for non-query operations)
+          if (!isQueryOnly) {
+            const marker = document.createElement('div');
+            marker.style.display = 'none';
+            marker.setAttribute(PATCH_ID_ATTR, patchId);
+            marker.setAttribute(PATCH_OWNER_ATTR, PATCH_OWNER_VALUE);
+            marker.setAttribute(PATCH_KIND_ATTR, 'dom-manipulation');
+            document.head.appendChild(marker);
+          }
 
           return {
-            patchId,
+            ...(isQueryOnly ? {} : {patchId}),
             success: true,
             operations: results,
             executedOperations,
@@ -1601,7 +1702,7 @@ export const manipulateDom = defineTool({
 
         } catch (error) {
           return {
-            patchId,
+            ...(isQueryOnly ? {} : {patchId}),
             success: false,
             error: error.message,
             operations: results,
@@ -1616,11 +1717,12 @@ export const manipulateDom = defineTool({
         PATCH_OWNER_ATTR,
         PATCH_KIND_ATTR,
         PATCH_OWNER_VALUE,
+        isQueryOnly,
       },
     );
 
-    // Register patch if successful
-    if (result.success) {
+    // Register patch if successful (only for non-query operations)
+    if (result.success && !isQueryOnly) {
       context.registerPatch({
         patchId,
         patchType: 'dom-manipulation',
@@ -1650,7 +1752,14 @@ export const manipulateDom = defineTool({
     const successfulOps = result.operations.filter(op => op.success === true).length;
     const totalOps = result.operations.length;
 
-    response.appendResponseLine(`DOM manipulation completed: ${successfulOps}/${totalOps} operations successful`);
+    if (isQueryOnly) {
+      const queryOps = result.operations.filter(op => op.action === 'query');
+      const foundCount = queryOps.filter(op => op.found).length;
+      const totalElements = queryOps.reduce((sum, op) => sum + (op.elementIndex !== undefined ? 1 : 0), 0);
+      response.appendResponseLine(`Query completed: ${foundCount}/${queryOps.length} selector(s) matched elements (${totalElements} total elements found)`);
+    } else {
+      response.appendResponseLine(`DOM manipulation completed: ${successfulOps}/${totalOps} operations successful`);
+    }
 
     if (result.operations.some(op => op.found === false)) {
       const notFound = result.operations.filter(op => op.found === false);
@@ -1664,12 +1773,13 @@ export const manipulateDom = defineTool({
     response.appendResponseLine(
       JSON.stringify(
         {
-          patchId,
+          ...(isQueryOnly ? {} : {patchId}),
           pageId,
           success: result.success,
           operations: result.operations,
           totalOperations: totalOps,
           successfulOperations: successfulOps,
+          ...(isQueryOnly ? {queryOnly: true} : {}),
         },
         null,
         2,

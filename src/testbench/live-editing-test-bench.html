@@ -92,6 +92,75 @@
             border-radius: 6px;
             display: none;
         }
+
+        /* Tab Navigation */
+        .tab-container {
+            margin-bottom: 32px;
+        }
+        .tab-nav {
+            display: flex;
+            gap: 8px;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 24px;
+        }
+        .tab-button {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #64748b;
+            transition: all 0.2s;
+            position: relative;
+            top: 2px;
+        }
+        .tab-button:hover {
+            color: var(--primary);
+            background: rgba(37, 99, 235, 0.05);
+        }
+        .tab-button.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Sub-tabs for keyboard methods */
+        .sub-tab-nav {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sub-tab-button {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            font-size: 13px;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .sub-tab-button:hover {
+            color: var(--primary);
+        }
+        .sub-tab-button.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        .sub-tab-content {
+            display: none;
+        }
+        .sub-tab-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -106,13 +175,14 @@
             <li>Params: <code>headerHeight: "48px"</code>, <code>sidebarWidth: "200px"</code>, <code>showFooter: true</code>.</li>
         </ul>
 
-        <h3>2. Keyboard Challenge</h3>
-        <p>Goal: Create a piano keyboard using different CSS methods.</p>
+        <h3>2. Computer Keyboard Challenge (REQUIRED: Do All Three Methods)</h3>
+        <p><strong>IMPORTANT:</strong> You must implement all three methods (A, B, and C) for creating a computer keyboard layout. This is for a computer keyboard (QWERTY layout), not a piano keyboard.</p>
         <ul>
-            <li><strong>Method A (Flex):</strong> Use <code>layout_parametric_stack</code> with <code>direction: "row"</code>.</li>
-            <li><strong>Method B (Grid):</strong> Use <code>layout_parametric_grid</code> with 12 columns for an octave.</li>
-            <li><strong>Method C (Absolute):</strong> Use <code>overlay_grid</code> to position black keys on top of white keys.</li>
-            <li>Target: <code>#keyboard-playground</code>.</li>
+            <li><strong>Method A (Flex):</strong> Use <code>layout_parametric_stack</code> with <code>direction: "row"</code> to create keyboard rows.</li>
+            <li><strong>Method B (Grid):</strong> Use <code>layout_parametric_grid</code> to create a grid-based keyboard layout.</li>
+            <li><strong>Method C (Absolute):</strong> Use <code>overlay_grid</code> or absolute positioning for special key placements.</li>
+            <li>Targets: <code>#keyboard-method-a</code>, <code>#keyboard-method-b</code>, <code>#keyboard-method-c</code>.</li>
+            <li><strong>Complete all three methods in the Keyboard Methods tab.</strong></li>
         </ul>
 
         <h3>3. Recipes & Components</h3>
@@ -144,7 +214,17 @@
             <p class="description">Master the <code>layout_live_editing</code> toolset and refine the interactive feedback loop.</p>
         </header>
 
-        <!-- Test 1: DAW Layout -->
+        <!-- Tab Navigation -->
+        <div class="tab-container">
+            <div class="tab-nav">
+                <button class="tab-button active" data-tab="construction">Construction Tests</button>
+                <button class="tab-button" data-tab="keyboard">Keyboard Methods</button>
+                <button class="tab-button" data-tab="layout-issues">Layout Issues</button>
+            </div>
+
+            <!-- Construction Tests Tab -->
+            <div id="construction-tab" class="tab-content active">
+                <!-- Test 1: DAW Layout -->
         <section id="daw-section">
             <h2>1. Digital Audio Workstation Shell</h2>
             <p class="description">Use the <code>app_shell</code> recipe to construct a high-level layout here. This tests nested parametric stacks.</p>
@@ -153,16 +233,7 @@
             </div>
         </section>
 
-        <!-- Test 2: Keyboard Layouts -->
-        <section id="keyboard-section">
-            <h2>2. Keyboard Layout Methods</h2>
-            <p class="description">Experiment with creating a keyboard. Try building one octave (7 white keys, 5 black keys) using different layout atoms.</p>
-            <div class="playground" id="keyboard-playground">
-                <!-- AI Insertions go here -->
-            </div>
-        </section>
-
-        <!-- Test 3: Components & Recipes -->
+        <!-- Test 2: Components & Recipes -->
         <section id="component-section">
             <h2>3. UI Component Playground</h2>
             <p class="description">Test standalone recipes like <code>selectable_view</code> or <code>parametric_grid</code>.</p>
@@ -247,9 +318,119 @@
                 The questionnaire slideshow will appear as a global overlay.
             </div>
         </section>
+            </div>
+
+            <!-- Keyboard Methods Tab -->
+            <div id="keyboard-tab" class="tab-content">
+                <section>
+                    <h2>Computer Keyboard Layout Methods</h2>
+                    <p class="description"><strong>Instructions for AI:</strong> You must implement all three methods (A, B, and C) for creating a computer keyboard layout. This is for a computer keyboard (QWERTY layout with standard keys), not a piano keyboard. Use the tabs below to switch between methods.</p>
+                    
+                    <div class="sub-tab-nav">
+                        <button class="sub-tab-button active" data-subtab="method-a">Method A (Flex)</button>
+                        <button class="sub-tab-button" data-subtab="method-b">Method B (Grid)</button>
+                        <button class="sub-tab-button" data-subtab="method-c">Method C (Absolute)</button>
+                    </div>
+
+                    <div id="method-a-content" class="sub-tab-content active">
+                        <h3>Method A: Flexbox Layout</h3>
+                        <p class="description">Use <code>layout_parametric_stack</code> with <code>direction: "row"</code> to create keyboard rows. Build a complete computer keyboard with QWERTY layout.</p>
+                        <div class="playground" id="keyboard-method-a">
+                            <!-- AI Insertions go here -->
+                        </div>
+                    </div>
+
+                    <div id="method-b-content" class="sub-tab-content">
+                        <h3>Method B: Grid Layout</h3>
+                        <p class="description">Use <code>layout_parametric_grid</code> to create a grid-based keyboard layout. Arrange keys in a standard computer keyboard grid pattern.</p>
+                        <div class="playground" id="keyboard-method-b">
+                            <!-- AI Insertions go here -->
+                        </div>
+                    </div>
+
+                    <div id="method-c-content" class="sub-tab-content">
+                        <h3>Method C: Absolute Positioning</h3>
+                        <p class="description">Use <code>overlay_grid</code> or absolute positioning for special key placements. Handle keys that don't fit standard grid patterns (like spacebar, Enter, Shift, etc.).</p>
+                        <div class="playground" id="keyboard-method-c">
+                            <!-- AI Insertions go here -->
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Layout Issues Tab -->
+            <div id="layout-issues-tab" class="tab-content">
+                <section>
+                    <h2>Layout Issues: Overlap, Clipping, and Other Problems</h2>
+                    <p class="description">Test cases for common layout problems: overlapping elements, clipping issues, overflow problems, z-index conflicts, and positioning errors.</p>
+                    
+                    <section id="overlap-section">
+                        <h3>Overlap Issues</h3>
+                        <p class="description">Test overlapping elements and z-index stacking contexts.</p>
+                        <div class="playground" id="overlap-playground">
+                            <!-- AI Insertions go here -->
+                        </div>
+                    </section>
+
+                    <section id="clipping-section">
+                        <h3>Clipping Issues</h3>
+                        <p class="description">Test elements that are clipped by parent containers or overflow settings.</p>
+                        <div class="playground" id="clipping-playground">
+                            <!-- AI Insertions go here -->
+                        </div>
+                    </section>
+
+                    <section id="overflow-section">
+                        <h3>Overflow Problems</h3>
+                        <p class="description">Test content that overflows containers, scroll issues, and text truncation.</p>
+                        <div class="playground" id="overflow-playground">
+                            <!-- AI Insertions go here -->
+                        </div>
+                    </section>
+
+                    <section id="positioning-section">
+                        <h3>Positioning Errors</h3>
+                        <p class="description">Test absolute, relative, fixed, and sticky positioning edge cases.</p>
+                        <div class="playground" id="positioning-playground">
+                            <!-- AI Insertions go here -->
+                        </div>
+                    </section>
+                </section>
+            </div>
+        </div>
     </main>
 
     <script>
+        // Tab switching functionality
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const tabId = button.getAttribute('data-tab');
+                
+                // Remove active class from all tabs and buttons
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                
+                // Add active class to clicked button and corresponding content
+                button.classList.add('active');
+                document.getElementById(tabId + '-tab').classList.add('active');
+            });
+        });
+
+        // Sub-tab switching functionality
+        document.querySelectorAll('.sub-tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const subtabId = button.getAttribute('data-subtab');
+                
+                // Remove active class from all sub-tabs and content
+                document.querySelectorAll('.sub-tab-button').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.sub-tab-content').forEach(content => content.classList.remove('active'));
+                
+                // Add active class to clicked button and corresponding content
+                button.classList.add('active');
+                document.getElementById(subtabId + '-content').classList.add('active');
+            });
+        });
+
         // Simple transport simulation
         const playBtn = document.getElementById('transport-play');
         const stopBtn = document.getElementById('transport-stop');
@@ -257,27 +438,33 @@
         const bpmVal = document.getElementById('bpm-value');
         const result = document.getElementById('dynamic-result');
 
-        playBtn.addEventListener('click', () => {
-            result.style.display = 'block';
-            result.textContent = 'Playing at ' + slider.value + ' BPM...';
-        });
-
-        stopBtn.addEventListener('click', () => {
-            result.textContent = 'Stopped.';
-            setTimeout(() => result.style.display = 'none', 2000);
-        });
-
-        slider.addEventListener('input', () => {
-            bpmVal.textContent = slider.value + ' BPM';
-            if (result.style.display === 'block') {
+        if (playBtn) {
+            playBtn.addEventListener('click', () => {
+                result.style.display = 'block';
                 result.textContent = 'Playing at ' + slider.value + ' BPM...';
-            }
-        });
+            });
+        }
+
+        if (stopBtn) {
+            stopBtn.addEventListener('click', () => {
+                result.textContent = 'Stopped.';
+                setTimeout(() => result.style.display = 'none', 2000);
+            });
+        }
+
+        if (slider) {
+            slider.addEventListener('input', () => {
+                bpmVal.textContent = slider.value + ' BPM';
+                if (result && result.style.display === 'block') {
+                    result.textContent = 'Playing at ' + slider.value + ' BPM...';
+                }
+            });
+        }
 
         // Helper for evaluate_script
         window.getDAWState = () => ({
-            playing: result.style.display === 'block',
-            bpm: parseInt(slider.value),
+            playing: result && result.style.display === 'block',
+            bpm: slider ? parseInt(slider.value) : 120,
             layoutReady: !!document.querySelector('.mcp-le-util-panel')
         });
     </script>

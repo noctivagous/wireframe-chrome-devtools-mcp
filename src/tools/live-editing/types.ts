@@ -7,7 +7,9 @@
 import type {Context, Response} from '../ToolDefinition.js';
 
 export const LIVE_EDITING_SCHEMA_VERSION = 1 as const;
-
+export const LIVE_EDITING_AI_INSTRUCTION =
+  "The state of the live editing workflow is live editing. Instruction for AI: Don't write to any files until the user instructs you to do so or commits changes. Use layout_live_editing for any layouts.";
+  
 export type LiveEditingResponseKind =
   | 'live_editing_snapshot'
   | 'live_editing_session'
@@ -42,6 +44,8 @@ export interface LiveEditingToolResponse<Data = unknown, BatchOps = unknown> {
   instructions?: LiveEditingInstructions;
   next_tool_calls?: LiveEditingToolCall[];
   batch_ops_plan?: BatchOps;
+  workflow_state?: 'live_editing' | 'idle';
+  ai_instruction?: string;
 }
 
 export function appendLiveEditingResponse(
@@ -51,6 +55,17 @@ export function appendLiveEditingResponse(
   response.appendResponseLine('```json');
   response.appendResponseLine(JSON.stringify(payload, null, 2));
   response.appendResponseLine('```');
+}
+
+export function attachLiveEditingWorkflowState(
+  payload: LiveEditingToolResponse,
+  context: Context,
+) {
+  const state = context.getLiveEditingWorkflowState();
+  payload.workflow_state = state;
+  if (state === 'live_editing') {
+    payload.ai_instruction = LIVE_EDITING_AI_INSTRUCTION;
+  }
 }
 
 export interface ArtifactOutput<T> {

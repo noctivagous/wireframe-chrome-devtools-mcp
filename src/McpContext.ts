@@ -177,6 +177,7 @@ export class McpContext implements Context {
   #nextEditChangeId = 1;
   #activeEditSessionId: string | null = null;
   #editSessions = new Map<string, EditSession>();
+  #liveEditingWorkflowState: 'live_editing' | 'idle' = 'idle';
 
   #locatorClass: typeof Locator;
   #options: McpContextOptions;
@@ -213,6 +214,14 @@ export class McpContext implements Context {
         },
       } as ListenerMap;
     });
+  }
+
+  setLiveEditingWorkflowState(state: 'live_editing' | 'idle'): void {
+    this.#liveEditingWorkflowState = state;
+  }
+
+  getLiveEditingWorkflowState(): 'live_editing' | 'idle' {
+    return this.#liveEditingWorkflowState;
   }
 
   async #init() {

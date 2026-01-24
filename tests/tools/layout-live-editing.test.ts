@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import {describe, it} from 'node:test';
 
-import {layoutLiveEditing, layoutLiveEditingRecipeCatalog} from '../../src/tools/layout-live-editing.js';
+import {layoutLiveEditing} from '../../src/tools/layout-live-editing.js';
 import {exportPrototypeState} from '../../src/tools/prototype.js';
 import {html, withMcpContext} from '../utils.js';
 
@@ -21,7 +21,7 @@ function extractJson(responseText: string) {
 describe('layout_live_editing', () => {
   it('returns recipe catalog summaries', async () => {
     await withMcpContext(async (response, context) => {
-      await layoutLiveEditingRecipeCatalog.handler({params: {}}, response, context);
+      await layoutLiveEditing.handler({params: {catalog: {}} as any}, response, context);
 
       const payload = extractJson(response.responseLines.join('\n'));
       const recipes = payload.recipes as Array<{name: string; params: Record<string, unknown>}>;

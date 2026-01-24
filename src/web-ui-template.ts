@@ -295,6 +295,36 @@ export function htmlPage(): string {
       color: var(--accent);
     }
 
+    .workflow-explainer {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: grid;
+      gap: 12px;
+    }
+
+    .workflow-explainer-section h4 {
+      margin: 0 0 6px 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .workflow-explainer-section ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .workflow-explainer-section li {
+      margin-bottom: 4px;
+    }
+
     #content-area {
       flex: 1;
       display: flex;
@@ -1193,6 +1223,91 @@ export function htmlPage(): string {
 
   <script>
     const WORKFLOW_GROUPS = ${JSON.stringify(WORKFLOW_GROUPS)};
+    const WORKFLOW_GUIDANCE = {
+      'live-editing-minimal': {
+        howToUse: [
+          'Start a live editing session.',
+          'Describe the changes you want.',
+          'Review results in-browser before committing.'
+        ],
+        aiToolUse: [
+          'Begin session and keep changes in-browser.',
+          'Use insert_css / insert_js / manipulate_dom with recordToSession when applicable.',
+          'Use wireframe/svg snapshots to validate layout before commit.'
+        ]
+      },
+      'layout-debugging': {
+        howToUse: [
+          'Identify a page or section with layout issues.',
+          'Ask for wireframe analysis and confirm the problems.',
+          'Approve fixes after before/after verification.'
+        ],
+        aiToolUse: [
+          'Use wireframe_snapshot / svg_snapshot to detect gaps, overlaps, clipping.',
+          'Apply candidate fixes in-browser and re-snapshot for comparison.',
+          'Only commit after the user confirms the layout is correct.'
+        ]
+      },
+      'debugging': {
+        howToUse: [
+          'Describe the bug or behavior you want to inspect.',
+          'Provide the page/URL and any repro steps.',
+          'Confirm findings and approve changes if needed.'
+        ],
+        aiToolUse: [
+          'Use snapshot and debugging tools to inspect state and DOM.',
+          'Use evaluate_script / manipulate_dom for targeted checks or patches.',
+          'Keep changes minimal and confirm impact before committing.'
+        ]
+      },
+      'testing-automation': {
+        howToUse: [
+          'Describe the test scenario and expected outcome.',
+          'Provide the page/URL and any setup steps.',
+          'Review results and iterate on failures.'
+        ],
+        aiToolUse: [
+          'Use input/navigation tools to drive the scenario.',
+          'Use snapshot tools to capture outcomes and verify state.',
+          'Report failures with clear steps and evidence.'
+        ]
+      },
+      'performance-analysis': {
+        howToUse: [
+          'Describe the performance concern or target metric.',
+          'Provide the page/URL and a reproducible flow.',
+          'Review findings and decide on next optimizations.'
+        ],
+        aiToolUse: [
+          'Use performance tools to capture traces and timings.',
+          'Use network tools to identify slow resources.',
+          'Summarize bottlenecks and propose targeted fixes.'
+        ]
+      }
+    };
+
+    function renderWorkflowGuidance(workflowId) {
+      const guidance = WORKFLOW_GUIDANCE[workflowId];
+      if (!guidance) return '';
+
+      const renderList = (items) => {
+        if (!items || !items.length) return '';
+        return '<ul>' + items.map(i => '<li>' + i + '</li>').join('') + '</ul>';
+      };
+
+      return \`
+        <div class="workflow-explainer">
+          <div class="workflow-explainer-section">
+            <h4>How to use this workflow</h4>
+            \${renderList(guidance.howToUse)}
+          </div>
+          <div class="workflow-explainer-section">
+            <h4>How the AI will use tools</h4>
+            \${renderList(guidance.aiToolUse)}
+          </div>
+        </div>
+      \`;
+    }
     const $ = (id) => document.getElementById(id);
     let tools = [];
     let selectedCategory = 'all';
@@ -1698,6 +1813,9 @@ export function htmlPage(): string {
         contextBar.querySelector('.back-to-workflows').addEventListener('click', () => {
           showWorkflowSelection();
         });
+
+        const explainerWrapper = document.createElement('div');
+        explainerWrapper.innerHTML = renderWorkflowGuidance(workflowValue) || '';
         
         // Add tools section
         const addToolsSection = document.createElement('div');
@@ -1726,6 +1844,9 @@ export function htmlPage(): string {
         }
         
         container.appendChild(contextBar);
+        if (explainerWrapper.innerHTML) {
+          container.appendChild(explainerWrapper);
+        }
         container.appendChild(addToolsSection);
         if (contentArea) {
           container.appendChild(contentArea);
@@ -1757,6 +1878,15 @@ export function htmlPage(): string {
           const badge = toolView.querySelector('.workflow-badge');
           if (contextInfo) contextInfo.textContent = workflowName;
           if (badge) badge.textContent = workflowValue;
+          const existingExplainer = toolView.querySelector('.workflow-explainer');
+          if (existingExplainer) {
+            existingExplainer.parentElement.removeChild(existingExplainer);
+          }
+          const updatedExplainer = document.createElement('div');
+          updatedExplainer.innerHTML = renderWorkflowGuidance(workflowValue) || '';
+          if (updatedExplainer.innerHTML) {
+            toolView.insertBefore(updatedExplainer.firstElementChild, toolView.children[1]);
+          }
         }
         
         // Trigger workflow selection in existing code

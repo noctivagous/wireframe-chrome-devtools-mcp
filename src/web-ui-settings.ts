@@ -14,13 +14,6 @@ export interface WorkflowGroup {
 
 export const WORKFLOW_GROUPS: WorkflowGroup[] = [
   {
-    id: 'live-editing',
-    name: 'Live Editing',
-    description: 'Tools for interactive prototyping and live development',
-    toolCategories: ['navigation', 'input', 'snapshot', 'edit_session', 'patch', 'debugging'],
-    tools: []
-  },
-  {
     id: 'live-editing-minimal',
     name: 'Live Editing Minimal',
     description: 'Essential tools for live prototyping and committing changes',

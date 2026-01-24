@@ -10,10 +10,11 @@ import {getDefaultGuidanceConfigPath, loadGuidanceConfig} from '../guidance-conf
 import {SnapshotFormatter} from '../formatters/SnapshotFormatter.js';
 
 import {ToolCategory} from './categories.js';
-import {defineTool, timeoutSchema} from './ToolDefinition.js';
+import {defineTool, timeoutSchema, type Context, type Response} from './ToolDefinition.js';
 import {
   appendLiveEditingResponse,
   LIVE_EDITING_SCHEMA_VERSION,
+  attachLiveEditingWorkflowState,
   resolveArtifactOutput,
   type LiveEditingArtifact,
   type LiveEditingToolResponse,
@@ -45,50 +46,49 @@ const maxBytesInlineSchema = zod
   .optional()
   .describe('Maximum inline payload size (bytes) before falling back to an artifact file.');
 
-export const beginLiveEditingSession = defineTool({
-  name: 'begin_live_editing_session',
-  description:
-    'Start a live editing session by opening a URL, activating an edit session, and returning a structured live-editing payload with suggested next steps.',
-  annotations: {
-    category: ToolCategory.EDIT_SESSION,
-    readOnlyHint: false,
+export const beginLiveEditingSessionSchema = {
+  url: zod.string().describe('URL to open for the live editing session.'),
+  openMode: zod
+    .enum(['new_page', 'navigate_selected'])
+    .default('navigate_selected')
+    .optional()
+    .describe('Open a new page or navigate the currently selected page.'),
+  setActiveEditSession: zod
+    .boolean()
+    .default(true)
+    .optional()
+    .describe('If true, create and activate a new edit session.'),
+  injectOverlay: zod
+    .boolean()
+    .default(true)
+    .optional()
+    .describe('If true, inject the live editing overlay into the page.'),
+  overlayPatchId: zod
+    .string()
+    .optional()
+    .describe('Optional patch id for the overlay injection.'),
+  snapshots: zod
+    .object({
+      takeSnapshot: zod.boolean().default(true).optional(),
+      wireframe: zod.boolean().default(true).optional(),
+      svg: zod.boolean().default(false).optional(),
+    })
+    .optional()
+    .describe('Which follow-up snapshots to suggest.'),
+  snapshotOptions: zod
+    .record(zod.any())
+    .optional()
+    .describe('Optional args to include in suggested snapshot tool calls.'),
+  ...timeoutSchema,
+};
+
+export async function beginLiveEditingSessionHandler(
+  request: {
+    params: zod.objectOutputType<typeof beginLiveEditingSessionSchema, zod.ZodTypeAny>;
   },
-  schema: {
-    url: zod.string().describe('URL to open for the live editing session.'),
-    openMode: zod
-      .enum(['new_page', 'navigate_selected'])
-      .default('navigate_selected')
-      .optional()
-      .describe('Open a new page or navigate the currently selected page.'),
-    setActiveEditSession: zod
-      .boolean()
-      .default(true)
-      .optional()
-      .describe('If true, create and activate a new edit session.'),
-    injectOverlay: zod
-      .boolean()
-      .default(true)
-      .optional()
-      .describe('If true, inject the live editing overlay into the page.'),
-    overlayPatchId: zod
-      .string()
-      .optional()
-      .describe('Optional patch id for the overlay injection.'),
-    snapshots: zod
-      .object({
-        takeSnapshot: zod.boolean().default(true).optional(),
-        wireframe: zod.boolean().default(true).optional(),
-        svg: zod.boolean().default(false).optional(),
-      })
-      .optional()
-      .describe('Which follow-up snapshots to suggest.'),
-    snapshotOptions: zod
-      .record(zod.any())
-      .optional()
-      .describe('Optional args to include in suggested snapshot tool calls.'),
-    ...timeoutSchema,
-  },
-  handler: async (request, response, context) => {
+  response: Response,
+  context: Context,
+) {
     const openMode = request.params.openMode ?? 'navigate_selected';
     const page = openMode === 'new_page' ? await context.newPage() : context.getSelectedPage();
     context.selectPage(page);
@@ -111,6 +111,9 @@ export const beginLiveEditingSession = defineTool({
           setActive: true,
         })
       : undefined;
+    if (request.params.setActiveEditSession) {
+      context.setLiveEditingWorkflowState('live_editing');
+    }
 
     let overlayPatchId: string | undefined;
     let overlayInstalled = false;
@@ -1308,6 +1311,22 @@ export const beginLiveEditingSession = defineTool({
     const artifacts: LiveEditingArtifact[] = [];
     let baselineWireframeFile: string | undefined;
     let baselineSnapshotFile: string | undefined;
+    let baselineWireframeData:
+      | {
+          summary: ReturnType<typeof summarizeWireframeSnapshot>;
+          outputMode: string;
+          inline?: WireframeSnapshotOutput;
+          inlineSkipped?: {reason: string; maxBytesInline: number; byteLength: number};
+        }
+      | undefined;
+    let baselineSvgData:
+      | {
+          summary: ReturnType<typeof summarizeWireframeSnapshot>;
+          outputMode: string;
+          svg?: string;
+          inlineSkipped?: {reason: string; maxBytesInline: number; byteLength: number};
+        }
+      | undefined;
     let guidanceSummary:
       | {design?: string; architecture?: string; engineering?: string}
       | undefined;
@@ -1333,17 +1352,19 @@ export const beginLiveEditingSession = defineTool({
       }
     }
 
+    // Capture wireframe baseline snapshot (internal call)
     if (snapshots.wireframe ?? true) {
       const {output, bytes, json} = await captureWireframeSnapshot(
         {params: snapshotOptions},
         context,
       );
+      const summary = summarizeWireframeSnapshot(output);
       const resolved = await resolveArtifactOutput({
         context,
         bytes,
         mimeType: 'application/json',
-        baseName: 'live-editing-wireframe-baseline',
-        outputMode: 'file',
+        baseName: 'wireframe_snapshot_live_editing',
+        outputMode: 'summary',
         maxBytesInline: 200_000,
         inlineData: output,
         summary: 'Wireframe snapshot baseline (JSON)',
@@ -1352,6 +1373,12 @@ export const beginLiveEditingSession = defineTool({
         artifacts.push(resolved.artifact);
         baselineWireframeFile = resolved.artifact.filename;
       }
+      baselineWireframeData = {
+        summary,
+        outputMode: resolved.effectiveOutputMode,
+        inline: resolved.inline,
+        inlineSkipped: resolved.inlineSkipped,
+      };
       await page.evaluate((baselineJson: string) => {
         const api = (window as any).__MCP_LIVE_EDITING__;
         if (api) {
@@ -1362,11 +1389,13 @@ export const beginLiveEditingSession = defineTool({
       }, json);
     }
 
+    // Capture SVG baseline snapshot (internal call)
     if (snapshots.svg ?? false) {
       const {output} = await captureWireframeSnapshot(
         {params: snapshotOptions},
         context,
       );
+      const summary = summarizeWireframeSnapshot(output);
       const svg = renderSvgWireframe(output, {
         scale: 1,
         background: 'transparent',
@@ -1385,15 +1414,21 @@ export const beginLiveEditingSession = defineTool({
         context,
         bytes: new TextEncoder().encode(svg),
         mimeType: 'text/plain',
-        baseName: 'live-editing-svg-baseline',
+        baseName: 'svg_snapshot_live_editing',
         outputMode: 'file',
         maxBytesInline: 200_000,
         inlineData: svg,
-        summary: 'Wireframe SVG baseline',
+        summary: 'SVG wireframe baseline',
       });
       if (resolved.artifact) {
         artifacts.push(resolved.artifact);
       }
+      baselineSvgData = {
+        summary,
+        outputMode: resolved.effectiveOutputMode,
+        svg: resolved.inline,
+        inlineSkipped: resolved.inlineSkipped,
+      };
     }
 
     const guidance = await loadGuidanceConfig(getDefaultGuidanceConfigPath());
@@ -1427,24 +1462,6 @@ export const beginLiveEditingSession = defineTool({
         });
       }
     }
-    const nextToolCalls = [
-      ...(snapshots.wireframe
-        ? [
-            {
-              tool: 'wireframe_snapshot_live_editing',
-              args: snapshotOptions,
-            },
-          ]
-        : []),
-      ...(snapshots.svg
-        ? [
-            {
-              tool: 'svg_snapshot_live_editing',
-              args: snapshotOptions,
-            },
-          ]
-        : []),
-    ];
 
     const payload: LiveEditingToolResponse<{
       page: {
@@ -1459,6 +1476,8 @@ export const beginLiveEditingSession = defineTool({
       baseline?: {
         textSnapshotFile?: string;
         wireframeFile?: string;
+        wireframe?: typeof baselineWireframeData;
+        svg?: typeof baselineSvgData;
       };
       guidanceSummary?: {design?: string; architecture?: string; engineering?: string};
     }> = {
@@ -1481,6 +1500,8 @@ export const beginLiveEditingSession = defineTool({
         baseline: {
           textSnapshotFile: baselineSnapshotFile,
           wireframeFile: baselineWireframeFile,
+          wireframe: baselineWireframeData,
+          svg: baselineSvgData,
         },
         guidanceSummary,
       },
@@ -1488,24 +1509,40 @@ export const beginLiveEditingSession = defineTool({
       instructions: {
         ordered_steps: [
           'Confirm the page is correct and ready for live editing.',
-          'Use the live-editing snapshot tools to get a baseline (see next_tool_calls) if you need more detail.',
+          ...(baselineWireframeData || baselineSvgData
+            ? [
+                'Baseline snapshots have been captured automatically:',
+                ...(baselineWireframeData
+                  ? [
+                      `- Wireframe snapshot: ${baselineWireframeData.summary.elementCount} elements captured. Use data.baseline.wireframe.summary for quick reference, or open the artifact file for full details.`,
+                    ]
+                  : []),
+                ...(baselineSvgData
+                  ? [
+                      `- SVG snapshot: ${baselineSvgData.summary.elementCount} elements captured. Use data.baseline.svg.summary for quick reference, or open the artifact file for full details.`,
+                    ]
+                  : []),
+              ]
+            : []),
           'Wait for the user to annotate or make changes.',
-          'When the user says “update from my changes”, call update_from_user_changes.',
+          'When the user says "update from my changes", call update_from_user_changes.',
+          'After making changes, verify your work using svg_snapshot_live_editing and wireframe_snapshot_live_editing to compare against the baseline.',
+          'Use batch_ops to do more than one tool call at a time.',
         ],
         constraints: [
           'Do not write repo files during live editing. Keep changes in-browser.',
+          'Use layout_live_editing for any layouts.',
         ],
         cautions: navigationError
           ? ['Navigation encountered an error; verify the page loaded correctly.']
           : undefined,
       },
-      next_tool_calls: nextToolCalls,
     };
 
+    attachLiveEditingWorkflowState(payload, context);
     appendLiveEditingResponse(response, payload);
     response.setIncludePages(true);
-  },
-});
+}
 
 export const updateFromUserChanges = defineTool({
   name: 'update_from_user_changes',
@@ -1903,7 +1940,7 @@ export const updateFromUserChanges = defineTool({
           ...(moveLinks.length
             ? ['Apply move links using the provided batch_ops_plan (evaluate_script).']
             : []),
-          'Re-run live-editing snapshots to verify changes.',
+          'Verify your changes using svg_snapshot_live_editing and wireframe_snapshot_live_editing to check your work.',
         ],
         constraints: ['Do not write repo files unless explicitly requested.'],
       },
@@ -1922,6 +1959,7 @@ export const updateFromUserChanges = defineTool({
         : undefined,
     };
 
+    attachLiveEditingWorkflowState(payload, context);
     appendLiveEditingResponse(response, payload);
   },
 });

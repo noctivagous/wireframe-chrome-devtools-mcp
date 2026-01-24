@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import {describe, it} from 'node:test';
 
 import {
-  beginLiveEditingSession,
+  beginLiveEditingSessionHandler,
   updateFromUserChanges,
 } from '../../src/tools/live-editing.js';
 import {html, withMcpContext} from '../utils.js';
@@ -24,7 +24,7 @@ describe('live editing tools', () => {
     it('returns a structured live-editing payload', async () => {
       await withMcpContext(async (response, context) => {
         const url = 'data:text/html,<html><body><main>Live</main></body></html>';
-        await beginLiveEditingSession.handler(
+        await beginLiveEditingSessionHandler(
           {params: {url}},
           response,
           context,
@@ -79,7 +79,7 @@ describe('live editing tools', () => {
           </main>`,
         );
 
-        await beginLiveEditingSession.handler(
+        await beginLiveEditingSessionHandler(
           {params: {url: 'about:blank', injectOverlay: true}},
           response,
           context,
@@ -130,7 +130,7 @@ describe('live editing tools', () => {
           </main>`,
         );
 
-        await beginLiveEditingSession.handler(
+        await beginLiveEditingSessionHandler(
           {params: {url: 'about:blank', injectOverlay: true}},
           response,
           context,
@@ -175,7 +175,7 @@ describe('live editing tools', () => {
       await withMcpContext(async (response, context) => {
         const url =
           'data:text/html,<html><body><main><div id="box" style="width:100px;height:20px">Box</div></main></body></html>';
-        await beginLiveEditingSession.handler(
+        await beginLiveEditingSessionHandler(
           {params: {url, injectOverlay: true, snapshots: {wireframe: true, svg: false}}},
           response,
           context,
@@ -204,7 +204,7 @@ describe('live editing tools', () => {
 
     it('returns annotation insights and priority ordering', async () => {
       await withMcpContext(async (response, context) => {
-        await beginLiveEditingSession.handler(
+        await beginLiveEditingSessionHandler(
           {params: {url: 'about:blank', injectOverlay: true}},
           response,
           context,
@@ -247,7 +247,7 @@ describe('live editing tools', () => {
 
     it('suggests style ops for layout hints', async () => {
       await withMcpContext(async (response, context) => {
-        await beginLiveEditingSession.handler(
+        await beginLiveEditingSessionHandler(
           {params: {url: 'about:blank', injectOverlay: true}},
           response,
           context,

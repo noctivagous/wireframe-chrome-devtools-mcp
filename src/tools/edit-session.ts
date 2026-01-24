@@ -11,7 +11,8 @@ import type {EditSession} from '../McpContext.js';
 import {zod} from '../third_party/index.js';
 
 import {ToolCategory} from './categories.js';
-import {beginLiveEditingSession} from './live-editing.js';
+import {beginLiveEditingSessionHandler, beginLiveEditingSessionSchema} from './live-editing.js';
+import {LIVE_EDITING_AI_INSTRUCTION} from './live-editing/types.js';
 import {exportPrototypeState} from './prototype.js';
 import {defineTool} from './ToolDefinition.js';
 
@@ -747,7 +748,7 @@ export const liveEditingSession = defineTool({
   },
   schema: {
     begin: zod
-      .object(beginLiveEditingSession.schema as Record<string, any>)
+      .object(beginLiveEditingSessionSchema as Record<string, any>)
       .optional()
       .describe(
         'Begin a live editing session (opens a URL, optionally injects overlay, optionally creates an edit session).',
@@ -813,7 +814,7 @@ export const liveEditingSession = defineTool({
     }
 
     if (begin) {
-      await beginLiveEditingSession.handler({params: begin as any}, response, context);
+      await beginLiveEditingSessionHandler({params: begin as any}, response, context);
       return;
     }
 
@@ -835,8 +836,20 @@ export const liveEditingSession = defineTool({
             source: 'ai',
           });
         }, rest);
+        const workflowState = context.getLiveEditingWorkflowState();
         response.appendResponseLine('```json');
-        response.appendResponseLine(JSON.stringify({success}, null, 2));
+        response.appendResponseLine(
+          JSON.stringify(
+            {
+              success,
+              workflow_state: workflowState,
+              ai_instruction:
+                workflowState === 'live_editing' ? LIVE_EDITING_AI_INSTRUCTION : undefined,
+            },
+            null,
+            2,
+          ),
+        );
         response.appendResponseLine('```');
         return;
       }
@@ -847,14 +860,36 @@ export const liveEditingSession = defineTool({
       const {action, ...rest} = exportOp as Record<string, unknown>;
       if (action === 'export_edit_session') {
         await exportEditSession.handler({params: rest as any}, response, context);
+        const workflowState = context.getLiveEditingWorkflowState();
+        response.appendResponseLine('```json');
+        response.appendResponseLine(
+          JSON.stringify(
+            {
+              workflow_state: workflowState,
+              ai_instruction:
+                workflowState === 'live_editing' ? LIVE_EDITING_AI_INSTRUCTION : undefined,
+            },
+            null,
+            2,
+          ),
+        );
+        response.appendResponseLine('```');
         return;
       }
       if (action === 'commit_edit_session_to_files') {
         await commitEditSessionToFiles.handler({params: rest as any}, response, context);
+        context.setLiveEditingWorkflowState('idle');
+        response.appendResponseLine('```json');
+        response.appendResponseLine(JSON.stringify({workflow_state: 'idle'}, null, 2));
+        response.appendResponseLine('```');
         return;
       }
       if (action === 'clear_edit_session') {
         await clearEditSession.handler({params: rest as any}, response, context);
+        context.setLiveEditingWorkflowState('idle');
+        response.appendResponseLine('```json');
+        response.appendResponseLine(JSON.stringify({workflow_state: 'idle'}, null, 2));
+        response.appendResponseLine('```');
         return;
       }
       throw new Error(`Unsupported export action: ${String(action)}`);
@@ -870,8 +905,21 @@ export const liveEditingSession = defineTool({
         return api.showInteractForm(params);
       }, interact);
       
+      const workflowState = context.getLiveEditingWorkflowState();
       response.appendResponseLine('```json');
-      response.appendResponseLine(JSON.stringify({ok: true, interactResult: result}, null, 2));
+      response.appendResponseLine(
+        JSON.stringify(
+          {
+            ok: true,
+            interactResult: result,
+            workflow_state: workflowState,
+            ai_instruction:
+              workflowState === 'live_editing' ? LIVE_EDITING_AI_INSTRUCTION : undefined,
+          },
+          null,
+          2,
+        ),
+      );
       response.appendResponseLine('```');
       return;
     }

@@ -165,6 +165,8 @@ export type Context = Readonly<{
     change: Omit<EditChangeRecord, 'changeId'> & {changeId?: string},
     options?: {sessionId?: string; autoCreate?: boolean},
   ): {sessionId: string; changeId: string} | null;
+  setLiveEditingWorkflowState(state: 'live_editing' | 'idle'): void;
+  getLiveEditingWorkflowState(): 'live_editing' | 'idle';
 }>;
 
 export function defineTool<Schema extends zod.ZodRawShape>(

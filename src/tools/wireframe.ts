@@ -14,6 +14,7 @@ import {
   LIVE_EDITING_SCHEMA_VERSION,
   type LiveEditingToolResponse,
   resolveArtifactOutput,
+  attachLiveEditingWorkflowState,
 } from './live-editing/types.js';
 
 type CoordinateSpace = 'viewport' | 'document';
@@ -2573,6 +2574,7 @@ export const wireframeSnapshotLiveEditing = defineTool({
       },
     };
 
+    attachLiveEditingWorkflowState(payload, context);
     appendLiveEditingResponse(response, payload);
   },
 });
@@ -2678,6 +2680,7 @@ export const svgSnapshotLiveEditing = defineTool({
       },
     };
 
+    attachLiveEditingWorkflowState(payload, context);
     appendLiveEditingResponse(response, payload);
   },
 });
