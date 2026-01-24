@@ -312,6 +312,10 @@ const patchSchema = zod.object({
     .boolean()
     .optional()
     .describe('If true, replaces existing patches with matching patch ids.'),
+  cssMode: zod
+    .enum(['replace', 'merge', 'append'])
+    .optional()
+    .describe('CSS update mode: "replace" (default, replaces entire CSS), "merge" (merges with existing, updates conflicting rules), "append" (appends new CSS without removing existing).'),
   recordToSession: zod
     .boolean()
     .optional()
@@ -527,6 +531,170 @@ function colorWithAlpha(value: string | undefined, alpha: number): string | null
   const parsed = parseColor(value);
   if (!parsed) {return null;}
   return `rgba(${parsed.r}, ${parsed.g}, ${parsed.b}, ${Math.max(0, Math.min(alpha, 1))})`;
+}
+
+/**
+ * CSS Helper Functions for merge/append operations
+ */
+
+type CssRule = {
+  selector: string;
+  properties: string;
+  fullText: string;
+};
+
+/**
+ * Parse CSS text into individual rules
+ */
+function parseCssRules(cssText: string): CssRule[] {
+  const rules: CssRule[] = [];
+  // Remove comments
+  const cleaned = cssText.replace(/\/\*[\s\S]*?\*\//g, '');
+  // Match selector { properties }
+  const rulePattern = /([^{]+)\{([^}]+)\}/g;
+  let match;
+  while ((match = rulePattern.exec(cleaned)) !== null) {
+    const selector = match[1].trim();
+    const properties = match[2].trim();
+    if (selector && properties) {
+      rules.push({
+        selector,
+        properties,
+        fullText: match[0],
+      });
+    }
+  }
+  return rules;
+}
+
+/**
+ * Extract unique selectors from CSS text
+ */
+function extractCssSelectors(cssText: string): Set<string> {
+  const selectors = new Set<string>();
+  const rules = parseCssRules(cssText);
+  rules.forEach(rule => {
+    // Split multiple selectors (comma-separated)
+    rule.selector.split(',').forEach(sel => {
+      const trimmed = sel.trim();
+      if (trimmed) {
+        selectors.add(trimmed);
+      }
+    });
+  });
+  return selectors;
+}
+
+/**
+ * Merge two CSS texts, updating conflicting rules from newCss
+ */
+function mergeCss(existingCss: string, newCss: string): string {
+  const existingRules = parseCssRules(existingCss);
+  const newRules = parseCssRules(newCss);
+  
+  // Create a map of existing rules by selector
+  const existingMap = new Map<string, CssRule[]>();
+  existingRules.forEach(rule => {
+    const key = rule.selector.trim();
+    if (!existingMap.has(key)) {
+      existingMap.set(key, []);
+    }
+    existingMap.get(key)!.push(rule);
+  });
+  
+  // Create a map of new rules by selector
+  const newMap = new Map<string, CssRule[]>();
+  newRules.forEach(rule => {
+    const key = rule.selector.trim();
+    if (!newMap.has(key)) {
+      newMap.set(key, []);
+    }
+    newMap.get(key)!.push(rule);
+  });
+  
+  // Build merged CSS: keep non-conflicting existing rules, add/update with new rules
+  const mergedRules: CssRule[] = [];
+  
+  // Add all existing rules that don't conflict
+  existingRules.forEach(rule => {
+    const key = rule.selector.trim();
+    if (!newMap.has(key)) {
+      mergedRules.push(rule);
+    }
+  });
+  
+  // Add all new rules (these override existing ones with same selector)
+  mergedRules.push(...newRules);
+  
+  // Combine into CSS text
+  return mergedRules.map(rule => rule.fullText).join('\n\n');
+}
+
+/**
+ * Append CSS, keeping all existing rules
+ */
+function appendCss(existingCss: string, newCss: string): string {
+  const existing = existingCss.trim();
+  const appended = newCss.trim();
+  if (!existing) return appended;
+  if (!appended) return existing;
+  return `${existing}\n\n${appended}`;
+}
+
+/**
+ * Validate CSS replacement and generate warnings
+ */
+function validateCssReplacement(
+  existingCss: string | null,
+  newCss: string,
+  mode: 'replace' | 'merge' | 'append',
+): {warnings: string[]; shouldWarn: boolean} {
+  const warnings: string[] = [];
+  
+  if (!existingCss || mode !== 'replace') {
+    return {warnings: [], shouldWarn: false};
+  }
+  
+  const existingSize = existingCss.length;
+  const newSize = newCss.length;
+  const sizeDiff = existingSize - newSize;
+  const sizeReductionPercent = existingSize > 0 ? (sizeDiff / existingSize) * 100 : 0;
+  
+  // Warn if replacing large CSS with significantly smaller CSS
+  if (sizeReductionPercent > 50 && existingSize > 1000) {
+    warnings.push(
+      `Replacing ${existingSize} char CSS with ${newSize} char CSS (${Math.round(sizeReductionPercent)}% reduction). ` +
+      `This will remove ${Math.round(sizeReductionPercent)}% of existing styles.`
+    );
+  }
+  
+  // Check for missing selectors
+  const existingSelectors = extractCssSelectors(existingCss);
+  const newSelectors = extractCssSelectors(newCss);
+  const missingSelectors: string[] = [];
+  
+  existingSelectors.forEach(selector => {
+    if (!newSelectors.has(selector)) {
+      missingSelectors.push(selector);
+    }
+  });
+  
+  if (missingSelectors.length > 0 && missingSelectors.length <= 10) {
+    warnings.push(
+      `Original CSS contained ${missingSelectors.length} selector(s) that are missing in replacement: ` +
+      `${missingSelectors.slice(0, 5).join(', ')}${missingSelectors.length > 5 ? '...' : ''}`
+    );
+  } else if (missingSelectors.length > 10) {
+    warnings.push(
+      `Original CSS contained ${missingSelectors.length} selectors that are missing in replacement. ` +
+      `This will remove styles for many elements.`
+    );
+  }
+  
+  return {
+    warnings,
+    shouldWarn: warnings.length > 0,
+  };
 }
 
 function unwrapSchema(schema: zod.ZodTypeAny): {schema: zod.ZodTypeAny; optional: boolean} {
@@ -1796,6 +1964,7 @@ export const layoutLiveEditing = defineTool({
     const cssPatchId = `${patchIdPrefix}-css`;
     const jsPatchId = `${patchIdPrefix}-js`;
     const replaceExisting = patch.replaceExisting ?? false;
+    const cssMode = patch.cssMode ?? (replaceExisting ? 'replace' : 'append');
     const recordToSession = patch.recordToSession ?? false;
     const editSessionId = patch.editSessionId;
 
@@ -2332,6 +2501,37 @@ export const layoutLiveEditing = defineTool({
         }
       }
       
+      response.appendResponseLine('### Querying/Inspecting Existing CSS');
+      response.appendResponseLine('To inspect existing CSS before updating, use `evaluate_script`:');
+      response.appendResponseLine('```json');
+      response.appendResponseLine('{');
+      response.appendResponseLine('  "name": "evaluate_script",');
+      response.appendResponseLine('  "params": {');
+      response.appendResponseLine(`    "script": "const style = document.querySelector('style[data-mcp-patch-id=\\'${cssPatchId}\\']'); return style ? style.textContent : null;"`);
+      response.appendResponseLine('  }');
+      response.appendResponseLine('}');
+      response.appendResponseLine('```');
+      response.appendResponseLine('');
+      response.appendResponseLine('### Safe CSS Updates with Merge/Append');
+      response.appendResponseLine('Use `cssMode` to safely update CSS without losing existing styles:');
+      response.appendResponseLine('```json');
+      response.appendResponseLine('{');
+      response.appendResponseLine('  "name": "layout_live_editing",');
+      response.appendResponseLine('  "params": {');
+      response.appendResponseLine('    "patch": {');
+      response.appendResponseLine('      "cssMode": "merge",  // or "append" or "replace" (default)');
+      response.appendResponseLine(`      "patchIdPrefix": "${patchIdPrefix}"`);
+      response.appendResponseLine('    },');
+      response.appendResponseLine('    "composition": { ... }');
+      response.appendResponseLine('  }');
+      response.appendResponseLine('}');
+      response.appendResponseLine('```');
+      response.appendResponseLine('');
+      response.appendResponseLine('- **`merge`**: Merges new CSS with existing, updating conflicting rules');
+      response.appendResponseLine('- **`append`**: Appends new CSS without removing existing styles');
+      response.appendResponseLine('- **`replace`**: Replaces entire CSS block (default, use with caution)');
+      response.appendResponseLine('');
+      
       response.appendResponseLine('---');
       response.appendResponseLine('');
       response.appendResponseLine('```json');
@@ -2429,30 +2629,70 @@ export const layoutLiveEditing = defineTool({
       }
     }
 
+    // Validate CSS replacement and generate warnings
+    let existingCss: string | null = null;
+    if (cssMode === 'replace' || cssMode === 'merge') {
+      existingCss = await page.evaluate(
+        ({patchId, PATCH_ID_ATTR}) => {
+          const existing = Array.from(
+            document.querySelectorAll(`style[${PATCH_ID_ATTR}]`),
+          ).find(el => el.getAttribute(PATCH_ID_ATTR) === patchId) as HTMLStyleElement | undefined;
+          return existing?.textContent ?? null;
+        },
+        {patchId: cssPatchId, PATCH_ID_ATTR},
+      );
+    }
+    
+    const validation = validateCssReplacement(existingCss, scopedCss, cssMode);
+    if (validation.shouldWarn) {
+      response.appendResponseLine('');
+      response.appendResponseLine('⚠️ **CSS Replacement Warning**');
+      validation.warnings.forEach(warning => {
+        response.appendResponseLine(`- ${warning}`);
+      });
+      if (cssMode === 'replace') {
+        response.appendResponseLine('');
+        response.appendResponseLine('💡 **Tip**: Consider using `cssMode: "merge"` to preserve existing styles, or `cssMode: "append"` to add new styles without removing existing ones.');
+      }
+      response.appendResponseLine('');
+    }
+    
+    // Prepare final CSS based on mode
+    let finalCss = scopedCss;
+    if (existingCss && cssMode === 'merge') {
+      finalCss = mergeCss(existingCss, scopedCss);
+    } else if (existingCss && cssMode === 'append') {
+      finalCss = appendCss(existingCss, scopedCss);
+    }
+    
     const cssApply = await page.evaluate(
-      ({cssText, patchId, replaceExisting, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE}) => {
+      ({cssText, patchId, cssMode, replaceExisting, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE}) => {
         const existing = Array.from(
           document.querySelectorAll(`style[${PATCH_ID_ATTR}]`),
         ).find(el => el.getAttribute(PATCH_ID_ATTR) === patchId) as HTMLStyleElement | undefined;
-        if (existing && !replaceExisting) {
+        
+        if (existing && !replaceExisting && cssMode === 'replace') {
           return {applied: false, reason: 'patch_exists'};
         }
+        
         if (existing) {
           existing.textContent = cssText;
-          return {applied: true, replaced: true};
+          return {applied: true, replaced: true, mode: cssMode};
         }
+        
         const style = document.createElement('style');
         style.setAttribute(PATCH_ID_ATTR, patchId);
         style.setAttribute(PATCH_OWNER_ATTR, PATCH_OWNER_VALUE);
         style.setAttribute(PATCH_KIND_ATTR, 'css');
         style.textContent = cssText;
         document.head.appendChild(style);
-        return {applied: true};
+        return {applied: true, mode: cssMode};
       },
       {
-        cssText: scopedCss,
+        cssText: finalCss,
         patchId: cssPatchId,
-        replaceExisting,
+        cssMode,
+        replaceExisting: replaceExisting || cssMode === 'replace',
         PATCH_ID_ATTR,
         PATCH_OWNER_ATTR,
         PATCH_KIND_ATTR,
@@ -2468,6 +2708,22 @@ export const layoutLiveEditing = defineTool({
         createdAt: Date.now(),
         description: 'layout_live_editing CSS',
       });
+      
+      // Add informative response about CSS operation
+      if (cssApply.replaced) {
+        response.appendResponseLine('');
+        response.appendResponseLine(`✅ **CSS Updated** (mode: \`${cssMode}\`)`);
+        if (cssMode === 'merge') {
+          response.appendResponseLine(`- Merged new CSS rules with existing styles`);
+          response.appendResponseLine(`- Conflicting rules were updated with new values`);
+        } else if (cssMode === 'append') {
+          response.appendResponseLine(`- Appended new CSS rules to existing styles`);
+        } else {
+          response.appendResponseLine(`- Replaced existing CSS with new styles`);
+        }
+        response.appendResponseLine('');
+      }
+      
       if (recordToSession) {
         context.appendEditChange(
           {
@@ -2478,14 +2734,26 @@ export const layoutLiveEditing = defineTool({
             description: 'layout_live_editing CSS',
             targetFilePath: patch.targetFilePaths?.css,
             payload: {
-              cssText: scopedCss,
+              cssText: finalCss,
               patchId: cssPatchId,
-              replaceExisting,
+              replaceExisting: replaceExisting || cssMode === 'replace',
+              cssMode,
             },
           },
           {sessionId: editSessionId, autoCreate: true},
         );
       }
+    } else if (cssApply.reason === 'patch_exists') {
+      response.appendResponseLine('');
+      response.appendResponseLine(`⚠️ **CSS Patch Exists**: Patch \`${cssPatchId}\` already exists.`);
+      response.appendResponseLine(`💡 **Tip**: Use \`replaceExisting: true\` to overwrite, or \`cssMode: "merge"\` / \`cssMode: "append"\` to update existing styles.`);
+      response.appendResponseLine('');
+      response.appendResponseLine('**To inspect existing CSS**, you can use:');
+      response.appendResponseLine('```javascript');
+      response.appendResponseLine(`const style = document.querySelector('style[data-mcp-patch-id="${cssPatchId}"]');`);
+      response.appendResponseLine('console.log(style?.textContent);');
+      response.appendResponseLine('```');
+      response.appendResponseLine('');
     }
 
     if (behaviorScript.trim()) {
