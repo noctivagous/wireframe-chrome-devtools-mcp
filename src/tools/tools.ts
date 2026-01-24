@@ -13,6 +13,7 @@ import * as emulationTools from './emulation.js';
 import * as extensionTools from './extensions.js';
 import * as guidanceTools from './guidance.js';
 import * as inputTools from './input.js';
+import {layoutLiveEditing, layoutLiveEditingRecipeCatalog} from './layout-live-editing.js';
 import * as liveEditingTools from './live-editing.js';
 import * as mutationTools from './mutation.js';
 import * as networkTools from './network.js';
@@ -41,6 +42,8 @@ const tools = [
   ...Object.values(extensionTools),
   ...Object.values(guidanceTools),
   ...Object.values(inputTools),
+  layoutLiveEditing,
+  layoutLiveEditingRecipeCatalog,
   ...Object.values(liveEditingTools),
   ...Object.values(mutationTools),
   ...Object.values(networkTools),

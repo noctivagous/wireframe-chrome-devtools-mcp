@@ -33,6 +33,7 @@ export const WORKFLOW_GROUPS: WorkflowGroup[] = [
       'batch_ops',
       'insert_css',
       'insert_js',
+      'layout_live_editing',
       'evaluate_script',
       'wireframe_snapshot_live_editing',
       'svg_snapshot_live_editing',

@@ -59,6 +59,21 @@ export const beginEditSession = defineTool({
     response.appendResponseLine('- **`batch_ops`** - Execute multiple tool operations in a single call to reduce round-trips. Supports sequential execution and returns structured results for observability. Use this to chain multiple operations efficiently.\n');
     response.appendResponseLine('- **`insert_css`** - Insert a `<style>` tag into the current page with a patch id for later rollback. Supports preview mode for testing multiple CSS values with visual wireframe feedback, responsive breakpoints, and before/after comparisons. Can optionally return wireframe results as SVG or JSON.\n');
     response.appendResponseLine('- **`insert_js`** - Insert a `<script>` tag into the current page with a patch id for later rollback. Supports preview mode for testing multiple script variants with visual wireframe feedback, responsive breakpoints, and before/after comparisons. Can optionally return wireframe results as SVG or JSON. Note: rollback removes script tags but cannot reliably undo side-effects like DOM mutations, timers, or event listeners.\n');
+    response.appendResponseLine('- **`layout_live_editing`** - Generate parametric layout scaffolding (grid/stack/viewer) and optional behaviors (selectable/roving focus/ARIA). These modules are generic and can be combined to approach any layout scenario. Use after the page is loaded to scaffold UI quickly; set `patch.recordToSession=true` to journal changes for export/commit later.\n');
+    response.appendResponseLine('  Example:\n');
+    response.appendResponseLine('  ```json\n');
+    response.appendResponseLine('  {\n');
+    response.appendResponseLine('    "name": "layout_live_editing",\n');
+    response.appendResponseLine('    "arguments": {\n');
+    response.appendResponseLine('      "target": {"selector": "body", "position": "beforeend"},\n');
+    response.appendResponseLine('      "patch": {"patchIdPrefix": "demo-layout", "replaceExisting": true, "recordToSession": true},\n');
+    response.appendResponseLine('      "composition": {\n');
+    response.appendResponseLine('        "type": "layout_parametric_stack",\n');
+    response.appendResponseLine('        "params": {"direction": "row", "gap": "12px", "items": ["Left", "Right"]}\n');
+    response.appendResponseLine('      }\n');
+    response.appendResponseLine('    }\n');
+    response.appendResponseLine('  }\n');
+    response.appendResponseLine('  ```\n');
     response.appendResponseLine('- **`evaluate_script`** - Evaluate a JavaScript function inside the currently selected page. Returns the response as JSON (returned values must be JSON-serializable). Useful for querying page state, extracting data, or testing JavaScript logic.\n');
     response.appendResponseLine('- **`wireframe_snapshot`** - Capture a compact, deterministic wireframe snapshot of the current page using CDP DOMSnapshot. Returns element rects (and optionally computed styles) suitable for overlap/gap analysis. Use this for programmatic layout analysis and detecting layout issues.\n');
     response.appendResponseLine('- **`svg_snapshot`** - Render a visual SVG wireframe of the current page (or a subset of elements). Uses the same underlying snapshot as `wireframe_snapshot`, but returns the SVG content wrapped in JSON for better parseability. Use this for visual layout debugging and human-readable wireframe representations.\n');
@@ -721,10 +736,11 @@ export const liveEditingSession = defineTool({
   name: 'live_editing_session',
   description:
     'Minimal session lifecycle tool for the Live Editing Minimal workflow.\n\n' +
-    'Use exactly one of: `begin`, `edit`, or `export`.\n\n' +
+    'Use exactly one of: `begin`, `edit`, `export`, or `interact`.\n\n' +
     '- `begin`: start a live editing session (wraps `begin_live_editing_session`).\n' +
-    '- `edit`: session-adjacent utilities (currently wraps `export_prototype_state`).\n' +
-    '- `export`: export/commit/clear session data (wraps `export_edit_session`, `commit_edit_session_to_files`, `clear_edit_session`).',
+    '- `edit`: session-adjacent utilities (export prototype state, or post AI annotations).\n' +
+    '- `export`: export/commit/clear session data (wraps `export_edit_session`, `commit_edit_session_to_files`, `clear_edit_session`).\n' +
+    '- `interact`: gather information or notify user of plans via interactive forms (questionnaires/slideshows).',
   annotations: {
     category: ToolCategory.EDIT_SESSION,
     readOnlyHint: false,
@@ -742,10 +758,16 @@ export const liveEditingSession = defineTool({
           action: zod.literal('export_prototype_state'),
           ...(exportPrototypeState.schema as Record<string, any>),
         }),
+        zod.object({
+          action: zod.literal('annotate'),
+          selector: zod.string().describe('CSS selector for the element to annotate.'),
+          text: zod.string().describe('Annotation text.'),
+          type: zod.enum(['note', 'change', 'warning', 'info']).default('info').optional().describe('Type of annotation.'),
+        }).describe('Post an AI annotation to explain a change; users can respond with their own notes.'),
       ])
       .optional()
       .describe(
-        'Session-adjacent operations during iteration (e.g. export prototype state from the browser).',
+        'Session-adjacent operations during iteration (e.g. export prototype state or post AI annotations).',
       ),
     export: zod
       .discriminatedUnion('action', [
@@ -764,14 +786,30 @@ export const liveEditingSession = defineTool({
       ])
       .optional()
       .describe('Export/commit/clear session state. This is the explicit write/export step.'),
+    interact: zod
+      .discriminatedUnion('type', [
+        zod.object({
+          type: zod.literal('questionnaire'),
+          questions: zod.array(zod.string()).describe('List of questions for the user.'),
+          title: zod.string().optional().describe('Optional title for the questionnaire.'),
+        }),
+        zod.object({
+          type: zod.literal('plans_notification'),
+          plans: zod.array(zod.string()).describe('List of planned actions to show the user.'),
+          title: zod.string().optional().describe('Optional title for the plans notification.'),
+        }),
+      ])
+      .optional()
+      .describe('Gather information or notify user of plans via interactive forms.'),
   },
   handler: async (request, response, context) => {
     const begin = (request.params as any).begin;
     const edit = (request.params as any).edit;
     const exportOp = (request.params as any).export;
-    const provided = [begin, edit, exportOp].filter(Boolean).length;
+    const interact = (request.params as any).interact;
+    const provided = [begin, edit, exportOp, interact].filter(Boolean).length;
     if (provided !== 1) {
-      throw new Error('Provide exactly one of: begin, edit, export.');
+      throw new Error('Provide exactly one of: begin, edit, export, interact.');
     }
 
     if (begin) {
@@ -783,6 +821,23 @@ export const liveEditingSession = defineTool({
       const {action, ...rest} = edit as Record<string, unknown>;
       if (action === 'export_prototype_state') {
         await exportPrototypeState.handler({params: rest as any}, response, context);
+        return;
+      }
+      if (action === 'annotate') {
+        const page = context.getSelectedPage();
+        const success = await page.evaluate((params) => {
+          const api = (window as any).__MCP_LIVE_EDITING__;
+          if (!api?.addAnnotation) {
+            return false;
+          }
+          return api.addAnnotation({
+            ...params,
+            source: 'ai',
+          });
+        }, rest);
+        response.appendResponseLine('```json');
+        response.appendResponseLine(JSON.stringify({success}, null, 2));
+        response.appendResponseLine('```');
         return;
       }
       throw new Error(`Unsupported edit action: ${String(action)}`);
@@ -803,6 +858,22 @@ export const liveEditingSession = defineTool({
         return;
       }
       throw new Error(`Unsupported export action: ${String(action)}`);
+    }
+
+    if (interact) {
+      const page = context.getSelectedPage();
+      const result = await page.evaluate((params) => {
+        const api = (window as any).__MCP_LIVE_EDITING__;
+        if (!api?.showInteractForm) {
+          throw new Error('Live editing overlay with interact support not installed or page not ready.');
+        }
+        return api.showInteractForm(params);
+      }, interact);
+      
+      response.appendResponseLine('```json');
+      response.appendResponseLine(JSON.stringify({ok: true, interactResult: result}, null, 2));
+      response.appendResponseLine('```');
+      return;
     }
   },
 });

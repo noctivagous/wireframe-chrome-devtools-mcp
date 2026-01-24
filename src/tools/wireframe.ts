@@ -908,12 +908,14 @@ async function captureWireframeSnapshot(
     });
 
     const coordinateSpace = request.params.coordinateSpace ?? 'viewport';
-    const includeComputedStyles = request.params.includeComputedStyles ?? false;
+    const includeLayoutAssertions = request.params.includeLayoutAssertions ?? true;
+    const includeClippingAnalysis = request.params.includeClippingAnalysis ?? true;
+    const includeComputedStyles =
+      request.params.includeComputedStyles ?? (includeClippingAnalysis ? true : false);
     const includeShadowDom = request.params.includeShadowDom ?? false;
     const includePseudoElements = request.params.includePseudoElements ?? false;
     const includeOverlapAnalysis = request.params.includeOverlapAnalysis ?? false;
     const includeGapAnalysis = request.params.includeGapAnalysis ?? false;
-    const includeClippingAnalysis = request.params.includeClippingAnalysis ?? false;
     const analysisMaxPairs =
       typeof request.params.analysisMaxPairs === 'number' && Number.isFinite(request.params.analysisMaxPairs)
         ? Math.max(1, Math.floor(request.params.analysisMaxPairs))
@@ -1033,6 +1035,9 @@ async function captureWireframeSnapshot(
     const includeDescendants = request.params.includeDescendants ?? false;
     const selectors = request.params.selectors;
     const scopeSelector = request.params.scopeSelector;
+    const wantsPageWideAnalysis =
+      (includeLayoutAssertions || includeClippingAnalysis) &&
+      ((selectors?.length ?? 0) > 0 || !!scopeSelector);
     const maxPerSelector =
       typeof request.params.maxPerSelector === 'number' &&
       Number.isFinite(request.params.maxPerSelector) &&
@@ -1133,6 +1138,11 @@ async function captureWireframeSnapshot(
     const elements: WireframeSnapshotOutput['elements'] = [];
     const elementNodeIndices: number[] = [];
     const elementByNodeIdx = new Map<number, WireframeSnapshotOutput['elements'][number]>();
+    const analysisElements = wantsPageWideAnalysis ? [] : elements;
+    const analysisElementNodeIndices = wantsPageWideAnalysis ? [] : elementNodeIndices;
+    const analysisElementByNodeIdx = wantsPageWideAnalysis
+      ? new Map<number, WireframeSnapshotOutput['elements'][number]>()
+      : elementByNodeIdx;
     const maxTotalRaw =
       (typeof request.params.maxTotal === 'number' ? request.params.maxTotal : undefined) ??
       request.params.maxElements ??
@@ -1182,9 +1192,10 @@ async function captureWireframeSnapshot(
       // Apply scope filter (ancestry-based), if present. Also compute depth (relative to scope root).
       let depth: number | undefined;
       let scopeRootMatchIdx: number | undefined;
+      let inScope = true;
       if (scopeNodeIndices.size) {
         let cur = nodeIdx;
-        let inScope = false;
+        inScope = false;
         let steps = 0;
         while (cur >= 0) {
           if (scopeNodeIndices.has(cur)) {
@@ -1200,7 +1211,7 @@ async function captureWireframeSnapshot(
           cur = p;
           steps++;
         }
-        if (!inScope) {
+        if (!inScope && !wantsPageWideAnalysis) {
           continue;
         }
       } else if (typeof maxDepth === 'number') {
@@ -1218,12 +1229,15 @@ async function captureWireframeSnapshot(
         depth = steps;
       }
 
-      if (typeof maxDepth === 'number' && typeof depth === 'number' && depth > maxDepth) {
+      const passesDepth =
+        !(typeof maxDepth === 'number' && typeof depth === 'number' && depth > maxDepth);
+      if (!passesDepth && !wantsPageWideAnalysis) {
         continue;
       }
 
       // Apply selector filter, if present, and attach match metadata.
       let matchedSelectors: string[] | undefined;
+      let passesSelectors = true;
       if (shouldIncludeNodeIndex.size) {
         if (includeDescendants) {
           // Include descendants of matched nodes by checking ancestry; inherit matchedSelectors from nearest match.
@@ -1241,23 +1255,30 @@ async function captureWireframeSnapshot(
             cur = p;
           }
           if (typeof matchedIdx !== 'number') {
-            continue;
+            passesSelectors = false;
+          } else {
+            const ms = matchedSelectorsByNodeIndex.get(matchedIdx);
+            matchedSelectors = ms?.length ? [...ms] : undefined;
           }
-          const ms = matchedSelectorsByNodeIndex.get(matchedIdx);
-          matchedSelectors = ms?.length ? [...ms] : undefined;
         } else {
           if (!shouldIncludeNodeIndex.has(nodeIdx)) {
-            continue;
+            passesSelectors = false;
+          } else {
+            const ms = matchedSelectorsByNodeIndex.get(nodeIdx);
+            matchedSelectors = ms?.length ? [...ms] : undefined;
           }
-          const ms = matchedSelectorsByNodeIndex.get(nodeIdx);
-          matchedSelectors = ms?.length ? [...ms] : undefined;
         }
       }
 
-      totalInScope++;
+      const includeInFiltered = inScope && passesDepth && passesSelectors;
+      if (includeInFiltered) {
+        totalInScope++;
+      }
 
       // Enforce maxTotal while still scanning to compute truncation stats.
-      if (elements.length >= maxTotal) {
+      const includeInOutput = includeInFiltered && elements.length < maxTotal;
+      const includeInAnalysis = wantsPageWideAnalysis ? true : includeInOutput;
+      if (!includeInOutput && !includeInAnalysis) {
         continue;
       }
 
@@ -1342,9 +1363,16 @@ async function captureWireframeSnapshot(
         rect,
         computedStyles: stylesObj,
       };
-      elements.push(element);
-      elementNodeIndices.push(nodeIdx);
-      elementByNodeIdx.set(nodeIdx, element);
+      if (includeInAnalysis) {
+        analysisElements.push(element);
+        analysisElementNodeIndices.push(nodeIdx);
+        analysisElementByNodeIdx.set(nodeIdx, element);
+      }
+      if (includeInOutput && elements !== analysisElements) {
+        elements.push(element);
+        elementNodeIndices.push(nodeIdx);
+        elementByNodeIdx.set(nodeIdx, element);
+      }
     }
 
     const truncated = totalInScope > maxTotal;
@@ -1366,7 +1394,7 @@ async function captureWireframeSnapshot(
       whyTruncated: truncated ? 'maxTotal' : undefined,
     };
 
-    if (request.params.includeLayoutAssertions ?? false) {
+    if (includeLayoutAssertions) {
       const viewLeft = coordinateSpace === 'document' ? scrollX : 0;
       const viewTop = coordinateSpace === 'document' ? scrollY : 0;
       const viewRight = viewLeft + innerWidth;
@@ -1375,7 +1403,8 @@ async function captureWireframeSnapshot(
       const overflowXOffenders: Array<{stableId: string; right: number; excess: number}> = [];
       const overflowYOffenders: Array<{stableId: string; bottom: number; excess: number}> = [];
 
-      for (const el of elements) {
+      const layoutAssertionElements = wantsPageWideAnalysis ? analysisElements : elements;
+      for (const el of layoutAssertionElements) {
         const sid = el.stableId;
         if (!sid) {continue;}
         if (el.rect.right > viewRight + 1) {
@@ -1411,7 +1440,7 @@ async function captureWireframeSnapshot(
       childrenByParent,
       includeOverlapAnalysis,
       includeGapAnalysis,
-      includeClippingAnalysis,
+      includeClippingAnalysis: includeClippingAnalysis && !wantsPageWideAnalysis,
       maxPairs: analysisMaxPairs,
       maxFindings: analysisMaxFindings,
       minOverlapArea: analysisMinOverlapArea,
@@ -1422,6 +1451,39 @@ async function captureWireframeSnapshot(
     });
     if (analysis) {
       output.analysis = analysis;
+    }
+    if (wantsPageWideAnalysis && includeClippingAnalysis) {
+      const clippingAnalysis = buildLayoutAnalysis({
+        elements: analysisElements,
+        elementNodeIndices: analysisElementNodeIndices,
+        elementByNodeIdx: analysisElementByNodeIdx,
+        parentIndex,
+        childrenByParent,
+        includeOverlapAnalysis: false,
+        includeGapAnalysis: false,
+        includeClippingAnalysis: true,
+        maxPairs: analysisMaxPairs,
+        maxFindings: analysisMaxFindings,
+        minOverlapArea: analysisMinOverlapArea,
+        minGap: analysisMinGapPx,
+        axis: analysisAxis,
+        skipAncestorOverlaps: analysisSkipAncestorOverlaps,
+        includeComputedStyles,
+      });
+      if (clippingAnalysis?.clipping?.length || clippingAnalysis?.meta?.clippingSkipped) {
+        if (!output.analysis) {
+          output.analysis = {};
+        }
+        if (clippingAnalysis.clipping) {
+          output.analysis.clipping = clippingAnalysis.clipping;
+        }
+        if (clippingAnalysis.meta) {
+          output.analysis.meta = {
+            ...(output.analysis.meta ?? {}),
+            ...clippingAnalysis.meta,
+          };
+        }
+      }
     }
 
     const includeDiff =
@@ -1601,7 +1663,6 @@ export const wireframeSnapshot = defineTool({
       ),
     includeComputedStyles: zod
       .boolean()
-      .default(false)
       .optional()
       .describe(
         'If true, includes a whitelist of computed styles for each element via DOMSnapshot.captureSnapshot.',
@@ -1667,7 +1728,7 @@ export const wireframeSnapshot = defineTool({
       .describe('Maximum length for textSnippet when includeTextSnippets is true.'),
     includeLayoutAssertions: zod
       .boolean()
-      .default(false)
+      .default(true)
       .optional()
       .describe(
         'If true, adds a small derived layoutAssertions section (e.g., overflow offenders).',
@@ -1684,7 +1745,7 @@ export const wireframeSnapshot = defineTool({
       .describe('If true, computes gap findings between sibling elements (bounded).'),
     includeClippingAnalysis: zod
       .boolean()
-      .default(false)
+      .default(true)
       .optional()
       .describe(
         'If true, computes clipping findings against ancestors with overflow clipping (requires includeComputedStyles).',
@@ -2177,7 +2238,6 @@ export const svgSnapshot = defineTool({
       ),
     includeComputedStyles: zod
       .boolean()
-      .default(false)
       .optional()
       .describe(
         'If true, includes a whitelist of computed styles for each element via DOMSnapshot.captureSnapshot (also used for optional diff/analysis).',
@@ -2243,7 +2303,7 @@ export const svgSnapshot = defineTool({
       .describe('Maximum length for textSnippet when includeTextSnippets is true.'),
     includeLayoutAssertions: zod
       .boolean()
-      .default(false)
+      .default(true)
       .optional()
       .describe(
         'If true, adds a small derived layoutAssertions section (e.g., overflow offenders).',
@@ -2260,7 +2320,7 @@ export const svgSnapshot = defineTool({
       .describe('If true, computes gap findings between sibling elements (bounded).'),
     includeClippingAnalysis: zod
       .boolean()
-      .default(false)
+      .default(true)
       .optional()
       .describe(
         'If true, computes clipping findings against ancestors with overflow clipping (requires includeComputedStyles).',

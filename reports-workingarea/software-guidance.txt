@@ -1,0 +1,114 @@
+
+guides tools
+
+    design_guide - philosphy, style guide, examples, fonts, espacing, proportions, color schemes, gui, etc.
+    arch_guide - project software architecture information
+    engin_guide - for guiding code additions, edits, etc.  style, file org, frameworks.
+
+    All three have a section in the web server gui
+    for configuration.
+
+    They are to keep the AI on the rails
+    for a project.  solves the issue of AI agent    
+        - writing things from scratch instead of using libs
+        - doing designs based on LLM training, not having a guide for code
+        additions, edits.
+    
+---
+
+Provide the AI agents with package combinations 
+when beginning new projects or working them, for all aspects of the project:
+    - gui component lib
+    - syncing/binding lib
+    - design system
+    - design guide
+    - icons
+    - fonts
+    - documentation
+    - search engine access
+    - guidance on how to proactively use these resources
+    and seek them out for the cirumstances.
+    - software architecture guidance
+    - kits and templates for various scenarios
+        - template component library 
+            - for common scenarios. has low-level issues
+            like syncing/binding of values in place
+                - master-detail view
+                - settings page
+        
+if not:
+    - has to be told each aspect manually (too tedious and tiring)
+    to complete the project, or
+        - will just make gui from scratch
+        - picks random css/js lib
+        - uses default web fonts
+        - makes use of no specific design system,
+        just what results from LLM training.
+    - won't seek out documentation
+        won't have have enough information
+        to work with details of any css/js lib.
+    - doesn't try to seek info. from search engine proactively
+        - won't be able to solve problems
+    - has no design guide
+    - starts writing things from
+    scratch that should be provided
+    as premade components.
+    - won't follow any specific software architecture,
+    will tack on code solutions in response to prompts.
+    - without a structured beginning,
+    over time makes a messy code code base
+    that it can't figure out or maintain later.
+    - leads to circular problems and
+    dead ends with agentic AI chat.
+
+
+Consistent design system:
+Standardized spacing, typography, and color palette
+Components share the same visual language
+Predictable patterns across the UI.
+Pre-built, reusable components.
+
+vs. 
+
+No design system: Colors, spacing, and typography 
+aren’t centralized. Ad-hoc components: buttons, 
+cards, modals built without component basis.  
+Component efforts get duplicated and design
+inconsistencies occur.
+
+The LLM tends to just be a generator in 
+response to prompts. Therefore, the 
+more systematic the setup you give
+the AI to work in, the better your long-term
+conditions. A design system, component system, software
+architecture guide.
+
+with a web ui as a gateway to settings of
+the mcp server, we know now that the 
+mcp servers could have settings for their tools.  
+the web ui can include settings for what a tool or
+a set of tools are doing.  it can
+include, for example, what app kit
+the the tools are using to make apps,
+what design styles, what color schemes
+and fonts.
+
+
+
+levels of kit
+
+    components with design system
+        design guidelines
+            - fonts, sizes, colors
+        gui controls
+            -
+        layout
+        components
+            - carousel
+            - cards
+        binding/syncing/states
+
+    prefab
+        - prefab settings: supply
+        the config file or database
+        and parameters tree.

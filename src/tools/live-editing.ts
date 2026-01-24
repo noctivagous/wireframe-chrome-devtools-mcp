@@ -135,6 +135,8 @@ export const beginLiveEditingSession = defineTool({
               selector: string;
               targetSelector?: string;
               createdAt: number;
+              source?: 'user' | 'ai';
+              userNotes?: string;
             }>,
             selectMode: false,
             scheduled: false,
@@ -153,6 +155,15 @@ export const beginLiveEditingSession = defineTool({
               startY: number;
               currentX: number;
               currentY: number;
+            },
+            interact: null as null | {
+              type: 'questionnaire' | 'plans_notification';
+              title: string;
+              questions: string[];
+              plans: string[];
+              currentIndex: number;
+              answers: string[];
+              completed: boolean;
             },
           };
 
@@ -420,6 +431,109 @@ export const beginLiveEditingSession = defineTool({
   outline: 2px solid #f59e0b !important;
   outline-offset: 2px;
 }
+#mcp-live-editing-root .mcp-le-tag[data-mcp-source="ai"] {
+  border: 2px solid #2563eb;
+  background: #eff6ff;
+}
+#mcp-live-editing-root .mcp-le-tag-user-notes {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid #d1d5db;
+  font-style: italic;
+  color: #374151;
+  font-size: 11px;
+}
+#mcp-live-editing-root .mcp-le-tag-user-notes:empty:before {
+  content: attr(placeholder);
+  color: #9ca3af;
+}
+#mcp-live-editing-root .mcp-le-interact-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+  pointer-events: auto;
+}
+#mcp-live-editing-root .mcp-le-interact-card {
+  background: white;
+  width: 480px;
+  max-width: 90vw;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+  padding: 24px;
+  color: #111827;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+#mcp-live-editing-root .mcp-le-interact-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 12px;
+}
+#mcp-live-editing-root .mcp-le-interact-body {
+  margin-bottom: 24px;
+  min-height: 100px;
+}
+#mcp-live-editing-root .mcp-le-interact-question {
+  font-size: 15px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+#mcp-live-editing-root .mcp-le-interact-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  min-height: 80px;
+  resize: vertical;
+}
+#mcp-live-editing-root .mcp-le-interact-plan-item {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border-left: 4px solid #2563eb;
+}
+#mcp-live-editing-root .mcp-le-interact-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#mcp-live-editing-root .mcp-le-interact-steps {
+  font-size: 12px;
+  color: #6b7280;
+}
+#mcp-live-editing-root .mcp-le-interact-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  cursor: pointer;
+  font-size: 14px;
+  background: white;
+  transition: all 0.2s;
+}
+#mcp-live-editing-root .mcp-le-interact-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+#mcp-live-editing-root .mcp-le-interact-btn-primary {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+#mcp-live-editing-root .mcp-le-interact-btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+#mcp-live-editing-root .mcp-le-interact-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
               `.trim();
               document.head.appendChild(style);
             }
@@ -495,6 +609,20 @@ export const beginLiveEditingSession = defineTool({
               tag.style.top = `${Math.max(8, rect.top - 28)}px`;
               tag.setAttribute('data-mcp-annotation-id', annotation.id);
               tag.setAttribute(PATCH_ID_ATTR, patchId);
+              tag.setAttribute('data-mcp-source', annotation.source || 'user');
+
+              if (annotation.source === 'ai') {
+                const userNotes = document.createElement('div');
+                userNotes.className = 'mcp-le-tag-user-notes';
+                userNotes.contentEditable = 'true';
+                userNotes.setAttribute('placeholder', 'Add your notes here...');
+                userNotes.textContent = annotation.userNotes || '';
+                userNotes.addEventListener('input', () => {
+                  annotation.userNotes = userNotes.textContent ?? '';
+                  save();
+                });
+                tag.appendChild(userNotes);
+              }
               if (annotation.type === 'move') {
                 const port = document.createElement('span');
                 port.className = 'mcp-le-port';
@@ -537,6 +665,81 @@ export const beginLiveEditingSession = defineTool({
             renderHighlight(root);
             renderMenu(root);
             renderNotes(root);
+            renderInteract(root);
+          };
+
+          const renderInteract = (root: HTMLElement) => {
+            let overlay = root.querySelector('.mcp-le-interact-overlay') as HTMLElement | null;
+            if (!state.interact) {
+              overlay?.remove();
+              return;
+            }
+            if (!overlay) {
+              overlay = document.createElement('div');
+              overlay.className = 'mcp-le-interact-overlay';
+              overlay.setAttribute(PATCH_ID_ATTR, patchId);
+              root.appendChild(overlay);
+            }
+            
+            const q = state.interact;
+            const items = q.type === 'questionnaire' ? q.questions : q.plans;
+            const isLast = q.currentIndex === items.length - 1;
+            
+            overlay.innerHTML = `
+              <div class="mcp-le-interact-card" ${PATCH_ID_ATTR}="${patchId}">
+                <div class="mcp-le-interact-title" ${PATCH_ID_ATTR}="${patchId}">${q.title}</div>
+                <div class="mcp-le-interact-body" ${PATCH_ID_ATTR}="${patchId}">
+                  ${q.type === 'questionnaire' ? `
+                    <div class="mcp-le-interact-question" ${PATCH_ID_ATTR}="${patchId}">${q.questions[q.currentIndex]}</div>
+                    <textarea class="mcp-le-interact-input" ${PATCH_ID_ATTR}="${patchId}" placeholder="Your answer...">${q.answers[q.currentIndex] || ''}</textarea>
+                  ` : `
+                    <div class="mcp-le-interact-plan-item" ${PATCH_ID_ATTR}="${patchId}">
+                      <div ${PATCH_ID_ATTR}="${patchId}">${q.plans[q.currentIndex]}</div>
+                    </div>
+                  `}
+                </div>
+                <div class="mcp-le-interact-footer" ${PATCH_ID_ATTR}="${patchId}">
+                  <div class="mcp-le-interact-steps" ${PATCH_ID_ATTR}="${patchId}">Step ${q.currentIndex + 1} of ${items.length}</div>
+                  <div style="display: flex; gap: 8px;" ${PATCH_ID_ATTR}="${patchId}">
+                    <button class="mcp-le-interact-btn" id="mcp-prev" ${q.currentIndex === 0 ? 'disabled' : ''} ${PATCH_ID_ATTR}="${patchId}">Back</button>
+                    <button class="mcp-le-interact-btn mcp-le-interact-btn-primary" id="mcp-next" ${PATCH_ID_ATTR}="${patchId}">${isLast ? 'Complete' : 'Next'}</button>
+                  </div>
+                </div>
+              </div>
+            `;
+            
+            overlay.querySelector('#mcp-prev')?.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              if (q.type === 'questionnaire') {
+                q.answers[q.currentIndex] = (overlay!.querySelector('.mcp-le-interact-input') as HTMLTextAreaElement).value;
+              }
+              q.currentIndex--;
+              render();
+            });
+            
+            overlay.querySelector('#mcp-next')?.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              if (q.type === 'questionnaire') {
+                q.answers[q.currentIndex] = (overlay!.querySelector('.mcp-le-interact-input') as HTMLTextAreaElement).value;
+              }
+              if (isLast) {
+                q.completed = true;
+                // Keep the questionnaire results in a temporary spot for extraction
+                (window as any).__MCP_LAST_INTERACT_RESULTS__ = {
+                  type: q.type,
+                  title: q.title,
+                  answers: q.type === 'questionnaire' ? [...q.answers] : undefined,
+                  completed: true,
+                  at: Date.now()
+                };
+                state.interact = null;
+              } else {
+                q.currentIndex++;
+              }
+              render();
+            });
           };
 
           const scheduleRender = () => {
@@ -1011,7 +1214,7 @@ export const beginLiveEditingSession = defineTool({
             disableSelectMode() {
               toggleSelectMode(false);
             },
-            addAnnotation(annotation: {selector: string; text: string; type?: string}) {
+            addAnnotation(annotation: {selector: string; text: string; type?: string; source?: 'user' | 'ai'}) {
               if (!annotation?.selector || !annotation?.text) {
                 return false;
               }
@@ -1021,10 +1224,30 @@ export const beginLiveEditingSession = defineTool({
                 text: annotation.text,
                 selector: annotation.selector,
                 createdAt: Date.now(),
+                source: annotation.source || 'user',
+                userNotes: '',
               });
               save();
               scheduleRender();
               return true;
+            },
+            showInteractForm(params: {type: 'questionnaire' | 'plans_notification'; title?: string; questions?: string[]; plans?: string[]}) {
+              state.interact = {
+                type: params.type,
+                title: params.title || (params.type === 'questionnaire' ? 'Questionnaire' : 'Plans Notification'),
+                questions: params.questions || [],
+                plans: params.plans || [],
+                currentIndex: 0,
+                answers: new Array((params.questions || []).length).fill(''),
+                completed: false,
+              };
+              scheduleRender();
+              return {active: true};
+            },
+            getQuestionnaireResults() {
+              const res = (window as any).__MCP_LAST_INTERACT_RESULTS__;
+              (window as any).__MCP_LAST_INTERACT_RESULTS__ = null;
+              return res;
             },
             exportAnnotations() {
               return [...state.annotations];
@@ -1329,14 +1552,17 @@ export const updateFromUserChanges = defineTool({
     let annotations: unknown[] = [];
     let annotationSource = 'unavailable';
     let pageNotes = '';
+    let interactResults: unknown = null;
     if (request.params.includeAnnotations ?? true) {
       const result = await page.evaluate(() => {
         const api = (window as any).__MCP_LIVE_EDITING__;
+        const interactResults = api?.getQuestionnaireResults?.();
         if (api?.exportAnnotations) {
           const payload = {
             annotations: api.exportAnnotations(),
             source: 'api',
             pageNotes: api.getPageNotes ? api.getPageNotes() : '',
+            interactResults,
           };
           if (api.clearAll) {
             api.clearAll();
@@ -1348,6 +1574,7 @@ export const updateFromUserChanges = defineTool({
             annotations: api.state.annotations,
             source: 'state',
             pageNotes: typeof api.state.pageNotes === 'string' ? api.state.pageNotes : '',
+            interactResults,
           };
           api.state.annotations = [];
           api.state.pageNotes = '';
@@ -1368,17 +1595,18 @@ export const updateFromUserChanges = defineTool({
             const parsed = JSON.parse(raw);
             window.sessionStorage?.removeItem(storageKey);
             window.sessionStorage?.removeItem('mcp_live_editing_page_notes');
-            return {annotations: parsed, source: 'storage', pageNotes: notes};
+            return {annotations: parsed, source: 'storage', pageNotes: notes, interactResults};
           } catch {
-            return {annotations: [], source: 'storage_parse_error', pageNotes: notes};
+            return {annotations: [], source: 'storage_parse_error', pageNotes: notes, interactResults};
           }
         }
         window.sessionStorage?.removeItem('mcp_live_editing_page_notes');
-        return {annotations: [], source: 'none', pageNotes: notes};
+        return {annotations: [], source: 'none', pageNotes: notes, interactResults};
       });
       annotations = Array.isArray(result?.annotations) ? result.annotations : [];
       annotationSource = result?.source ?? 'unknown';
       pageNotes = typeof result?.pageNotes === 'string' ? result.pageNotes : '';
+      interactResults = result?.interactResults;
     }
 
     const includeSnapshots = request.params.includeSnapshots ?? {wireframe: true, svg: false};
@@ -1631,6 +1859,7 @@ export const updateFromUserChanges = defineTool({
       annotations: unknown[];
       annotationSource: string;
       pageNotes: string;
+      interactResults?: any;
       annotationInsights: Array<{
         id?: string;
         type?: string;
@@ -1657,6 +1886,7 @@ export const updateFromUserChanges = defineTool({
         annotations,
         annotationSource,
         pageNotes,
+        interactResults,
         annotationInsights,
         prioritizedAnnotationIds,
         moveLinks,

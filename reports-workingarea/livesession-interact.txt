@@ -1,0 +1,16 @@
+for live_editing_session, we want to add the "interact" parameter.  
+
+The user starts the live editing session, but after a request
+to the chat, the AI should use live_editing_session's "interact" parameter
+to a add questionnaire forms to the page to make sure that the
+user is informed about what it plans to do and can answer a variety
+of questions on a slideshow form.  the AI would use this when requests
+pertain to things other than small fixes and tweaks.
+
+Second,  wen the AI executes update from user changes, it should post, 
+its own annotations for what it did and these tag controls have the option
+for the user to open them up and add notes that the ai reads on
+the next iteration.
+
+
+
