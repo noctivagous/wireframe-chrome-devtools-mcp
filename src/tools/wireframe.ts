@@ -17,6 +17,16 @@ import {
 } from './live-editing/types.js';
 
 type CoordinateSpace = 'viewport' | 'document';
+type Rect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
 type ComputedStylePreset =
   | 'minimal'
   | 'layout'
@@ -310,6 +320,34 @@ function rectFromBounds(bounds: number[]) {
   };
 }
 
+function rectFromEdges(left: number, top: number, right: number, bottom: number): Rect {
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+    left,
+    top,
+    right,
+    bottom,
+  };
+}
+
+function rectArea(rect: Rect): number {
+  return Math.max(0, rect.width) * Math.max(0, rect.height);
+}
+
+function rectIntersection(a: Rect, b: Rect): Rect | undefined {
+  const left = Math.max(a.left, b.left);
+  const right = Math.min(a.right, b.right);
+  const top = Math.max(a.top, b.top);
+  const bottom = Math.min(a.bottom, b.bottom);
+  if (right <= left || bottom <= top) {
+    return undefined;
+  }
+  return rectFromEdges(left, top, right, bottom);
+}
+
 function isElementTagName(tagName: string | undefined): boolean {
   if (!tagName) {
     return false;
@@ -446,6 +484,276 @@ async function getViewportAndScroll(page: Page): Promise<{
   });
 }
 
+function isAncestorNode(
+  ancestorIdx: number,
+  nodeIdx: number,
+  parentIndex: unknown,
+): boolean {
+  if (!Array.isArray(parentIndex)) {
+    return false;
+  }
+  let cur = nodeIdx;
+  while (cur >= 0) {
+    if (cur === ancestorIdx) {
+      return true;
+    }
+    const p = parentIndex[cur];
+    if (typeof p !== 'number') {
+      return false;
+    }
+    cur = p;
+  }
+  return false;
+}
+
+function buildLayoutAnalysis(input: {
+  elements: WireframeSnapshotOutput['elements'];
+  elementNodeIndices: number[];
+  elementByNodeIdx: Map<number, WireframeSnapshotOutput['elements'][number]>;
+  parentIndex: unknown;
+  childrenByParent: number[][];
+  includeOverlapAnalysis: boolean;
+  includeGapAnalysis: boolean;
+  includeClippingAnalysis: boolean;
+  maxPairs: number;
+  maxFindings: number;
+  minOverlapArea: number;
+  minGap: number;
+  axis: 'x' | 'y' | 'both';
+  skipAncestorOverlaps: boolean;
+  includeComputedStyles: boolean;
+}): WireframeSnapshotOutput['analysis'] | undefined {
+  const analysis: NonNullable<WireframeSnapshotOutput['analysis']> = {};
+  const meta: NonNullable<WireframeSnapshotOutput['analysis']>['meta'] = {};
+
+  if (input.includeOverlapAnalysis) {
+    const overlaps: NonNullable<WireframeSnapshotOutput['analysis']>['overlaps'] = [];
+    let pairsChecked = 0;
+    let truncated = false;
+    for (let i = 0; i < input.elements.length; i++) {
+      const a = input.elements[i];
+      const aNode = input.elementNodeIndices[i];
+      const aArea = rectArea(a.rect);
+      if (!a.stableId || aArea <= 0) {
+        continue;
+      }
+      for (let j = i + 1; j < input.elements.length; j++) {
+        if (pairsChecked >= input.maxPairs) {
+          truncated = true;
+          break;
+        }
+        pairsChecked++;
+        const b = input.elements[j];
+        const bNode = input.elementNodeIndices[j];
+        const bArea = rectArea(b.rect);
+        if (!b.stableId || bArea <= 0) {
+          continue;
+        }
+        if (
+          input.skipAncestorOverlaps &&
+          (isAncestorNode(aNode, bNode, input.parentIndex) ||
+            isAncestorNode(bNode, aNode, input.parentIndex))
+        ) {
+          continue;
+        }
+        const intersection = rectIntersection(a.rect, b.rect);
+        if (!intersection) {
+          continue;
+        }
+        const area = rectArea(intersection);
+        if (area < input.minOverlapArea) {
+          continue;
+        }
+        overlaps.push({
+          a: a.stableId,
+          b: b.stableId,
+          area,
+          rect: intersection,
+          overlapRatioA: aArea ? area / aArea : 0,
+          overlapRatioB: bArea ? area / bArea : 0,
+        });
+      }
+      if (truncated) {
+        break;
+      }
+    }
+    overlaps.sort((left, right) => right.area - left.area);
+    analysis.overlaps = overlaps.slice(0, input.maxFindings);
+    meta.overlapPairsChecked = pairsChecked;
+    meta.overlapPairsTruncated = truncated;
+  }
+
+  if (input.includeGapAnalysis) {
+    const gaps: NonNullable<WireframeSnapshotOutput['analysis']>['gaps'] = [];
+    let pairsChecked = 0;
+    let truncated = false;
+    const axes: Array<'x' | 'y'> =
+      input.axis === 'both' ? ['x', 'y'] : [input.axis];
+
+    for (let parentIdx = 0; parentIdx < input.childrenByParent.length; parentIdx++) {
+      const kids = input.childrenByParent[parentIdx];
+      if (!kids || kids.length < 2) {
+        continue;
+      }
+      const entries = kids
+        .map(idx => input.elementByNodeIdx.get(idx))
+        .filter((el): el is WireframeSnapshotOutput['elements'][number] => !!el && !!el.stableId);
+      if (entries.length < 2) {
+        continue;
+      }
+      for (const axis of axes) {
+        entries.sort((left, right) =>
+          axis === 'x' ? left.rect.left - right.rect.left : left.rect.top - right.rect.top,
+        );
+        for (let i = 0; i + 1 < entries.length; i++) {
+          if (pairsChecked >= input.maxPairs) {
+            truncated = true;
+            break;
+          }
+          pairsChecked++;
+          const a = entries[i];
+          const b = entries[i + 1];
+          if (!a.stableId || !b.stableId) {
+            continue;
+          }
+          if (axis === 'x') {
+            const overlap = Math.min(a.rect.bottom, b.rect.bottom) - Math.max(a.rect.top, b.rect.top);
+            const gap = b.rect.left - a.rect.right;
+            if (gap < input.minGap || overlap <= 0) {
+              continue;
+            }
+            gaps.push({
+              a: a.stableId,
+              b: b.stableId,
+              axis: 'x',
+              gap,
+              rect: rectFromEdges(
+                a.rect.right,
+                Math.max(a.rect.top, b.rect.top),
+                b.rect.left,
+                Math.min(a.rect.bottom, b.rect.bottom),
+              ),
+            });
+          } else {
+            const overlap = Math.min(a.rect.right, b.rect.right) - Math.max(a.rect.left, b.rect.left);
+            const gap = b.rect.top - a.rect.bottom;
+            if (gap < input.minGap || overlap <= 0) {
+              continue;
+            }
+            gaps.push({
+              a: a.stableId,
+              b: b.stableId,
+              axis: 'y',
+              gap,
+              rect: rectFromEdges(
+                Math.max(a.rect.left, b.rect.left),
+                a.rect.bottom,
+                Math.min(a.rect.right, b.rect.right),
+                b.rect.top,
+              ),
+            });
+          }
+        }
+        if (truncated) {
+          break;
+        }
+      }
+      if (truncated) {
+        break;
+      }
+    }
+    gaps.sort((left, right) => right.gap - left.gap);
+    analysis.gaps = gaps.slice(0, input.maxFindings);
+    meta.gapPairsChecked = pairsChecked;
+    meta.gapPairsTruncated = truncated;
+  }
+
+  if (input.includeClippingAnalysis) {
+    const clipping: NonNullable<WireframeSnapshotOutput['analysis']>['clipping'] = [];
+    if (!input.includeComputedStyles) {
+      meta.clippingSkipped = true;
+    } else {
+      const clipValues = new Set(['hidden', 'clip', 'scroll', 'auto']);
+      for (let i = 0; i < input.elements.length; i++) {
+        const el = input.elements[i];
+        const nodeIdx = input.elementNodeIndices[i];
+        if (!el.stableId) {
+          continue;
+        }
+        let cur = Array.isArray(input.parentIndex) ? input.parentIndex[nodeIdx] : -1;
+        while (typeof cur === 'number' && cur >= 0) {
+          const ancestor = input.elementByNodeIdx.get(cur);
+          if (ancestor?.stableId && ancestor.computedStyles) {
+            const overflow = ancestor.computedStyles['overflow'] ?? 'visible';
+            const overflowX = ancestor.computedStyles['overflow-x'] ?? overflow;
+            const overflowY = ancestor.computedStyles['overflow-y'] ?? overflow;
+            const clipX = clipValues.has(overflowX);
+            const clipY = clipValues.has(overflowY);
+            if (clipX || clipY) {
+              const clipRect = ancestor.rect;
+              const elementRect = el.rect;
+              const excessLeft = clipX ? Math.max(0, clipRect.left - elementRect.left) : 0;
+              const excessRight = clipX ? Math.max(0, elementRect.right - clipRect.right) : 0;
+              const excessTop = clipY ? Math.max(0, clipRect.top - elementRect.top) : 0;
+              const excessBottom = clipY ? Math.max(0, elementRect.bottom - clipRect.bottom) : 0;
+              if (excessLeft || excessRight || excessTop || excessBottom) {
+                const clippedRects: Rect[] = [];
+                if (excessLeft) {
+                  clippedRects.push(
+                    rectFromEdges(elementRect.left, elementRect.top, elementRect.left + excessLeft, elementRect.bottom),
+                  );
+                }
+                if (excessRight) {
+                  clippedRects.push(
+                    rectFromEdges(clipRect.right, elementRect.top, elementRect.right, elementRect.bottom),
+                  );
+                }
+                if (excessTop) {
+                  clippedRects.push(
+                    rectFromEdges(elementRect.left, elementRect.top, elementRect.right, elementRect.top + excessTop),
+                  );
+                }
+                if (excessBottom) {
+                  clippedRects.push(
+                    rectFromEdges(elementRect.left, clipRect.bottom, elementRect.right, elementRect.bottom),
+                  );
+                }
+                clipping.push({
+                  target: el.stableId,
+                  clippedBy: ancestor.stableId,
+                  elementRect,
+                  clipRect,
+                  clippedRects,
+                  excess: {
+                    left: excessLeft,
+                    right: excessRight,
+                    top: excessTop,
+                    bottom: excessBottom,
+                  },
+                });
+              }
+              break;
+            }
+          }
+          cur = Array.isArray(input.parentIndex) ? input.parentIndex[cur] : -1;
+        }
+      }
+      clipping.sort((left, right) => {
+        const leftArea = left.clippedRects.reduce((sum, rect) => sum + rectArea(rect), 0);
+        const rightArea = right.clippedRects.reduce((sum, rect) => sum + rectArea(rect), 0);
+        return rightArea - leftArea;
+      });
+      analysis.clipping = clipping.slice(0, input.maxFindings);
+    }
+  }
+
+  if (Object.keys(meta).length) {
+    analysis.meta = meta;
+  }
+
+  return Object.keys(analysis).length ? analysis : undefined;
+}
+
 export interface WireframeSnapshotOutput {
   schemaVersion: number;
   coordinateSpace: CoordinateSpace;
@@ -473,16 +781,7 @@ export interface WireframeSnapshotOutput {
     id?: string;
     classList?: string[];
     textSnippet?: string;
-    rect: {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-      left: number;
-      top: number;
-      right: number;
-      bottom: number;
-    };
+    rect: Rect;
     computedStyles?: Record<string, string>;
     changed?: boolean;
     changedComputedStyleKeys?: string[];
@@ -504,6 +803,38 @@ export interface WireframeSnapshotOutput {
     }>;
     addedElements: string[];
     removedElements: string[];
+  };
+  analysis?: {
+    overlaps?: Array<{
+      a: string;
+      b: string;
+      area: number;
+      rect: Rect;
+      overlapRatioA: number;
+      overlapRatioB: number;
+    }>;
+    gaps?: Array<{
+      a: string;
+      b: string;
+      axis: 'x' | 'y';
+      gap: number;
+      rect: Rect;
+    }>;
+    clipping?: Array<{
+      target: string;
+      clippedBy: string;
+      elementRect: Rect;
+      clipRect: Rect;
+      clippedRects: Rect[];
+      excess: {left: number; right: number; top: number; bottom: number};
+    }>;
+    meta?: {
+      overlapPairsChecked?: number;
+      overlapPairsTruncated?: boolean;
+      gapPairsChecked?: number;
+      gapPairsTruncated?: boolean;
+      clippingSkipped?: boolean;
+    };
   };
 }
 
@@ -530,6 +861,15 @@ async function captureWireframeSnapshot(
       includeTextSnippets?: boolean;
       textSnippetMaxLength?: number;
       includeLayoutAssertions?: boolean;
+      includeOverlapAnalysis?: boolean;
+      includeGapAnalysis?: boolean;
+      includeClippingAnalysis?: boolean;
+      analysisMaxPairs?: number;
+      analysisMaxFindings?: number;
+      analysisMinOverlapArea?: number;
+      analysisMinGapPx?: number;
+      analysisAxis?: 'x' | 'y' | 'both';
+      analysisSkipAncestorOverlaps?: boolean;
       compareWith?: string;
       includeDiff?: boolean;
       highlightChanged?: boolean;
@@ -571,6 +911,27 @@ async function captureWireframeSnapshot(
     const includeComputedStyles = request.params.includeComputedStyles ?? false;
     const includeShadowDom = request.params.includeShadowDom ?? false;
     const includePseudoElements = request.params.includePseudoElements ?? false;
+    const includeOverlapAnalysis = request.params.includeOverlapAnalysis ?? false;
+    const includeGapAnalysis = request.params.includeGapAnalysis ?? false;
+    const includeClippingAnalysis = request.params.includeClippingAnalysis ?? false;
+    const analysisMaxPairs =
+      typeof request.params.analysisMaxPairs === 'number' && Number.isFinite(request.params.analysisMaxPairs)
+        ? Math.max(1, Math.floor(request.params.analysisMaxPairs))
+        : 5000;
+    const analysisMaxFindings =
+      typeof request.params.analysisMaxFindings === 'number' && Number.isFinite(request.params.analysisMaxFindings)
+        ? Math.max(1, Math.floor(request.params.analysisMaxFindings))
+        : 20;
+    const analysisMinOverlapArea =
+      typeof request.params.analysisMinOverlapArea === 'number' && Number.isFinite(request.params.analysisMinOverlapArea)
+        ? Math.max(0, request.params.analysisMinOverlapArea)
+        : 4;
+    const analysisMinGapPx =
+      typeof request.params.analysisMinGapPx === 'number' && Number.isFinite(request.params.analysisMinGapPx)
+        ? Math.max(0, request.params.analysisMinGapPx)
+        : 4;
+    const analysisAxis = request.params.analysisAxis ?? 'both';
+    const analysisSkipAncestorOverlaps = request.params.analysisSkipAncestorOverlaps ?? true;
 
     const computedStyleWhitelistParam = request.params.computedStyleWhitelist;
     // Treat an empty array as "unset" so we still fall back to presets.
@@ -770,6 +1131,8 @@ async function captureWireframeSnapshot(
     }
 
     const elements: WireframeSnapshotOutput['elements'] = [];
+    const elementNodeIndices: number[] = [];
+    const elementByNodeIdx = new Map<number, WireframeSnapshotOutput['elements'][number]>();
     const maxTotalRaw =
       (typeof request.params.maxTotal === 'number' ? request.params.maxTotal : undefined) ??
       request.params.maxElements ??
@@ -965,7 +1328,7 @@ async function captureWireframeSnapshot(
           ? (backendNodeId[nodeIdx] as number)
           : undefined;
 
-      elements.push({
+      const element = {
         ref: backend ? {backendNodeId: backend} : undefined,
         stableId,
         matchedSelectors,
@@ -978,7 +1341,10 @@ async function captureWireframeSnapshot(
         textSnippet,
         rect,
         computedStyles: stylesObj,
-      });
+      };
+      elements.push(element);
+      elementNodeIndices.push(nodeIdx);
+      elementByNodeIdx.set(nodeIdx, element);
     }
 
     const truncated = totalInScope > maxTotal;
@@ -1035,6 +1401,27 @@ async function captureWireframeSnapshot(
         overflowXOffenders: overflowXOffenders.slice(0, 20),
         overflowYOffenders: overflowYOffenders.slice(0, 20),
       };
+    }
+
+    const analysis = buildLayoutAnalysis({
+      elements,
+      elementNodeIndices,
+      elementByNodeIdx,
+      parentIndex,
+      childrenByParent,
+      includeOverlapAnalysis,
+      includeGapAnalysis,
+      includeClippingAnalysis,
+      maxPairs: analysisMaxPairs,
+      maxFindings: analysisMaxFindings,
+      minOverlapArea: analysisMinOverlapArea,
+      minGap: analysisMinGapPx,
+      axis: analysisAxis,
+      skipAncestorOverlaps: analysisSkipAncestorOverlaps,
+      includeComputedStyles,
+    });
+    if (analysis) {
+      output.analysis = analysis;
     }
 
     const includeDiff =
@@ -1285,7 +1672,59 @@ export const wireframeSnapshot = defineTool({
       .describe(
         'If true, adds a small derived layoutAssertions section (e.g., overflow offenders).',
       ),
-
+    includeOverlapAnalysis: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true, computes overlap findings between elements (bounded).'),
+    includeGapAnalysis: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true, computes gap findings between sibling elements (bounded).'),
+    includeClippingAnalysis: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe(
+        'If true, computes clipping findings against ancestors with overflow clipping (requires includeComputedStyles).',
+      ),
+    analysisMaxPairs: zod
+      .number()
+      .int()
+      .positive()
+      .default(5000)
+      .optional()
+      .describe('Maximum pair comparisons per analysis pass.'),
+    analysisMaxFindings: zod
+      .number()
+      .int()
+      .positive()
+      .default(20)
+      .optional()
+      .describe('Maximum findings to include for overlaps/gaps/clipping.'),
+    analysisMinOverlapArea: zod
+      .number()
+      .min(0)
+      .default(4)
+      .optional()
+      .describe('Minimum overlap area (px^2) to report.'),
+    analysisMinGapPx: zod
+      .number()
+      .min(0)
+      .default(4)
+      .optional()
+      .describe('Minimum gap (px) to report.'),
+    analysisAxis: zod
+      .enum(['x', 'y', 'both'])
+      .default('both')
+      .optional()
+      .describe('Axis to use for gap analysis.'),
+    analysisSkipAncestorOverlaps: zod
+      .boolean()
+      .default(true)
+      .optional()
+      .describe('If true, skips overlap checks for ancestor/descendant pairs.'),
     // Scroll ergonomics
     scrollToSelector: zod
       .string()
@@ -1373,6 +1812,9 @@ function renderSvgWireframe(
     showLabels: boolean;
     showDimensions: boolean;
     showSpacing: boolean;
+    showOverlaps: boolean;
+    showGaps: boolean;
+    showClipping: boolean;
     strokeWidth: number;
     fillOpacity: number;
     highlightChanged: boolean;
@@ -1423,6 +1865,9 @@ function renderSvgWireframe(
   const labels: string[] = [];
   const dims: string[] = [];
   const spacing: string[] = [];
+  const overlapOverlays: string[] = [];
+  const gapOverlays: string[] = [];
+  const clippingOverlays: string[] = [];
 
   for (let idx = 0; idx < snapshot.elements.length; idx++) {
     const el = snapshot.elements[idx];
@@ -1579,6 +2024,42 @@ function renderSvgWireframe(
     }
   }
 
+  if (options.showOverlaps && snapshot.analysis?.overlaps?.length) {
+    for (const overlap of snapshot.analysis.overlaps) {
+      const r = overlap.rect;
+      overlapOverlays.push(
+        `<rect class="wf-overlap" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" ` +
+          `fill="rgba(255,59,48,0.2)" stroke="#ff3b30" stroke-width="1" />`,
+      );
+    }
+  }
+
+  if (options.showGaps && snapshot.analysis?.gaps?.length) {
+    for (const gap of snapshot.analysis.gaps) {
+      const r = gap.rect;
+      gapOverlays.push(
+        `<rect class="wf-gap" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" ` +
+          `fill="rgba(255,167,38,0.15)" stroke="#ffa726" stroke-width="1" stroke-dasharray="3 2" />`,
+      );
+    }
+  }
+
+  if (options.showClipping && snapshot.analysis?.clipping?.length) {
+    for (const clip of snapshot.analysis.clipping) {
+      const c = clip.clipRect;
+      clippingOverlays.push(
+        `<rect class="wf-clip-bound" x="${c.x}" y="${c.y}" width="${c.width}" height="${c.height}" ` +
+          `fill="none" stroke="#9b59b6" stroke-width="1" stroke-dasharray="4 3" />`,
+      );
+      for (const r of clip.clippedRects) {
+        clippingOverlays.push(
+          `<rect class="wf-clip" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" ` +
+            `fill="rgba(155,89,182,0.2)" stroke="#9b59b6" stroke-width="1" />`,
+        );
+      }
+    }
+  }
+
   return (
     `<?xml version="1.0" encoding="UTF-8"?>` +
     `<svg xmlns="http://www.w3.org/2000/svg" width="${viewportW * scale}" height="${viewportH * scale}" viewBox="${viewBox}">` +
@@ -1591,6 +2072,9 @@ function renderSvgWireframe(
     (labels.length ? `<g>` + labels.join('') + `</g>` : '') +
     (dims.length ? `<g>` + dims.join('') + `</g>` : '') +
     (spacing.length ? `<g>` + spacing.join('') + `</g>` : '') +
+    (overlapOverlays.length ? `<g>` + overlapOverlays.join('') + `</g>` : '') +
+    (gapOverlays.length ? `<g>` + gapOverlays.join('') + `</g>` : '') +
+    (clippingOverlays.length ? `<g>` + clippingOverlays.join('') + `</g>` : '') +
     `</svg>`
   );
 }
@@ -1764,6 +2248,59 @@ export const svgSnapshot = defineTool({
       .describe(
         'If true, adds a small derived layoutAssertions section (e.g., overflow offenders).',
       ),
+    includeOverlapAnalysis: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true, computes overlap findings between elements (bounded).'),
+    includeGapAnalysis: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true, computes gap findings between sibling elements (bounded).'),
+    includeClippingAnalysis: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe(
+        'If true, computes clipping findings against ancestors with overflow clipping (requires includeComputedStyles).',
+      ),
+    analysisMaxPairs: zod
+      .number()
+      .int()
+      .positive()
+      .default(5000)
+      .optional()
+      .describe('Maximum pair comparisons per analysis pass.'),
+    analysisMaxFindings: zod
+      .number()
+      .int()
+      .positive()
+      .default(20)
+      .optional()
+      .describe('Maximum findings to include for overlaps/gaps/clipping.'),
+    analysisMinOverlapArea: zod
+      .number()
+      .min(0)
+      .default(4)
+      .optional()
+      .describe('Minimum overlap area (px^2) to report.'),
+    analysisMinGapPx: zod
+      .number()
+      .min(0)
+      .default(4)
+      .optional()
+      .describe('Minimum gap (px) to report.'),
+    analysisAxis: zod
+      .enum(['x', 'y', 'both'])
+      .default('both')
+      .optional()
+      .describe('Axis to use for gap analysis.'),
+    analysisSkipAncestorOverlaps: zod
+      .boolean()
+      .default(true)
+      .optional()
+      .describe('If true, skips overlap checks for ancestor/descendant pairs.'),
 
     // Scroll ergonomics
     scrollToSelector: zod
@@ -1803,6 +2340,21 @@ export const svgSnapshot = defineTool({
       .default(false)
       .optional()
       .describe('If true, visualizes margins, padding, and gaps between elements.'),
+    showOverlaps: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true, overlays computed overlap regions (requires includeOverlapAnalysis).'),
+    showGaps: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true, overlays computed gap regions (requires includeGapAnalysis).'),
+    showClipping: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true, overlays computed clipping regions (requires includeClippingAnalysis).'),
     strokeWidth: zod
       .number()
       .min(0.25)
@@ -1840,6 +2392,16 @@ export const svgSnapshot = defineTool({
       ),
   },
   handler: async (request, response, context) => {
+    if (request.params.showOverlaps) {
+      request.params.includeOverlapAnalysis = true;
+    }
+    if (request.params.showGaps) {
+      request.params.includeGapAnalysis = true;
+    }
+    if (request.params.showClipping) {
+      request.params.includeClippingAnalysis = true;
+      request.params.includeComputedStyles = true;
+    }
     const {output} = await captureWireframeSnapshot(request as any, context);
 
     let previous: WireframeSnapshotOutput | undefined;
@@ -1859,6 +2421,9 @@ export const svgSnapshot = defineTool({
       showLabels: request.params.showLabels ?? true,
       showDimensions: request.params.showDimensions ?? false,
       showSpacing: request.params.showSpacing ?? false,
+      showOverlaps: request.params.showOverlaps ?? false,
+      showGaps: request.params.showGaps ?? false,
+      showClipping: request.params.showClipping ?? false,
       strokeWidth: request.params.strokeWidth ?? 1,
       fillOpacity: request.params.fillOpacity ?? 0.08,
       highlightChanged: request.params.highlightChanged ?? false,
@@ -1973,6 +2538,16 @@ export const svgSnapshotLiveEditing = defineTool({
     maxBytesInline: liveEditingMaxBytesInlineSchema,
   },
   handler: async (request, response, context) => {
+    if (request.params.showOverlaps) {
+      request.params.includeOverlapAnalysis = true;
+    }
+    if (request.params.showGaps) {
+      request.params.includeGapAnalysis = true;
+    }
+    if (request.params.showClipping) {
+      request.params.includeClippingAnalysis = true;
+      request.params.includeComputedStyles = true;
+    }
     const {output} = await captureWireframeSnapshot(request as any, context);
     const summary = summarizeWireframeSnapshot(output);
 
@@ -1993,6 +2568,9 @@ export const svgSnapshotLiveEditing = defineTool({
       showLabels: request.params.showLabels ?? true,
       showDimensions: request.params.showDimensions ?? false,
       showSpacing: request.params.showSpacing ?? false,
+      showOverlaps: request.params.showOverlaps ?? false,
+      showGaps: request.params.showGaps ?? false,
+      showClipping: request.params.showClipping ?? false,
       strokeWidth: request.params.strokeWidth ?? 1,
       fillOpacity: request.params.fillOpacity ?? 0.08,
       highlightChanged: request.params.highlightChanged ?? false,

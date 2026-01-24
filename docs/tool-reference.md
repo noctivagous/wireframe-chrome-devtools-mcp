@@ -378,6 +378,24 @@
 - **includeComputedStyles** (boolean) _(optional)_: If true, includes a whitelist of computed styles for each element via DOMSnapshot.captureSnapshot (also used for optional diff/analysis).
 - **includeDescendants** (boolean) _(optional)_: When used with selectors, includes matching elements’ descendants as well (within scopeSelector if provided).
 - **includeLayoutAssertions** (boolean) _(optional)_: If true, adds a small derived layoutAssertions section (e.g., overflow offenders).
+- **includeOverlapAnalysis** (boolean) _(optional)_: If true, computes overlap findings between elements (bounded).
+- **includeGapAnalysis** (boolean) _(optional)_: If true, computes gap findings between sibling elements (bounded).
+- **includeClippingAnalysis** (boolean) _(optional)_: If true, computes clipping findings against ancestors with overflow clipping (requires includeComputedStyles).
+- **analysisMaxPairs** (number) _(optional)_: Maximum pair comparisons per analysis pass.
+- **analysisMaxFindings** (number) _(optional)_: Maximum findings to include for overlaps/gaps/clipping.
+- **analysisMinOverlapArea** (number) _(optional)_: Minimum overlap area (px^2) to report.
+- **analysisMinGapPx** (number) _(optional)_: Minimum gap (px) to report.
+- **analysisAxis** (enum: "x", "y", "both") _(optional)_: Axis to use for gap analysis.
+- **analysisSkipAncestorOverlaps** (boolean) _(optional)_: If true, skips overlap checks for ancestor/descendant pairs.
+- **includeOverlapAnalysis** (boolean) _(optional)_: If true, computes overlap findings between elements (bounded).
+- **includeGapAnalysis** (boolean) _(optional)_: If true, computes gap findings between sibling elements (bounded).
+- **includeClippingAnalysis** (boolean) _(optional)_: If true, computes clipping findings against ancestors with overflow clipping (requires includeComputedStyles).
+- **analysisMaxPairs** (number) _(optional)_: Maximum pair comparisons per analysis pass.
+- **analysisMaxFindings** (number) _(optional)_: Maximum findings to include for overlaps/gaps/clipping.
+- **analysisMinOverlapArea** (number) _(optional)_: Minimum overlap area (px^2) to report.
+- **analysisMinGapPx** (number) _(optional)_: Minimum gap (px) to report.
+- **analysisAxis** (enum: "x", "y", "both") _(optional)_: Axis to use for gap analysis.
+- **analysisSkipAncestorOverlaps** (boolean) _(optional)_: If true, skips overlap checks for ancestor/descendant pairs.
 - **includePseudoElements** (boolean) _(optional)_: If true, includes pseudo-element nodes (e.g. ::before/::after) when present in the DOMSnapshot.
 - **includeShadowDom** (boolean) _(optional)_: If true, attempts to include and query into open shadow roots under the scope root (best-effort).
 - **includeTextSnippets** (boolean) _(optional)_: If true, includes best-effort textSnippet fields when available in the snapshot (bounded).
@@ -393,6 +411,9 @@
 - **showDimensions** (boolean) _(optional)_: If true, draws width×height labels for each box.
 - **showLabels** (boolean) _(optional)_: If true, draws tag/id/class labels in the top-left of each box.
 - **showSpacing** (boolean) _(optional)_: If true, visualizes margins, padding, and gaps between elements.
+- **showOverlaps** (boolean) _(optional)_: If true, overlays computed overlap regions (requires includeOverlapAnalysis).
+- **showGaps** (boolean) _(optional)_: If true, overlays computed gap regions (requires includeGapAnalysis).
+- **showClipping** (boolean) _(optional)_: If true, overlays computed clipping regions (requires includeClippingAnalysis).
 - **strokeWidth** (number) _(optional)_: Stroke width for element rectangles.
 - **stylePreset** (enum: "minimal", "layout", "standard", "debug", "typography", "paint") _(optional)_: Deprecated alias for computedStylePreset. Prefer computedStylePreset.
 - **textSnippetMaxLength** (integer) _(optional)_: Maximum length for textSnippet when includeTextSnippets is true.

@@ -24,3 +24,9 @@ description: Workflow approaches and edit session patterns
 **Debug**: Load → `begin_edit_session` → `svg_snapshot`/`wireframe_snapshot` → fix → commit
 
 **A/B test**: `insert_css_preview` → compare wireframes → keep best, rollback
+
+
+--------------
+## Git Shortcuts During Chat
+
+**gitp**: try to npm run build and make sure it passes, then `git add . ; git commit -m '[your commit line based on the situation]' ; git push`

@@ -34,6 +34,52 @@ describe('wireframe', () => {
         assert.ok(text.includes('"elements"'));
       });
     });
+
+    it('includes overlap/gap/clipping analysis when requested', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(
+          html`<main>
+            <section id="overlap">
+              <div id="overlap-a" style="width: 60px; height: 60px; background: #eee"></div>
+              <div id="overlap-b" style="width: 60px; height: 60px; margin-top: -30px; background: #ddd"></div>
+            </section>
+            <section id="gap" style="display: flex; flex-direction: column; gap: 12px;">
+              <div id="gap-a" style="width: 40px; height: 20px;"></div>
+              <div id="gap-b" style="width: 40px; height: 20px;"></div>
+            </section>
+            <section id="clip" style="width: 50px; height: 50px; overflow: hidden;">
+              <div id="clip-a" style="width: 120px; height: 120px;"></div>
+            </section>
+          </main>`,
+        );
+
+        await wireframeSnapshot.handler(
+          {
+            params: {
+              includeComputedStyles: true,
+              includeOverlapAnalysis: true,
+              includeGapAnalysis: true,
+              includeClippingAnalysis: true,
+              analysisMinOverlapArea: 25,
+              analysisMinGapPx: 6,
+              analysisMaxFindings: 10,
+            },
+          },
+          response,
+          context,
+        );
+
+        const responseText = response.responseLines.join('\n');
+        const jsonMatch = responseText.match(/```json\s*\n(.*)\n```/s);
+        assert.ok(jsonMatch);
+        const result = JSON.parse(jsonMatch[1]);
+        assert.ok(result.analysis);
+        assert.ok(result.analysis.overlaps?.length >= 1);
+        assert.ok(result.analysis.gaps?.length >= 1);
+        assert.ok(result.analysis.clipping?.length >= 1);
+      });
+    });
   });
 
   describe('svg_snapshot', () => {
@@ -80,6 +126,51 @@ describe('wireframe', () => {
         assert.ok(result.elementCount >= 2);
         assert.equal(result.truncated, false);
         assert.ok(result.viewport);
+      });
+    });
+
+    it('renders overlap/gap/clipping overlays when enabled', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = context.getSelectedPage();
+        await page.setContent(
+          html`<main>
+            <section id="overlap">
+              <div id="overlap-a" style="width: 60px; height: 60px; background: #eee"></div>
+              <div id="overlap-b" style="width: 60px; height: 60px; margin-top: -30px; background: #ddd"></div>
+            </section>
+            <section id="gap" style="display: flex; flex-direction: column; gap: 12px;">
+              <div id="gap-a" style="width: 40px; height: 20px;"></div>
+              <div id="gap-b" style="width: 40px; height: 20px;"></div>
+            </section>
+            <section id="clip" style="width: 50px; height: 50px; overflow: hidden;">
+              <div id="clip-a" style="width: 120px; height: 120px;"></div>
+            </section>
+          </main>`,
+        );
+
+        await svgSnapshot.handler(
+          {
+            params: {
+              includeComputedStyles: true,
+              showOverlaps: true,
+              showGaps: true,
+              showClipping: true,
+              analysisMinOverlapArea: 25,
+              analysisMinGapPx: 6,
+              analysisMaxFindings: 10,
+            },
+          },
+          response,
+          context,
+        );
+
+        const responseText = response.responseLines.join('\n');
+        const jsonMatch = responseText.match(/```json\s*\n(.*)\n```/s);
+        assert.ok(jsonMatch);
+        const result = JSON.parse(jsonMatch[1]);
+        assert.ok(result.svg.includes('wf-overlap'));
+        assert.ok(result.svg.includes('wf-gap'));
+        assert.ok(result.svg.includes('wf-clip'));
       });
     });
   });
