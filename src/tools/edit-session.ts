@@ -68,9 +68,10 @@ export const beginEditSession = defineTool({
     response.appendResponseLine('    "arguments": {\n');
     response.appendResponseLine('      "target": {"selector": "body", "position": "beforeend"},\n');
     response.appendResponseLine('      "patch": {"patchIdPrefix": "demo-layout", "replaceExisting": true, "recordToSession": true},\n');
-    response.appendResponseLine('      "composition": {\n');
-    response.appendResponseLine('        "type": "layout_parametric_stack",\n');
-    response.appendResponseLine('        "params": {"direction": "row", "gap": "12px", "items": ["Left", "Right"]}\n');
+    response.appendResponseLine('      "parametric_stack": {\n');
+    response.appendResponseLine('        "direction": "row",\n');
+    response.appendResponseLine('        "gap": "12px",\n');
+    response.appendResponseLine('        "items": ["Left", "Right"]\n');
     response.appendResponseLine('      }\n');
     response.appendResponseLine('    }\n');
     response.appendResponseLine('  }\n');
@@ -740,8 +741,11 @@ export const liveEditingSession = defineTool({
     'Use exactly one of: `begin`, `edit`, `export`, or `interact`.\n\n' +
     '- `begin`: start a live editing session (wraps `begin_live_editing_session`).\n' +
     '- `edit`: session-adjacent utilities (export prototype state, or post AI annotations).\n' +
+    '  - `edit.action` must be one of: `export_prototype_state` or `annotate`.\n' +
     '- `export`: export/commit/clear session data (wraps `export_edit_session`, `commit_edit_session_to_files`, `clear_edit_session`).\n' +
-    '- `interact`: gather information or notify user of plans via interactive forms (questionnaires/slideshows).',
+    '  - `export.action` must be one of: `export_edit_session`, `commit_edit_session_to_files`, or `clear_edit_session`.\n' +
+    '- `questionnaire` or `plans_notification`: gather information or notify user of plans via interactive forms.\n\n' +
+    '**Note on batch calls:** When using `batch_ops` or making batch tool calls, use `functions.<tool_name>` exactly (no double namespace). For example: `functions.live_editing_session`, not `functions.functions.live_editing_session`.',
   annotations: {
     category: ToolCategory.EDIT_SESSION,
     readOnlyHint: false,
@@ -787,30 +791,31 @@ export const liveEditingSession = defineTool({
       ])
       .optional()
       .describe('Export/commit/clear session state. This is the explicit write/export step.'),
-    interact: zod
-      .discriminatedUnion('type', [
-        zod.object({
-          type: zod.literal('questionnaire'),
-          questions: zod.array(zod.string()).describe('List of questions for the user.'),
-          title: zod.string().optional().describe('Optional title for the questionnaire.'),
-        }),
-        zod.object({
-          type: zod.literal('plans_notification'),
-          plans: zod.array(zod.string()).describe('List of planned actions to show the user.'),
-          title: zod.string().optional().describe('Optional title for the plans notification.'),
-        }),
-      ])
+    questionnaire: zod
+      .object({
+        questions: zod.array(zod.string()).describe('List of questions for the user.'),
+        title: zod.string().optional().describe('Optional title for the questionnaire.'),
+      })
       .optional()
-      .describe('Gather information or notify user of plans via interactive forms.'),
+      .describe('Show a questionnaire form to gather information from the user.'),
+    plans_notification: zod
+      .object({
+        plans: zod.array(zod.string()).describe('List of planned actions to show the user.'),
+        title: zod.string().optional().describe('Optional title for the plans notification.'),
+      })
+      .optional()
+      .describe('Notify the user of planned actions via an interactive form.'),
   },
   handler: async (request, response, context) => {
     const begin = (request.params as any).begin;
     const edit = (request.params as any).edit;
     const exportOp = (request.params as any).export;
-    const interact = (request.params as any).interact;
-    const provided = [begin, edit, exportOp, interact].filter(Boolean).length;
+    const questionnaire = (request.params as any).questionnaire;
+    const plans_notification = (request.params as any).plans_notification;
+    const hasInteract = Boolean(questionnaire || plans_notification);
+    const provided = [begin, edit, exportOp, hasInteract].filter(Boolean).length;
     if (provided !== 1) {
-      throw new Error('Provide exactly one of: begin, edit, export, interact.');
+      throw new Error('Provide exactly one of: begin, edit, export, questionnaire, plans_notification.');
     }
 
     if (begin) {
@@ -895,7 +900,14 @@ export const liveEditingSession = defineTool({
       throw new Error(`Unsupported export action: ${String(action)}`);
     }
 
-    if (interact) {
+    if (questionnaire || plans_notification) {
+      if (questionnaire && plans_notification) {
+        throw new Error('Provide exactly one of: questionnaire, plans_notification.');
+      }
+      const interactParams = questionnaire
+        ? {type: 'questionnaire', ...questionnaire}
+        : {type: 'plans_notification', ...plans_notification};
+      
       const page = context.getSelectedPage();
       const result = await page.evaluate((params) => {
         const api = (window as any).__MCP_LIVE_EDITING__;
@@ -903,7 +915,7 @@ export const liveEditingSession = defineTool({
           throw new Error('Live editing overlay with interact support not installed or page not ready.');
         }
         return api.showInteractForm(params);
-      }, interact);
+      }, interactParams);
       
       const workflowState = context.getLiveEditingWorkflowState();
       response.appendResponseLine('```json');

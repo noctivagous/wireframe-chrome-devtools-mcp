@@ -1,12 +1,11 @@
 {
   "version": 1,
-  "updatedAt": "2026-01-24T17:49:36.948Z",
+  "updatedAt": "2026-01-25T01:52:45.206Z",
   "disabledTools": [
     "analyze_js",
     "apply_commit_plan",
     "apply_unified_diff",
     "begin_edit_session",
-    "begin_live_editing_session",
     "clear_edit_session",
     "commit_edit_session_to_files",
     "drag",
@@ -23,7 +22,6 @@
     "inspect_state",
     "install_extension",
     "js_console",
-    "layout_live_editing_recipe_catalog",
     "list_console_messages",
     "list_edit_sessions",
     "list_network_requests",

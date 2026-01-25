@@ -258,7 +258,7 @@ describe('mutation', () => {
         `);
 
         await insertCss.handler(
-          {params: {cssText: '.test { color: red; }', replaceExisting: false}},
+          {params: {mode: 'apply', cssText: '.test { color: red; }', replaceExisting: false}},
           response,
           context,
         );
@@ -310,6 +310,7 @@ describe('mutation', () => {
         await insertCss.handler(
           {
             params: {
+              mode: 'apply',
               cssText: '.test { color: red; }',
               patchId: 'test-patch',
               replaceExisting: false,

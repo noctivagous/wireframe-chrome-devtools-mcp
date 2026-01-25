@@ -43,16 +43,13 @@ describe('layout_live_editing', () => {
             target: {selector: '#app', position: 'beforeend'},
             root: {id: 'le-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'test-grid', replaceExisting: true},
-            composition: {
-              type: 'layout_parametric_grid',
-              params: {
-                rows: [
-                  {items: ['A', 'B', 'C']},
-                  {items: ['D', 'E']},
-                ],
-                unit: '1fr',
-                gap: '0.25rem',
-              },
+            parametric_grid: {
+              rows: [
+                {items: ['A', 'B', 'C']},
+                {items: ['D', 'E']},
+              ],
+              unit: '1fr',
+              gap: '0.25rem',
             },
             behaviors: [
               {type: 'behavior_selectable', params: {defaultSelectedIndex: 0}},
@@ -128,13 +125,10 @@ describe('layout_live_editing', () => {
             target: {selector: '#app', position: 'beforeend'},
             root: {id: 'preview-root', classPrefix: 'prev'},
             patch: {patchIdPrefix: 'preview-test', replaceExisting: true},
-            composition: {
-              type: 'layout_parametric_stack',
-              params: {
-                items: ['X', 'Y', 'Z'],
-                gap: '4px',
-                direction: 'row',
-              },
+            parametric_stack: {
+              items: ['X', 'Y', 'Z'],
+              gap: '4px',
+              direction: 'row',
             },
           },
         },
@@ -154,6 +148,37 @@ describe('layout_live_editing', () => {
     });
   });
 
+  it('accepts double-stringified composition JSON', async () => {
+    await withMcpContext(async (response, context) => {
+      const page = context.getSelectedPage();
+      await page.setContent(html`<main id="app"></main>`);
+
+      const parametricStack = {
+        direction: 'row',
+        items: ['A', 'B'],
+      };
+
+      await layoutLiveEditing.handler(
+        {
+          params: {
+            mode: 'apply',
+            target: {selector: '#app', position: 'beforeend'},
+            root: {id: 'double-string-root', classPrefix: 'le'},
+            patch: {patchIdPrefix: 'double-string-test', replaceExisting: true},
+            parametric_stack: JSON.stringify(JSON.stringify(parametricStack)),
+          },
+        },
+        response,
+        context,
+      );
+
+      const rootExists = await page.evaluate(() => {
+        return Boolean(document.querySelector('#double-string-root'));
+      });
+      assert.equal(rootExists, true);
+    });
+  });
+
   it('supports fixed and constrained sizing in stack items', async () => {
     await withMcpContext(async (response, context) => {
       const page = context.getSelectedPage();
@@ -166,15 +191,12 @@ describe('layout_live_editing', () => {
             target: {selector: '#app', position: 'beforeend'},
             root: {id: 'size-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'size-test', replaceExisting: true},
-            composition: {
-              type: 'layout_parametric_stack',
-              params: {
-                direction: 'row',
-                items: [
-                  {label: 'Fixed', size: '120px', minSize: '80px', maxSize: '160px'},
-                  {label: 'Flex', span: 1},
-                ],
-              },
+            parametric_stack: {
+              direction: 'row',
+              items: [
+                {label: 'Fixed', size: '120px', minSize: '80px', maxSize: '160px'},
+                {label: 'Flex', span: 1},
+              ],
             },
           },
         },
@@ -204,22 +226,17 @@ describe('layout_live_editing', () => {
             target: {selector: '#app', position: 'beforeend'},
             root: {id: 'nested-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'nested-test', replaceExisting: true},
-            composition: {
-              type: 'layout_parametric_stack',
-              params: {
-                direction: 'column',
-                items: [
-                  {
-                    composition: {
-                      type: 'layout_parametric_grid',
-                      params: {
-                        rows: [{items: ['A', 'B']}],
-                        unit: '1fr',
-                      },
-                    },
+            parametric_stack: {
+              direction: 'column',
+              items: [
+                {
+                  composition: {
+                    type: 'layout_parametric_grid',
+                    rows: [{items: ['A', 'B']}],
+                    unit: '1fr',
                   },
-                ],
-              },
+                },
+              ],
             },
           },
         },
@@ -246,15 +263,12 @@ describe('layout_live_editing', () => {
             target: {selector: '#app', position: 'beforeend'},
             root: {id: 'carousel-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'carousel-test', replaceExisting: true},
-            composition: {
-              type: 'component_parametric_viewer',
-              params: {
-                variant: 'carousel',
-                items: [
-                  {label: 'One', content: '<p>One</p>'},
-                  {label: 'Two', content: '<p>Two</p>'},
-                ],
-              },
+            component_parametric_viewer: {
+              variant: 'carousel',
+              items: [
+                {label: 'One', content: '<p>One</p>'},
+                {label: 'Two', content: '<p>Two</p>'},
+              ],
             },
             behaviors: [{type: 'behavior_selectable'}],
           },
@@ -291,14 +305,11 @@ describe('layout_live_editing', () => {
             target: {selector: '#app', position: 'beforeend'},
             root: {id: 'resize-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'resize-test', replaceExisting: true},
-            composition: {
-              type: 'layout_parametric_stack',
-              params: {
-                direction: 'row',
-                items: ['Left', 'Middle', 'Right'],
-              },
-              behaviors: [{type: 'behavior_drag_resize'}],
+            parametric_stack: {
+              direction: 'row',
+              items: ['Left', 'Middle', 'Right'],
             },
+            behaviors: [{type: 'behavior_drag_resize'}],
           },
         },
         response,
@@ -378,12 +389,9 @@ describe('layout_live_editing', () => {
                 text: '#f5f5f5',
               },
             },
-            composition: {
-              type: 'layout_parametric_stack',
-              params: {
-                direction: 'row',
-                items: ['Left', 'Right'],
-              },
+            parametric_stack: {
+              direction: 'row',
+              items: ['Left', 'Right'],
             },
           },
         },
@@ -414,10 +422,7 @@ describe('layout_live_editing', () => {
             target: {selector: '#app', position: 'beforeend'},
             root: {id: 'replace-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'replace-test', replaceExisting: true},
-            composition: {
-              type: 'layout_parametric_stack',
-              params: {direction: 'row', items: ['First']},
-            },
+            parametric_stack: {direction: 'row', items: ['First']},
           },
         },
         response,
@@ -431,10 +436,7 @@ describe('layout_live_editing', () => {
             target: {selector: '#app', position: 'beforeend'},
             root: {id: 'replace-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'replace-test', replaceExisting: true},
-            composition: {
-              type: 'layout_parametric_stack',
-              params: {direction: 'row', items: ['Updated']},
-            },
+            parametric_stack: {direction: 'row', items: ['Updated']},
           },
         },
         response,
@@ -475,12 +477,9 @@ describe('layout_live_editing', () => {
             theme: {
               auto: {sampleSelector: '#sample'},
             },
-            composition: {
-              type: 'layout_parametric_stack',
-              params: {
-                direction: 'row',
-                items: ['One', 'Two'],
-              },
+            parametric_stack: {
+              direction: 'row',
+              items: ['One', 'Two'],
             },
           },
         },

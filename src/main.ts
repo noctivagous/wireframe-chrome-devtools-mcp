@@ -11,6 +11,22 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
+// Debug logging helper
+const DEBUG_LOG_PATH = path.join(process.cwd(), '.cursor', 'debug.log');
+function debugLog(data: {location: string; message: string; data: any; hypothesisId: string}) {
+  try {
+    const logEntry = JSON.stringify({
+      ...data,
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'run1',
+    }) + '\n';
+    fs.appendFileSync(DEBUG_LOG_PATH, logEntry, 'utf8');
+  } catch (e) {
+    // Ignore logging errors
+  }
+}
+
 import type {Channel} from './browser.js';
 import {ensureBrowserConnected, ensureBrowserLaunched} from './browser.js';
 import {cliOptions, parseArguments} from './cli.js';
@@ -285,6 +301,12 @@ function registerTool(tool: ToolDefinition): void {
       annotations: tool.annotations,
     },
     async (params): Promise<CallToolResult> => {
+      // #region agent log
+      if (tool.name === 'layout_live_editing' && (params as any).composition) {
+        const comp = (params as any).composition;
+        debugLog({location:'main.ts:305',message:'MCP handler entry - composition param received',data:{compositionType:typeof comp,compositionIsString:typeof comp === 'string',compositionIsObject:typeof comp === 'object',compositionPreview:comp ? (typeof comp === 'string' ? comp.substring(0,100) : JSON.stringify(comp).substring(0,100)) : 'undefined'},hypothesisId:'H'});
+      }
+      // #endregion
       const guard = await toolMutex.acquire();
       const startTime = Date.now();
       let success = false;

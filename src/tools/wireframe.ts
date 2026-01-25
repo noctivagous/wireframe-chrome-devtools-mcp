@@ -1033,7 +1033,7 @@ async function captureWireframeSnapshot(
     const matchedSelectorsByNodeIndex = new Map<number, string[]>();
     const scopeNodeIndices = new Set<number>();
 
-    const includeDescendants = request.params.includeDescendants ?? false;
+    const includeDescendants = request.params.includeDescendants ?? true;
     const selectors = request.params.selectors;
     const scopeSelector = request.params.scopeSelector;
     const wantsPageWideAnalysis =
@@ -1626,10 +1626,10 @@ export const wireframeSnapshot = defineTool({
       ),
     includeDescendants: zod
       .boolean()
-      .default(false)
+      .default(true)
       .optional()
       .describe(
-        'When used with selectors, includes matching elements’ descendants as well (within scopeSelector if provided).',
+        'When used with selectors, includes matching elements\' descendants as well (within scopeSelector if provided). Defaults to true to capture child elements.',
       ),
 
     // Payload shaping
@@ -2201,10 +2201,10 @@ export const svgSnapshot = defineTool({
       ),
     includeDescendants: zod
       .boolean()
-      .default(false)
+      .default(true)
       .optional()
       .describe(
-        'When used with selectors, includes matching elements’ descendants as well (within scopeSelector if provided).',
+        'When used with selectors, includes matching elements\' descendants as well (within scopeSelector if provided). Defaults to true to capture child elements.',
       ),
 
     // Payload shaping

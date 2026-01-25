@@ -49,6 +49,7 @@ describe('edit-session', () => {
       await insertCss.handler(
         {
           params: {
+            mode: 'apply',
             cssText: '.x { color: red; }',
             replaceExisting: false,
             recordToSession: true,

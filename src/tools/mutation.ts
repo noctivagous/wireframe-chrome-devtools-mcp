@@ -25,18 +25,26 @@ export const insertCss = defineTool({
   name: 'insert_css',
   description:
     'Insert a <style> tag into the current page with a patch id for later rollback.\n\n' +
-    '**Preview Mode:** When `preview` parameters are provided (selector, property, values), the tool automatically generates visual wireframe feedback, supports testing multiple values, responsive breakpoints, and before/after comparisons. Preview mode includes automatic rollback by default.',
+    '**Preview Mode:** When `mode: "preview"` is used with `selector`, `property`, and `values`, the tool automatically generates visual wireframe feedback, supports testing multiple values, responsive breakpoints, and before/after comparisons. Preview mode includes automatic rollback by default.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
   },
   schema: {
+    mode: zod
+      .enum(['apply', 'preview'])
+      .optional()
+      .default('apply')
+      .describe(
+        'Operation mode: "apply" to modify the page permanently, "preview" to apply changes then automatically rollback. Preview mode requires selector, property, and values parameters.',
+      ),
+
     // Direct CSS insertion mode
     cssText: zod
       .string()
       .optional()
       .describe(
-        'CSS text to insert into the page. Required unless using preview mode (selector + property + values).',
+        'CSS text to insert into the page. Required when mode is "apply" and not using selector/property/values.',
       ),
 
     // Preview mode parameters (for A/B testing CSS property values)
@@ -44,20 +52,20 @@ export const insertCss = defineTool({
       .string()
       .optional()
       .describe(
-        'CSS selector to target elements (preview mode). When provided with property and values, enables preview mode.',
+        'CSS selector to target elements. Required when mode is "preview" (must be provided with property and values).',
       ),
     property: zod
       .string()
       .optional()
       .describe(
-        'CSS property to modify in preview mode (e.g., "margin-bottom", "gap", "padding").',
+        'CSS property to modify (e.g., "margin-bottom", "gap", "padding"). Required when mode is "preview" (must be provided with selector and values).',
       ),
     values: zod
       .array(zod.string())
       .min(1)
       .optional()
       .describe(
-        'Array of CSS values to test in preview mode. Each value will be applied and visually previewed.',
+        'Array of CSS values to test. Each value will be applied and visually previewed. Required when mode is "preview" (must be provided with selector and property).',
       ),
     selectedValueIndex: zod
       .number()
@@ -68,30 +76,30 @@ export const insertCss = defineTool({
         'Optional index (0-based) indicating which value should be recorded as the "chosen" snippet when recordToSession=true in preview mode. If omitted, the last value is recorded.',
       ),
 
-    // Visual options (preview mode)
+    // Visual options (used in preview mode)
     showVisual: zod
       .boolean()
       .default(true)
       .optional()
       .describe(
-        'If true, automatically generates SVG wireframe snapshots for visual feedback (preview mode).',
+        'If true, automatically generates SVG wireframe snapshots for visual feedback. Used when mode is "preview".',
       ),
     highlightChanges: zod
       .boolean()
       .default(true)
       .optional()
       .describe(
-        'If true, highlights changed elements in the visual snapshots (preview mode).',
+        'If true, highlights changed elements in the visual snapshots. Used when mode is "preview".',
       ),
     showDimensions: zod
       .boolean()
       .default(true)
       .optional()
       .describe(
-        'If true, shows width×height dimensions on elements in the wireframe (preview mode).',
+        'If true, shows width×height dimensions on elements in the wireframe. Used when mode is "preview".',
       ),
 
-    // Responsive testing (preview mode)
+    // Responsive testing (used in preview mode)
     responsiveBreakpoints: zod
       .array(
         zod.object({
@@ -104,24 +112,24 @@ export const insertCss = defineTool({
       )
       .optional()
       .describe(
-        'Optional responsive breakpoints to test in preview mode. Will resize viewport and capture snapshots for each.',
+        'Optional responsive breakpoints to test. Will resize viewport and capture snapshots for each. Used when mode is "preview".',
       ),
 
-    // Output options (preview mode)
+    // Output options (used in preview mode)
     filePath: zod
       .string()
       .optional()
       .describe(
-        'Optional path to save detailed results in preview mode. If not provided, results are returned in the response.',
+        'Optional path to save detailed results. If not provided, results are returned in the response. Used when mode is "preview".',
       ),
 
-    // Rollback options (preview mode)
+    // Rollback options (used in preview mode)
     autoRollback: zod
       .boolean()
       .default(true)
       .optional()
       .describe(
-        'If true, automatically rolls back CSS changes after capturing snapshots (preview mode only).',
+        'If true, automatically rolls back CSS changes after capturing snapshots. Only used when mode is "preview".',
       ),
 
     patchId: zod
@@ -166,15 +174,12 @@ export const insertCss = defineTool({
     const page = context.getSelectedPage();
     const pageId = context.getPageId(page) ?? 0;
 
-    // Check if preview mode is enabled (selector + property + values provided)
-    const isPreviewMode =
-      request.params.selector &&
-      request.params.property &&
-      request.params.values &&
-      request.params.values.length > 0;
+    const mode = request.params.mode ?? 'apply';
 
-    if (isPreviewMode) {
-      // Preview mode: test multiple CSS values with visual feedback
+    // Preview mode: test CSS changes with visual feedback and automatic rollback
+    if (mode === 'preview') {
+      // Preview mode with selector/property/values (A/B testing CSS property values)
+      if (request.params.selector && request.params.property && request.params.values && request.params.values.length > 0) {
       const {
         selector,
         property,
@@ -551,14 +556,240 @@ export const insertCss = defineTool({
         throw error;
       }
       return;
-    }
+      }
 
-    // Simple insertion mode (non-preview)
-    if (!request.params.cssText) {
+      // Preview mode with cssText (apply then rollback)
+      if (request.params.cssText) {
+        const patchId = request.params.patchId ?? context.createPatchId('css-preview');
+        const cssText = request.params.cssText;
+        const autoRollback = request.params.autoRollback ?? true;
+
+        // Insert CSS
+        await page.evaluate(
+          ({
+            patchId,
+            cssText,
+            replaceExisting,
+            PATCH_ID_ATTR,
+            PATCH_OWNER_ATTR,
+            PATCH_KIND_ATTR,
+            PATCH_OWNER_VALUE,
+          }) => {
+            const find = () => {
+              const nodes = Array.from(
+                document.querySelectorAll(`style[${PATCH_ID_ATTR}]`),
+              ) as HTMLStyleElement[];
+              return (
+                nodes.find(n => n.getAttribute(PATCH_ID_ATTR) === patchId) ?? null
+              );
+            };
+
+            const existing = find();
+            if (existing && !replaceExisting) {
+              return {patchId, inserted: false, replaced: false, existed: true};
+            }
+            if (existing) {
+              existing.remove();
+            }
+
+            const el = document.createElement('style');
+            el.setAttribute(PATCH_ID_ATTR, patchId);
+            el.setAttribute(PATCH_OWNER_ATTR, PATCH_OWNER_VALUE);
+            el.setAttribute(PATCH_KIND_ATTR, 'css');
+            el.textContent = cssText;
+
+            (document.head ?? document.documentElement).appendChild(el);
+            return {
+              patchId,
+              inserted: true,
+              replaced: Boolean(existing),
+              existed: Boolean(existing),
+            };
+          },
+          {
+            patchId,
+            cssText,
+            replaceExisting: request.params.replaceExisting,
+            PATCH_ID_ATTR,
+            PATCH_OWNER_ATTR,
+            PATCH_KIND_ATTR,
+            PATCH_OWNER_VALUE,
+          },
+        );
+
+        context.registerPatch({
+          patchId,
+          patchType: 'css',
+          pageId,
+          createdAt: Date.now(),
+          description: request.params.description || 'CSS Preview',
+        });
+
+        response.appendResponseLine('```json');
+        response.appendResponseLine(
+          JSON.stringify(
+            {
+              patchId,
+              inserted: true,
+              pageId,
+              mode: 'preview',
+              cssText,
+            },
+            null,
+            2,
+          ),
+        );
+        response.appendResponseLine('```');
+        response.appendResponseLine('\n⚠️  Preview mode: CSS applied. Use rollback_patch to remove changes.');
+
+        // Auto-rollback if requested
+        if (autoRollback) {
+          await page.evaluate(({patchId, PATCH_ID_ATTR}) => {
+            const candidates = Array.from(
+              document.querySelectorAll(`[${PATCH_ID_ATTR}]`),
+            ) as HTMLElement[];
+            for (const el of candidates) {
+              if (el.getAttribute(PATCH_ID_ATTR) === patchId) {
+                el.remove();
+              }
+            }
+          }, {patchId, PATCH_ID_ATTR});
+          context.unregisterPatch(patchId);
+          response.appendResponseLine('✅ Automatically rolled back CSS changes.');
+        }
+
+        return;
+      }
+
+      // Preview mode requires either selector/property/values OR cssText
       throw new Error(
-        'cssText is required when not using preview mode (selector + property + values).',
+        'Preview mode requires either:\n' +
+        '  - selector, property, and values (for A/B testing CSS property values), OR\n' +
+        '  - cssText (to preview CSS then rollback).\n' +
+        'Example: { mode: "preview", selector: ".grid", property: "gap", values: ["8px", "16px"] }',
       );
     }
+
+    // Apply mode: direct CSS insertion
+    if (mode === 'apply') {
+      // When using selector/property/values in apply mode, apply all values (no rollback)
+      if (request.params.selector && request.params.property && request.params.values && request.params.values.length > 0) {
+        // Apply all values sequentially (last one stays)
+        const {selector, property, values} = request.params;
+        const patchId = request.params.patchId ?? context.createPatchId('css');
+        
+        for (let i = 0; i < values.length; i++) {
+          const value = values[i];
+          const cssText = `${selector} { ${property}: ${value} !important; }`;
+          const currentPatchId = i === values.length - 1 ? patchId : context.createPatchId(`css-apply-${i}`);
+          
+          await page.evaluate(
+            ({
+              patchId,
+              cssText,
+              replaceExisting,
+              PATCH_ID_ATTR,
+              PATCH_OWNER_ATTR,
+              PATCH_KIND_ATTR,
+              PATCH_OWNER_VALUE,
+            }) => {
+              const find = () => {
+                const nodes = Array.from(
+                  document.querySelectorAll(`style[${PATCH_ID_ATTR}]`),
+                ) as HTMLStyleElement[];
+                return (
+                  nodes.find(n => n.getAttribute(PATCH_ID_ATTR) === patchId) ?? null
+                );
+              };
+
+              const existing = find();
+              if (existing && !replaceExisting) {
+                return {patchId, inserted: false, replaced: false, existed: true};
+              }
+              if (existing) {
+                existing.remove();
+              }
+
+              const el = document.createElement('style');
+              el.setAttribute(PATCH_ID_ATTR, patchId);
+              el.setAttribute(PATCH_OWNER_ATTR, PATCH_OWNER_VALUE);
+              el.setAttribute(PATCH_KIND_ATTR, 'css');
+              el.textContent = cssText;
+
+              (document.head ?? document.documentElement).appendChild(el);
+              return {
+                patchId,
+                inserted: true,
+                replaced: Boolean(existing),
+                existed: Boolean(existing),
+              };
+            },
+            {
+              patchId: currentPatchId,
+              cssText,
+              replaceExisting: request.params.replaceExisting,
+              PATCH_ID_ATTR,
+              PATCH_OWNER_ATTR,
+              PATCH_KIND_ATTR,
+              PATCH_OWNER_VALUE,
+            },
+          );
+
+          if (i === values.length - 1) {
+            context.registerPatch({
+              patchId,
+              patchType: 'css',
+              pageId,
+              createdAt: Date.now(),
+              description: request.params.description || `CSS Apply: ${selector} { ${property}: ${value} }`,
+            });
+          }
+        }
+
+        if (request.params.recordToSession) {
+          const lastValue = values[values.length - 1];
+          context.appendEditChange(
+            {
+              type: 'insert_css',
+              pageId,
+              createdAt: Date.now(),
+              patchId,
+              description: request.params.description,
+              targetFilePath: request.params.targetFilePath,
+              payload: {
+                cssText: `${selector} { ${property}: ${lastValue} !important; }`,
+                replaceExisting: request.params.replaceExisting ?? false,
+              },
+            },
+            {sessionId: request.params.editSessionId, autoCreate: true},
+          );
+        }
+
+        response.appendResponseLine('```json');
+        response.appendResponseLine(
+          JSON.stringify(
+            {
+              patchId,
+              inserted: true,
+              pageId,
+              appliedValues: values.length,
+              finalValue: values[values.length - 1],
+            },
+            null,
+            2,
+          ),
+        );
+        response.appendResponseLine('```');
+        return;
+      }
+
+      // Standard apply mode with cssText
+      if (!request.params.cssText) {
+        throw new Error(
+          'cssText is required when mode is "apply" and not using selector/property/values. ' +
+          'Alternatively, use mode: "preview" with selector, property, and values for preview mode.',
+        );
+      }
 
     const patchId = request.params.patchId ?? context.createPatchId('css');
 
@@ -652,151 +883,23 @@ export const insertCss = defineTool({
       ),
     );
     response.appendResponseLine('```');
+    }
   },
 });
 
 export const insertJs = defineTool({
   name: 'insert_js',
   description:
-    'Insert a <script> tag into the current page with a patch id for later rollback.\n\n' +
-    '**Preview Mode:** When `scripts` array is provided, the tool automatically generates visual wireframe feedback, supports testing multiple script variants, responsive breakpoints, and before/after comparisons. Preview mode includes automatic rollback by default (note: rollback removes script tags but cannot reliably undo side-effects like DOM mutations, timers, or event listeners).',
+    'Insert a <script> tag into the current page with a patch id for later rollback. ' +
+    'To test multiple script variants, insert, evaluate results, then rollback and insert again.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
   },
   schema: {
-    // Direct JS insertion mode
     jsText: zod
       .string()
-      .optional()
-      .describe(
-        'JavaScript text to insert into the page. Required unless using preview mode (scripts array).',
-      ),
-
-    // Preview mode parameters (for A/B testing JS variants)
-    scripts: zod
-      .array(zod.string())
-      .min(1)
-      .optional()
-      .describe(
-        'Array of JavaScript snippets to test in preview mode. Each entry is injected as a <script> tag and then snapshotted.',
-      ),
-    selectedScriptIndex: zod
-      .number()
-      .int()
-      .min(0)
-      .optional()
-      .describe(
-        'Optional index (0-based) indicating which script should be recorded as the "chosen" snippet when recordToSession=true in preview mode. If omitted, the last script is recorded.',
-      ),
-    waitAfterMs: zod
-      .number()
-      .int()
-      .min(0)
-      .optional()
-      .default(0)
-      .describe(
-        'Optional delay (ms) after injecting a script before capturing snapshots in preview mode (useful if the script triggers async DOM updates).',
-      ),
-
-    // Snapshot targeting (preview mode, mirrors wireframe_snapshot basics)
-    selectors: zod
-      .array(zod.string())
-      .optional()
-      .describe(
-        'Optional selectors to snapshot/highlight in preview mode. If omitted, the snapshot covers the whole page (subject to maxElements cap).',
-      ),
-    scopeSelector: zod
-      .string()
-      .optional()
-      .describe(
-        'Optional scope root selector in preview mode; when used with selectors, matching is resolved within this subtree.',
-      ),
-    includeDescendants: zod
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        'If true, include matching elements\' descendants as well in preview mode (within scopeSelector if provided).',
-      ),
-    maxElements: zod
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .default(50)
-      .describe(
-        'Maximum number of elements to include in snapshots in preview mode (legacy alias for maxTotal).',
-      ),
-    includeComputedStyles: zod
-      .boolean()
-      .optional()
-      .default(false)
-      .describe(
-        'If true, include computed styles in the snapshot payload in preview mode (larger output).',
-      ),
-    computedStylePreset: zod
-      .enum(['layout', 'typography', 'paint', 'standard', 'debug'])
-      .optional()
-      .describe(
-        'Computed style preset to use when includeComputedStyles=true in preview mode. If omitted, wireframe_snapshot defaults apply.',
-      ),
-
-    // Visual options (preview mode)
-    showVisual: zod
-      .boolean()
-      .default(true)
-      .optional()
-      .describe(
-        'If true, automatically generates SVG wireframe snapshots for visual feedback (preview mode).',
-      ),
-    highlightChanges: zod
-      .boolean()
-      .default(true)
-      .optional()
-      .describe(
-        'If true, highlights changed elements in the visual snapshots in preview mode (best-effort).',
-      ),
-    showDimensions: zod
-      .boolean()
-      .default(true)
-      .optional()
-      .describe(
-        'If true, shows width×height dimensions on elements in the wireframe (preview mode).',
-      ),
-
-    // Responsive testing (preview mode)
-    responsiveBreakpoints: zod
-      .array(
-        zod.object({
-          name: zod
-            .string()
-            .describe('Name for this breakpoint (e.g., "mobile", "tablet", "desktop").'),
-          width: zod.number().int().positive().describe('Viewport width in pixels.'),
-          height: zod.number().int().positive().describe('Viewport height in pixels.'),
-        }),
-      )
-      .optional()
-      .describe(
-        'Optional responsive breakpoints to test in preview mode. Will resize viewport and capture snapshots for each.',
-      ),
-
-    // Output options (preview mode)
-    filePath: zod
-      .string()
-      .optional()
-      .describe(
-        'Optional path to save detailed results in preview mode. If not provided, results are returned in the response.',
-      ),
-
-    // Rollback options (preview mode)
-    autoRollback: zod
-      .boolean()
-      .default(true)
-      .optional()
-      .describe(
-        'If true, automatically removes injected <script> tags after capturing snapshots in preview mode (does not reliably undo side-effects).',
-      ),
+      .describe('JavaScript text to insert into the page.'),
 
     patchId: zod
       .string()
@@ -840,349 +943,8 @@ export const insertJs = defineTool({
     const page = context.getSelectedPage();
     const pageId = context.getPageId(page) ?? 0;
 
-    // Check if preview mode is enabled (scripts array provided)
-    const isPreviewMode =
-      request.params.scripts && request.params.scripts.length > 0;
-
-    if (isPreviewMode) {
-      // Preview mode: test multiple JS variants with visual feedback
-      const {
-        scripts,
-        selectedScriptIndex,
-        waitAfterMs,
-        selectors,
-        scopeSelector,
-        includeDescendants,
-        maxElements,
-        includeComputedStyles,
-        computedStylePreset,
-        showVisual,
-        highlightChanges,
-        showDimensions,
-        responsiveBreakpoints,
-        filePath,
-        autoRollback,
-      } = request.params;
-
-      // Store original viewport for restoration
-      const originalViewport = await page.viewport();
-      if (
-        selectedScriptIndex !== undefined &&
-        (selectedScriptIndex < 0 || selectedScriptIndex >= scripts!.length)
-      ) {
-        throw new Error(
-          `selectedScriptIndex out of range: got ${selectedScriptIndex}, scripts.length=${scripts!.length}`,
-        );
-      }
-
-      const results: Array<{
-        jsText: string;
-        patchId: string;
-        visualSnapshot?: {
-          svg: string;
-          dimensions: {width: number; height: number};
-        };
-        responsiveSnapshots?: Array<{
-          breakpoint: string;
-          width: number;
-          height: number;
-          visualSnapshot: {
-            svg: string;
-            dimensions: {width: number; height: number};
-          };
-        }>;
-      }> = [];
-
-      try {
-        // Take initial snapshot if we need to show changes
-        let initialSnapshot: WireframeSnapshotOutput | null = null;
-        if (showVisual && highlightChanges) {
-          const {captureWireframeSnapshot} = await import('./wireframe.js');
-          const {output} = await captureWireframeSnapshot(
-            {
-              params: {
-                selectors,
-                scopeSelector,
-                includeDescendants,
-                maxElements,
-                includeComputedStyles,
-                computedStylePreset,
-                coordinateSpace: 'viewport',
-              },
-            },
-            context,
-          );
-          initialSnapshot = output;
-        }
-
-        const insertedPatchIds: string[] = [];
-        for (let i = 0; i < scripts!.length; i++) {
-          const jsText = scripts![i];
-          const patchId = context.createPatchId(`js-preview-${i}`);
-
-          const insertResult = await page.evaluate(
-            ({
-              patchId,
-              jsText,
-              PATCH_ID_ATTR,
-              PATCH_OWNER_ATTR,
-              PATCH_KIND_ATTR,
-              PATCH_OWNER_VALUE,
-            }) => {
-              const el = document.createElement('script');
-              el.setAttribute(PATCH_ID_ATTR, patchId);
-              el.setAttribute(PATCH_OWNER_ATTR, PATCH_OWNER_VALUE);
-              el.setAttribute(PATCH_KIND_ATTR, 'js');
-              el.text = jsText;
-              (document.head ?? document.documentElement).appendChild(el);
-              return {patchId, inserted: true};
-            },
-            {
-              patchId,
-              jsText,
-              PATCH_ID_ATTR,
-              PATCH_OWNER_ATTR,
-              PATCH_KIND_ATTR,
-              PATCH_OWNER_VALUE,
-            },
-          );
-
-          context.registerPatch({
-            patchId,
-            patchType: 'js',
-            pageId,
-            createdAt: Date.now(),
-            description: `JS Preview: variant ${i + 1}/${scripts!.length}`,
-          });
-          insertedPatchIds.push(insertResult.patchId);
-
-          if (waitAfterMs && waitAfterMs > 0) {
-            await new Promise(resolve => setTimeout(resolve, waitAfterMs));
-          }
-
-          const result: (typeof results)[number] = {
-            jsText,
-            patchId: insertResult.patchId,
-          };
-
-          if (showVisual) {
-            const {captureWireframeSnapshot, renderSvgWireframe} =
-              await import('./wireframe.js');
-            const {output: currentSnapshot} = await captureWireframeSnapshot(
-              {
-                params: {
-                  selectors,
-                  scopeSelector,
-                  includeDescendants,
-                  maxElements,
-                  includeComputedStyles,
-                  computedStylePreset,
-                  coordinateSpace: 'viewport',
-                },
-              },
-              context,
-            );
-
-            const svg = renderSvgWireframe(currentSnapshot, {
-              scale: 1,
-              background: 'transparent',
-              showLabels: true,
-              showDimensions: showDimensions ?? true,
-              showSpacing: true,
-              showOverlaps: false,
-              showGaps: false,
-              showClipping: false,
-              strokeWidth: 1,
-              fillOpacity: 0.08,
-              highlightChanged: highlightChanges ?? true,
-              previous: initialSnapshot ?? undefined,
-            });
-
-            const viewport = await page.viewport();
-            result.visualSnapshot = {
-              svg,
-              dimensions: {
-                width: viewport?.width || 1200,
-                height: viewport?.height || 800,
-              },
-            };
-          }
-
-          // Test responsive breakpoints if provided
-          if (responsiveBreakpoints && responsiveBreakpoints.length > 0) {
-            result.responsiveSnapshots = [];
-            for (const breakpoint of responsiveBreakpoints) {
-              await page.setViewport({
-                width: breakpoint.width,
-                height: breakpoint.height,
-              });
-
-              const {captureWireframeSnapshot, renderSvgWireframe} =
-                await import('./wireframe.js');
-              const {output: responsiveSnapshot} = await captureWireframeSnapshot(
-                {
-                  params: {
-                    selectors,
-                    scopeSelector,
-                    includeDescendants,
-                    maxElements,
-                    includeComputedStyles,
-                    computedStylePreset,
-                    coordinateSpace: 'viewport',
-                  },
-                },
-                context,
-              );
-
-              const svg = renderSvgWireframe(responsiveSnapshot, {
-                scale: 1,
-                background: 'transparent',
-                showLabels: true,
-                showDimensions: showDimensions ?? true,
-                showSpacing: true,
-                showOverlaps: false,
-                showGaps: false,
-                showClipping: false,
-                strokeWidth: 1,
-                fillOpacity: 0.08,
-                highlightChanged: false,
-                previous: undefined,
-              });
-
-              result.responsiveSnapshots.push({
-                breakpoint: breakpoint.name,
-                width: breakpoint.width,
-                height: breakpoint.height,
-                visualSnapshot: {
-                  svg,
-                  dimensions: {
-                    width: breakpoint.width,
-                    height: breakpoint.height,
-                  },
-                },
-              });
-            }
-          }
-
-          results.push(result);
-
-          // Auto-rollback if requested (except for the last script; the last patch is handled below).
-          if (autoRollback && i < scripts!.length - 1) {
-            await page.evaluate(({patchId, PATCH_ID_ATTR}) => {
-              const candidates = Array.from(
-                document.querySelectorAll(`[${PATCH_ID_ATTR}]`),
-              ) as HTMLElement[];
-              for (const el of candidates) {
-                if (el.getAttribute(PATCH_ID_ATTR) === patchId) {
-                  el.remove();
-                }
-              }
-            }, {patchId, PATCH_ID_ATTR});
-            context.unregisterPatch(patchId);
-          }
-        }
-
-        // If autoRollback=true, also remove the last applied patch.
-        if (autoRollback && insertedPatchIds.length > 0) {
-          const lastPatchId = insertedPatchIds[insertedPatchIds.length - 1];
-          await page.evaluate(({patchId, PATCH_ID_ATTR}) => {
-            const candidates = Array.from(
-              document.querySelectorAll(`[${PATCH_ID_ATTR}]`),
-            ) as HTMLElement[];
-            for (const el of candidates) {
-              if (el.getAttribute(PATCH_ID_ATTR) === patchId) {
-                el.remove();
-              }
-            }
-          }, {patchId: lastPatchId, PATCH_ID_ATTR});
-          context.unregisterPatch(lastPatchId);
-        }
-
-        // Restore original viewport
-        if (originalViewport) {
-          await page.setViewport(originalViewport);
-        }
-
-        const recordedScriptIndex =
-          selectedScriptIndex !== undefined
-            ? selectedScriptIndex
-            : scripts!.length - 1;
-        const recorded = results[recordedScriptIndex];
-
-        response.appendResponseLine(`Tested ${scripts!.length} JS variants`);
-        const out = {
-          testedScripts: scripts!.length,
-          results,
-          autoRolledBack: autoRollback,
-          recordedScriptIndex,
-          recordedJsText: recorded?.jsText,
-        };
-
-        response.appendResponseLine('```json');
-        response.appendResponseLine(JSON.stringify(out, null, 2));
-        response.appendResponseLine('```');
-
-        if (filePath) {
-          const summary = {
-            timestamp: new Date().toISOString(),
-            testedScripts: scripts!.length,
-            results,
-          };
-          await context.saveFile(
-            new TextEncoder().encode(JSON.stringify(summary, null, 2)),
-            filePath,
-          );
-          response.appendResponseLine(`\nSaved detailed results to ${filePath}`);
-        }
-
-        if (request.params.recordToSession) {
-          const recordedScriptIndex =
-            selectedScriptIndex !== undefined
-              ? selectedScriptIndex
-              : Math.max(0, scripts!.length - 1);
-          const recorded = results[recordedScriptIndex];
-          context.appendEditChange(
-            {
-              type: 'insert_js_preview',
-              pageId,
-              createdAt: Date.now(),
-              description: `JS Preview: [${scripts!.length} variants]`,
-              targetFilePath: request.params.targetFilePath,
-              payload: {
-                selectedScriptIndex: recordedScriptIndex,
-                jsText: recorded?.jsText,
-                results: results.map(r => ({
-                  jsText: r.jsText,
-                  patchId: r.patchId,
-                })),
-                autoRollback,
-              },
-            },
-            {sessionId: request.params.editSessionId, autoCreate: true},
-          );
-        }
-      } catch (error) {
-        // Restore viewport on error
-        if (originalViewport) {
-          try {
-            await page.setViewport(originalViewport);
-          } catch (_e) {
-            // Ignore viewport restoration errors
-          }
-        }
-        throw error;
-      }
-      return;
-    }
-
-    // Simple insertion mode (non-preview)
-    if (!request.params.jsText) {
-      throw new Error(
-        'jsText is required when not using preview mode (scripts array).',
-      );
-    }
-
     const patchId = request.params.patchId ?? context.createPatchId('js');
+    const jsText = request.params.jsText;
 
     const result = await page.evaluate(
       ({
@@ -1227,7 +989,7 @@ export const insertJs = defineTool({
       },
       {
         patchId,
-        jsText: request.params.jsText,
+        jsText,
         replaceExisting: request.params.replaceExisting,
         PATCH_ID_ATTR,
         PATCH_OWNER_ATTR,
@@ -1254,7 +1016,7 @@ export const insertJs = defineTool({
           description: request.params.description,
           targetFilePath: request.params.targetFilePath,
           payload: {
-            jsText: request.params.jsText,
+            jsText,
             replaceExisting: request.params.replaceExisting ?? false,
           },
         },
@@ -1355,7 +1117,7 @@ export const rollbackPatch = defineTool({
 export const manipulateDom = defineTool({
   name: 'manipulate_dom',
   description:
-    'Perform DOM manipulations on web pages including setting styles, adding/removing classes, inserting/removing elements, and batch operations. Also supports querying elements to retrieve their properties, styles, and other information.',
+    'Perform DOM manipulations on web pages including setting styles, adding/removing classes, inserting/removing elements, replacing innerHTML, and batch operations. Also supports querying elements to retrieve their properties, styles, and other information.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -1363,7 +1125,7 @@ export const manipulateDom = defineTool({
   schema: {
     // Single action mode
     action: zod
-      .enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html', 'query'])
+      .enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html', 'replace-html', 'query'])
       .optional()
       .describe('Single DOM manipulation action to perform. Use "query" to retrieve element information without modifying the DOM.'),
 
@@ -1386,7 +1148,7 @@ export const manipulateDom = defineTool({
     html: zod
       .string()
       .optional()
-      .describe('HTML content to insert for insert-html action.'),
+      .describe('HTML content to insert for insert-html action, or to replace innerHTML for replace-html action.'),
 
     position: zod
       .enum(['beforebegin', 'afterbegin', 'beforeend', 'afterend'])
@@ -1402,12 +1164,12 @@ export const manipulateDom = defineTool({
     // Batch operations mode
     operations: zod
       .array(zod.object({
-        action: zod.enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html', 'query']).describe('DOM manipulation action. Use "query" to retrieve element information.'),
+        action: zod.enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html', 'replace-html', 'query']).describe('DOM manipulation action. Use "query" to retrieve element information.'),
         selector: zod.string().describe('CSS selector to target elements.'),
         properties: zod.record(zod.string()).optional().describe('CSS properties for set-style action.'),
         className: zod.string().optional().describe('CSS class name for add-class/remove-class actions.'),
-        html: zod.string().optional().describe('HTML content for insert-html action.'),
-        position: zod.enum(['beforebegin', 'afterbegin', 'beforeend', 'afterend']).optional().describe('Position for insert-html action. Defaults to "beforeend".'),
+        html: zod.string().optional().describe('HTML content for insert-html or replace-html action.'),
+        position: zod.enum(['beforebegin', 'afterbegin', 'beforeend', 'afterend']).optional().describe('Position for insert-html action. Defaults to "beforeend". Not used for replace-html.'),
         queryFields: zod.array(zod.enum(['tagName', 'id', 'className', 'textContent', 'innerHTML', 'attributes', 'computedStyles', 'boundingRect', 'classes'])).optional().describe('Fields to include in query results (for query action).'),
       }))
       .optional()
@@ -1493,6 +1255,9 @@ export const manipulateDom = defineTool({
       }
       if (op.action === 'insert-html' && !op.html) {
         throw new Error('insert-html action requires html parameter.');
+      }
+      if (op.action === 'replace-html' && !op.html) {
+        throw new Error('replace-html action requires html parameter.');
       }
       // Query action doesn't require any additional parameters
     }
@@ -1652,6 +1417,12 @@ export const manipulateDom = defineTool({
                       if (op.html) {
                         const position = (op.position || 'beforeend') as InsertPosition;
                         element.insertAdjacentHTML(position, op.html);
+                      }
+                      break;
+
+                    case 'replace-html':
+                      if (op.html !== undefined) {
+                        element.innerHTML = op.html;
                       }
                       break;
 

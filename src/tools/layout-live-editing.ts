@@ -5,11 +5,29 @@
  */
 
 import {zod} from '../third_party/index.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import {ToolCategory} from './categories.js';
 import {defineTool, type Context, type Response} from './ToolDefinition.js';
 import {rollbackPatch} from './mutation.js';
 import {svgSnapshotLiveEditing, wireframeSnapshotLiveEditing} from './wireframe.js';
+
+// Debug logging helper
+const DEBUG_LOG_PATH = path.join(process.cwd(), '.cursor', 'debug.log');
+function debugLog(data: {location: string; message: string; data: any; hypothesisId: string}) {
+  try {
+    const logEntry = JSON.stringify({
+      ...data,
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'run1',
+    }) + '\n';
+    fs.appendFileSync(DEBUG_LOG_PATH, logEntry, 'utf8');
+  } catch (e) {
+    // Ignore logging errors
+  }
+}
 
 let compositionSchema: zod.ZodTypeAny;
 
@@ -47,6 +65,11 @@ const lengthSchema = zod
   .union([zod.number(), zod.string()])
   .describe('CSS length (number interpreted as px) or token string (e.g., "1fr", "0.5rem").');
 
+const offsetVectorSchema = zod.object({
+  x: lengthSchema.optional().describe('Horizontal offset.'),
+  y: lengthSchema.optional().describe('Vertical offset.'),
+});
+
 const contentItemSchema: zod.ZodTypeAny = zod.union([
   zod.string().describe('Shorthand content label/string.'),
   zod.object({
@@ -57,8 +80,7 @@ const contentItemSchema: zod.ZodTypeAny = zod.union([
       .string()
       .optional()
       .describe('HTML string or text content to insert for the item.'),
-    composition: zod
-      .lazy(() => compositionSchema)
+    composition: compositionSchemaWithStringSupport()
       .optional()
       .describe('Nested composition to render inside this item.'),
     className: zod.string().optional().describe('Optional class name for the item.'),
@@ -77,6 +99,10 @@ const contentItemSchema: zod.ZodTypeAny = zod.union([
     maxSize: lengthSchema
       .optional()
       .describe('Maximum size for stack items along the main axis.'),
+    offset: zod
+      .union([lengthSchema, offsetVectorSchema])
+      .optional()
+      .describe('Optional offset for positioning (scalar or {x,y}). Supports fractional units like "0.5fr" or "50%".'),
     style: zod
       .record(zod.string())
       .optional()
@@ -94,11 +120,6 @@ const gridRowSchema: zod.ZodTypeAny = zod.object({
   offset: lengthSchema
     .optional()
     .describe('Optional offset (in units) applied before the row items.'),
-});
-
-const offsetVectorSchema = zod.object({
-  x: lengthSchema.optional().describe('Horizontal offset.'),
-  y: lengthSchema.optional().describe('Vertical offset.'),
 });
 
 const gridOverlayLayerSchema: zod.ZodTypeAny = zod.object({
@@ -132,7 +153,7 @@ const layoutParametricGridSchema: zod.ZodTypeAny = zod.object({
     .enum(['grid', 'flex'])
     .optional()
     .describe('Row layout mode ("grid" for CSS grid, "flex" for flex row).'),
-  overlay: zod
+  layers: zod
     .array(gridOverlayLayerSchema)
     .optional()
     .describe('Optional overlay layers (e.g., piano black keys).'),
@@ -244,7 +265,7 @@ const componentParametricViewerSchema: zod.ZodTypeAny = zod.object({
           .union([
             zod.string(),
             zod.object({
-              composition: zod.lazy(() => compositionSchema),
+              composition: compositionSchemaWithStringSupport(),
             }),
           ])
           .describe('HTML content or nested composition for the panel/view.'),
@@ -257,20 +278,271 @@ const componentParametricViewerSchema: zod.ZodTypeAny = zod.object({
 compositionSchema = zod.discriminatedUnion('type', [
   zod.object({
     type: zod.literal('layout_parametric_grid'),
-    params: layoutParametricGridSchema,
+  }).merge(layoutParametricGridSchema as any).extend({
     behaviors: zod.array(behaviorSchema).optional(),
-  }),
+  }) as any,
   zod.object({
     type: zod.literal('layout_parametric_stack'),
-    params: layoutParametricStackSchema,
+  }).merge(layoutParametricStackSchema as any).extend({
     behaviors: zod.array(behaviorSchema).optional(),
-  }),
+  }) as any,
   zod.object({
     type: zod.literal('component_parametric_viewer'),
-    params: componentParametricViewerSchema,
+  }).merge(componentParametricViewerSchema as any).extend({
     behaviors: zod.array(behaviorSchema).optional(),
-  }),
+  }) as any,
 ]);
+
+// Helper function to format Zod error paths for better readability
+function formatZodErrorPath(path: (string | number)[]): string {
+  if (path.length === 0) return 'composition';
+  return `composition.${path.join('.')}`;
+}
+
+// Helper function to format Zod validation errors with clear field paths
+function formatCompositionValidationError(error: zod.ZodError): string {
+  const examples = getCompositionExamples();
+  const issues = error.issues;
+  
+  if (issues.length === 0) {
+    return `Invalid composition structure.\n\n${examples}`;
+  }
+  
+  // Separate structural errors (custom) from validation errors
+  const structuralErrors: zod.ZodIssue[] = [];
+  const validationErrors: zod.ZodIssue[] = [];
+  
+  for (const issue of issues) {
+    if (issue.code === zod.ZodIssueCode.custom && 
+        (issue.message.includes('STRUCTURAL ERROR') || issue.message.includes('wrong level'))) {
+      structuralErrors.push(issue);
+    } else {
+      validationErrors.push(issue);
+    }
+  }
+  
+  // Format structural errors first (they're usually more critical)
+  const formattedStructural = structuralErrors.map(issue => {
+    const fieldPath = formatZodErrorPath(issue.path);
+    return `Field "${fieldPath}":\n${issue.message}`;
+  });
+  
+  // Format validation errors
+  const formattedValidation = validationErrors.map(issue => {
+    const fieldPath = formatZodErrorPath(issue.path);
+    let message = `Field "${fieldPath}": ${issue.message}`;
+    
+    // Provide specific guidance for common errors
+    if (issue.path.length > 0) {
+      const lastPath = issue.path[issue.path.length - 1];
+      if (lastPath === 'rows' && issue.code === zod.ZodIssueCode.invalid_type) {
+        message += '\n  Expected: array of row objects with "items" field';
+      } else if (lastPath === 'layers' && issue.code === zod.ZodIssueCode.invalid_type) {
+        message += '\n  Expected: array of overlay layer objects with "items" field';
+      } else if (lastPath === 'items' && issue.code === zod.ZodIssueCode.invalid_type) {
+        message += '\n  Expected: array of item objects or strings';
+      }
+    }
+    
+    return message;
+  });
+  
+  // Combine errors with structural errors first
+  const allFormatted = [...formattedStructural, ...formattedValidation];
+  
+  let header = 'Composition validation failed:';
+  if (structuralErrors.length > 0) {
+    header = '❌ COMPOSITION VALIDATION FAILED (Structural Issues Detected):';
+  }
+  
+  return `${header}\n\n${allFormatted.join('\n\n')}\n\n${examples}`;
+}
+
+// Helper function to generate example composition structures for error messages
+function getCompositionExamples(): string {
+  return `Example compositions:
+
+⚠️ STRUCTURE: All layout parameters must be at the root level of the composition object:
+composition
+├── type ("layout_parametric_grid")
+├── rows
+│   └── [ { "items": [...] }, ... ]
+├── layers
+│   └── [ { "items": [...], "offset": ... }, ... ]
+├── columnCount (number)
+├── gap (length)
+└── rowHeight (length)
+
+1. layout_parametric_grid (basic):
+{
+  "type": "layout_parametric_grid",
+  "rows": [
+    { "items": ["Item 1", "Item 2", "Item 3"] }
+  ],
+  "columnCount": 3,
+  "gap": "8px",
+  "rowHeight": "100px"
+}
+
+2. layout_parametric_grid with overlay layers (e.g., piano keys):
+{
+  "type": "layout_parametric_grid",
+  "rows": [
+    { "items": ["C", "D", "E", "F", "G", "A", "B"] }
+  ],
+  "columnCount": 7,
+  "gap": "2px",
+  "rowHeight": "120px",
+  "layers": [
+    {
+      "items": ["C#", "D#", "F#", "G#", "A#"],
+      "offset": { "x": "0.5fr", "y": "0px" }
+    }
+  ]
+}
+
+3. layout_parametric_stack:
+{
+  "type": "layout_parametric_stack",
+  "direction": "row",
+  "gap": "16px",
+  "items": ["Item 1", "Item 2", "Item 3"]
+}
+
+4. component_parametric_viewer:
+{
+  "type": "component_parametric_viewer",
+  "variant": "tabs",
+  "items": [
+    { "label": "Tab 1", "content": "Content 1" },
+    { "label": "Tab 2", "content": "Content 2" }
+  ]
+}
+
+5. Using overlay_grid recipe (recommended for overlays):
+{
+  "recipe": "overlay_grid",
+  "recipeParams": {
+    "rows": [
+      { "items": ["C", "D", "E", "F", "G", "A", "B"] }
+    ],
+    "layers": [
+      {
+        "items": ["C#", "D#", "F#", "G#", "A#"],
+        "offset": { "x": "0.5fr", "y": "0px" }
+      }
+    ],
+    "columnCount": 7
+  }
+}`;
+}
+
+// Helper function to detect if a value was double-stringified
+function isDoubleStringified(val: unknown): boolean {
+  if (typeof val !== 'string') return false;
+  // Check if it looks like JSON but starts with quotes (indicating double stringification)
+  const trimmed = val.trim();
+  return (trimmed.startsWith('"{') || trimmed.startsWith('"[')) && trimmed.endsWith('"');
+}
+
+// Helper function to parse composition from string or object
+function parseComposition(val: unknown): unknown {
+  // #region agent log
+  const debugDataC = {valType:typeof val,valIsString:typeof val === 'string',valIsObject:typeof val === 'object',valPreview:typeof val === 'string' ? (val as string).substring(0,100) : typeof val === 'object' ? JSON.stringify(val).substring(0,100) : String(val).substring(0,100)};
+  debugLog({location:'layout-live-editing.ts:441',message:'Parse composition function entry',data:debugDataC,hypothesisId:'C'});
+  // #endregion
+  
+  // If it's already an object, return it
+  if (val && typeof val === 'object') {
+    return val;
+  }
+  
+  // If it's a string, parse it
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (isDoubleStringified(trimmed)) {
+      try {
+        const unwrapped = JSON.parse(trimmed);
+        if (typeof unwrapped === 'string') {
+          return parseComposition(unwrapped);
+        }
+      } catch (e) {
+        // Fall through to normal parsing to surface a consistent error message.
+      }
+    }
+    // #region agent log
+    debugLog({location:'layout-live-editing.ts:450',message:'Parse: val is string, attempting JSON.parse',data:{valLength:val.length,valPreview:val.substring(0,200)},hypothesisId:'D'});
+    // #endregion
+    try {
+      const parsed = JSON.parse(val);
+      // #region agent log
+      debugLog({location:'layout-live-editing.ts:454',message:'Parse: JSON.parse succeeded',data:{parsedType:typeof parsed,parsedIsObject:typeof parsed === 'object',parsedPreview:JSON.stringify(parsed).substring(0,100)},hypothesisId:'E'});
+      // #endregion
+      
+      // After parsing, check if we got an object
+      if (!parsed || typeof parsed !== 'object') {
+        const examples = getCompositionExamples();
+        throw new zod.ZodError([
+          {
+            code: zod.ZodIssueCode.custom,
+            path: [],
+            message: `Composition string parsed to "${typeof parsed}" instead of object. Expected a valid JSON object representing a composition.\n\nParsed value: ${JSON.stringify(parsed)}\n\n${examples}`,
+          },
+        ]);
+      }
+      
+      return parsed;
+    } catch (e) {
+      // If parsing fails, throw a more helpful error
+      const examples = getCompositionExamples();
+      
+      // Provide specific guidance based on the error
+      let helpText = '';
+      if (e instanceof SyntaxError) {
+        helpText = '\n\n⚠️ The string is not valid JSON. Common issues:\n- Missing quotes around property names\n- Trailing commas\n- Single quotes instead of double quotes\n- Comments (not allowed in JSON)';
+        if (trimmed.startsWith("{'") || /'[^']+'\s*:/.test(trimmed)) {
+          helpText += '\n- Detected single quotes. Use double quotes or pass an object directly.';
+        }
+      } else if (e instanceof zod.ZodError) {
+        // Re-throw Zod errors as-is
+        throw e;
+      }
+      
+      throw new zod.ZodError([
+        {
+          code: zod.ZodIssueCode.custom,
+          path: [],
+          message: `Failed to parse composition string as JSON: ${e instanceof Error ? e.message : String(e)}${helpText}\n\nReceived: ${val.length > 200 ? val.slice(0, 200) + '...' : val}\n\n⚠️ SOLUTION: Pass the composition as an object, not a JSON string.\n\n${examples}`,
+        },
+      ]);
+    }
+  }
+  
+  // If it's neither string nor object, throw error
+  const examples = getCompositionExamples();
+  throw new zod.ZodError([
+    {
+      code: zod.ZodIssueCode.custom,
+      path: [],
+      message: `Composition must be an object or JSON string, got ${typeof val}.\n\nReceived: ${String(val)}\n\n${examples}`,
+    },
+  ]);
+}
+
+// Helper function to wrap compositionSchema with string parsing support
+// Uses zod.any() to bypass client-side validation issues with complex nested structures
+// All validation happens server-side, allowing us to keep the full nested structure
+function compositionSchemaWithStringSupport() {
+  // Accept any value (string, object, etc.) - validation happens server-side
+  // This bypasses JSON Schema conversion issues with discriminated unions and recursion
+  return zod.any().describe(
+    'Composition object or JSON string. Can be:\n' +
+    '- Object: {type: "layout_parametric_grid", rows: [...], ...}\n' +
+    '- String: JSON string that will be parsed\n' +
+    '- Double-stringified JSON: will be unwrapped and parsed\n' +
+    'Full validation happens server-side to support complex nested structures.'
+  );
+}
 
 const recipeNameSchema = zod.enum([
   'selectable_view',
@@ -282,6 +554,18 @@ const recipeNameSchema = zod.enum([
   'toolbar',
   'grid_canvas',
 ]);
+
+const compositionTypeValues = [
+  'layout_parametric_grid',
+  'layout_parametric_stack',
+  'component_parametric_viewer',
+] as const;
+
+type CompositionType = (typeof compositionTypeValues)[number];
+
+function isCompositionType(value: string): value is CompositionType {
+  return compositionTypeValues.includes(value as CompositionType);
+}
 
 const targetSchema = zod.object({
   selector: zod.string().describe('CSS selector to insert into (default: body).'),
@@ -438,8 +722,14 @@ function parseUnitOffset(offset: number | string | undefined): number | null {
   if (offset === undefined) {return null;}
   if (typeof offset === 'number') {return offset;}
   const trimmed = offset.trim();
+  // Support "u" suffix (e.g., "0.5u")
   if (trimmed.endsWith('u')) {
     const parsed = Number(trimmed.slice(0, -1));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  // Support fractional fr units (e.g., "0.5fr" -> 0.5)
+  if (trimmed.endsWith('fr')) {
+    const parsed = Number(trimmed.slice(0, -2));
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
@@ -908,6 +1198,12 @@ function buildGridOverlayHtml(
   }
 
   const transformParts = [
+    // Handle unit-based offsets (including fractional fr units) for layer-level offset
+    // For fractional offsets, use transform. For whole-number offsets, use spacer + transform if needed
+    offsetUnits !== null && offsetUnits !== 0 && !offset.translateX
+      ? `translateX(calc(${offsetUnits} * ${unit}))`
+      : '',
+    // Handle explicit translateX/translateY values
     offset.translateX ? `translateX(${offset.translateX})` : '',
     offset.translateY ? `translateY(${offset.translateY})` : '',
   ].filter(Boolean);
@@ -916,7 +1212,9 @@ function buildGridOverlayHtml(
     overlayStyles.push(`transform:${transformParts.join(' ')};`);
   }
   let html = `<div class="${prefix}-grid-overlay" data-le-overlay="${layerIndex}" style="${overlayStyles.join('')}">`;
-  if (offsetUnits && offsetUnits > 0) {
+  // Only create spacer for whole-number offsets (for grid column positioning)
+  // Fractional offsets use transform instead
+  if (offsetUnits && offsetUnits > 0 && Number.isInteger(offsetUnits)) {
     const spanValue = Math.max(1, Math.ceil(offsetUnits));
     html += `<div class="${prefix}-grid-spacer" style="grid-column: span ${spanValue};"></div>`;
   }
@@ -926,8 +1224,34 @@ function buildGridOverlayHtml(
     const resolved = rendered.resolved;
     const span = spans[itemIndex] ?? 1;
     const style = resolved.style ?? {};
+    
+    // Handle per-item offset
+    let itemTransformParts: string[] = [];
+    if (typeof item === 'object' && item && 'offset' in item && item.offset) {
+      const itemOffset = resolveOverlayOffset(item.offset);
+      
+      // Handle unit-based offsets (including fractional fr units)
+      if (itemOffset.unitOffset !== null && itemOffset.unitOffset !== 0) {
+        // For unit offsets, use calc() with the unit size
+        // e.g., 0.5fr becomes calc(0.5 * 1fr)
+        const offsetValue = itemOffset.unitOffset;
+        // Use calc to multiply the unit by the offset value
+        itemTransformParts.push(`translateX(calc(${offsetValue} * ${unit}))`);
+      }
+      
+      // Handle explicit translateX/translateY values (these can coexist with unit offsets for y-axis)
+      if (itemOffset.translateX) {
+        itemTransformParts.push(`translateX(${itemOffset.translateX})`);
+      }
+      if (itemOffset.translateY) {
+        itemTransformParts.push(`translateY(${itemOffset.translateY})`);
+      }
+    }
+    
     const spanStyle = span > 1 ? `grid-column: span ${span};` : '';
-    const inlineStyle = spanStyle ? ` style="${spanStyle}${Object.entries(style).map(([k, v]) => `${k}:${v}`).join(';')}"` : buildInlineStyle(style);
+    const transformStyle = itemTransformParts.length > 0 ? `transform:${itemTransformParts.join(' ')};` : '';
+    const combinedStyle = [spanStyle, transformStyle, ...Object.entries(style).map(([k, v]) => `${k}:${v}`)].filter(Boolean).join(';');
+    const inlineStyle = combinedStyle ? ` style="${combinedStyle}"` : buildInlineStyle(style);
     const className = resolved.className ? ` ${resolved.className}` : '';
     html += `<div class="${prefix}-grid-overlay-item${className}" data-le-item data-le-index="${itemIndex}"${inlineStyle}>${rendered.html}</div>`;
     if (rendered.css) {nestedCss.push(rendered.css);}
@@ -973,8 +1297,8 @@ function buildGridLayout(params: LayoutGridParams, prefix: string, componentMap?
   const layoutColumnCount = params.columnCount ?? maxRowUnits;
   const overlayHtml: string[] = [];
   const overlayStyles: string[] = [];
-  if (params.overlay && params.overlay.length > 0) {
-    params.overlay.forEach((layer: GridOverlayLayer, index: number) => {
+  if (params.layers && params.layers.length > 0) {
+    params.layers.forEach((layer: GridOverlayLayer, index: number) => {
       const {
         html,
         overlayCss,
@@ -1037,7 +1361,7 @@ function buildGridLayout(params: LayoutGridParams, prefix: string, componentMap?
       cssVariables: extractCssVariables(fullCss, `\\.${prefix}-grid-item`, prefix),
       selector: `.${prefix}-grid-item`,
     });
-    if (params.overlay && params.overlay.length > 0) {
+    if (params.layers && params.layers.length > 0) {
       componentMap.push({
         elementName: 'grid-overlay',
         classes: [`${prefix}-grid-overlay`],
@@ -1311,24 +1635,24 @@ function renderComposition(composition: any, prefix: string, componentMap?: Comp
     return {html: '', css: '', behaviors: [], componentMap};
   }
   if (composition.type === 'layout_parametric_grid') {
-    const result = buildGridLayout(composition.params, prefix, componentMap);
+    const result = buildGridLayout(composition, prefix, componentMap);
     const behaviors = [...(composition.behaviors ?? []), ...result.behaviors];
     return {html: result.html, css: result.css, behaviors, componentMap: result.componentMap};
   }
   if (composition.type === 'layout_parametric_stack') {
     const behaviors = [...(composition.behaviors ?? [])];
     const enableResize = behaviors.some(behavior => behavior.type === 'behavior_drag_resize');
-    const result = buildStackLayout(composition.params, prefix, {enableResize, componentMap});
+    const result = buildStackLayout(composition, prefix, {enableResize, componentMap});
     const updatedHtml = enableResize
       ? injectRootAttributes(result.html, {
           'data-le-resize': true,
-          'data-le-direction': composition.params.direction ?? 'row',
+          'data-le-direction': composition.direction ?? 'row',
         })
       : result.html;
     return {html: updatedHtml, css: result.css, behaviors: [...behaviors, ...result.behaviors], componentMap: result.componentMap};
   }
   if (composition.type === 'component_parametric_viewer') {
-    const result = buildViewerComponent(composition.params, prefix, componentMap);
+    const result = buildViewerComponent(composition, prefix, componentMap);
     const behaviors = [...(composition.behaviors ?? []), ...result.behaviors];
     return {html: result.html, css: result.css, behaviors, componentMap: result.componentMap};
   }
@@ -1798,7 +2122,7 @@ export const recipeRegistry = {
     description: 'Generic grid layout with overlay layers.',
     schema: zod.object({
       rows: zod.array(gridRowSchema).min(1),
-      overlay: zod.array(gridOverlayLayerSchema).optional(),
+      layers: zod.array(gridOverlayLayerSchema).optional(),
       columnCount: zod.number().int().positive().optional(),
       unit: lengthSchema.optional(),
       gap: lengthSchema.optional(),
@@ -1889,7 +2213,7 @@ export async function layoutLiveEditingRecipeCatalogHandler(
 export const layoutLiveEditing = defineTool({
   name: 'layout_live_editing',
   description:
-    'Generate a parametric layout in the live browser using layout atoms, behavior modules, and component compositions. Use either a recipe (preset) or an explicit composition.',
+    'Generate a parametric layout in the live browser using layout atoms, behavior modules, and component compositions. Use either a recipe (preset) or one of the flattened composition parameters: parametric_grid, parametric_stack, or component_parametric_viewer.',
   annotations: {
     category: ToolCategory.PATCH,
     readOnlyHint: false,
@@ -1911,24 +2235,35 @@ export const layoutLiveEditing = defineTool({
       .record(zod.any())
       .optional()
       .describe('Parameters for the selected recipe.'),
-    composition: zod
-      .preprocess(
-        (val) => {
-          // If the value is a string, try to parse it as JSON
-          if (typeof val === 'string') {
-            try {
-              return JSON.parse(val);
-            } catch {
-              // If parsing fails, return the original value to let Zod handle the error
-              return val;
-            }
-          }
-          return val;
-        },
-        compositionSchema,
-      )
+    parametric_grid: layoutParametricGridSchema
       .optional()
-      .describe('Explicit composition of layout atoms and components.'),
+      .describe(
+        'Create a parametric grid layout. ' +
+        'Required: rows (array of row objects with items). ' +
+        'Optional: columnCount (number), gap (string), rowGap (string), unit (string), ' +
+        'rowHeight (string), rowMinHeight (string), rowLayout ("grid"|"flex"), ' +
+        'layers (array of overlay layers). ' +
+        'Example: { rows: [{ items: ["A", "B", "C"] }, { items: ["D", "E"] }], columnCount: 3, gap: "8px" }',
+      ),
+    parametric_stack: layoutParametricStackSchema
+      .optional()
+      .describe(
+        'Create a parametric stack layout. ' +
+        'Required: items (array). ' +
+        'Optional: direction ("row"|"column", default: "row"), gap (string), ' +
+        'align ("start"|"center"|"end"|"stretch"), justify ("start"|"center"|"end"|"between"|"around"|"evenly"), ' +
+        'wrap (boolean). ' +
+        'Example: { direction: "row", gap: "16px", items: ["Item 1", "Item 2", "Item 3"] }',
+      ),
+    component_parametric_viewer: componentParametricViewerSchema
+      .optional()
+      .describe(
+        'Create a parametric viewer component (tabs/carousel). ' +
+        'Required: items (array of objects with label and content). ' +
+        'Optional: variant ("tabs"|"carousel"), orientation ("horizontal"|"vertical"), ' +
+        'showControls (boolean), showIndicators (boolean), ariaLabel (string). ' +
+        'Example: { variant: "tabs", items: [{ label: "Tab 1", content: "<p>Content 1</p>" }] }',
+      ),
     behaviors: zod
       .array(behaviorSchema)
       .optional()
@@ -1945,9 +2280,66 @@ export const layoutLiveEditing = defineTool({
     }
 
     const hasRecipe = Boolean(request.params.recipe);
-    const hasComposition = Boolean(request.params.composition);
+    const parametricGrid = (request.params as any).parametric_grid;
+    const parametricStack = (request.params as any).parametric_stack;
+    const componentViewer = (request.params as any).component_parametric_viewer;
+    const hasComposition = Boolean(parametricGrid || parametricStack || componentViewer);
+    
     if (!hasRecipe && !hasComposition) {
-      throw new Error('Provide either recipe (with recipeParams) or composition.');
+      throw new Error('Provide either recipe (with recipeParams) or one of: parametric_grid, parametric_stack, component_parametric_viewer.');
+    }
+
+    if (hasComposition) {
+      const provided = [parametricGrid, parametricStack, componentViewer].filter(Boolean).length;
+      if (provided > 1) {
+        throw new Error('Provide exactly one of: parametric_grid, parametric_stack, component_parametric_viewer.');
+      }
+    }
+
+    // Validate and construct composition from flattened parameters
+    let validatedComposition: any = undefined;
+    if (hasComposition) {
+      try {
+        let compositionToValidate: any;
+        
+        if (parametricGrid) {
+          compositionToValidate = {
+            type: 'layout_parametric_grid',
+            ...parametricGrid,
+          };
+        } else if (parametricStack) {
+          compositionToValidate = {
+            type: 'layout_parametric_stack',
+            ...parametricStack,
+          };
+        } else if (componentViewer) {
+          compositionToValidate = {
+            type: 'component_parametric_viewer',
+            ...componentViewer,
+          };
+        } else {
+          throw new Error('Invalid composition parameter state.');
+        }
+
+        // Validate against the full schema
+        const compositionResult = compositionSchema.safeParse(compositionToValidate);
+        if (!compositionResult.success) {
+          const formattedError = formatCompositionValidationError(compositionResult.error);
+          throw new Error(formattedError);
+        }
+        validatedComposition = compositionResult.data;
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('Composition validation failed')) {
+          throw e;
+        }
+        if (e instanceof zod.ZodError) {
+          const formattedError = formatCompositionValidationError(e);
+          throw new Error(formattedError);
+        }
+        throw new Error(
+          `Invalid composition: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
     }
 
     const page = context.getSelectedPage();
@@ -1981,7 +2373,8 @@ export const layoutLiveEditing = defineTool({
       }
     }
 
-    let resolvedComposition = request.params.composition;
+    // Use validated composition (already parsed and validated above)
+    let resolvedComposition = validatedComposition;
     let resolvedBehaviors = request.params.behaviors ?? [];
 
     if (request.params.recipe) {
@@ -1990,13 +2383,11 @@ export const layoutLiveEditing = defineTool({
         case 'selectable_view':
           resolvedComposition = {
             type: 'component_parametric_viewer',
-            params: {
-              items: recipeParams.items ?? [],
-              orientation: recipeParams.orientation,
-              variant: recipeParams.variant,
-              showControls: recipeParams.showControls,
-              showIndicators: recipeParams.showIndicators,
-            },
+            items: recipeParams.items ?? [],
+            orientation: recipeParams.orientation,
+            variant: recipeParams.variant,
+            showControls: recipeParams.showControls,
+            showIndicators: recipeParams.showIndicators,
             behaviors: [],
           };
           resolvedBehaviors = [
@@ -2012,33 +2403,29 @@ export const layoutLiveEditing = defineTool({
         case 'parametric_grid':
           resolvedComposition = {
             type: 'layout_parametric_grid',
-            params: {
-              rows: recipeParams.rows ?? [],
-              columnCount: recipeParams.columnCount,
-              unit: recipeParams.unit,
-              gap: recipeParams.gap,
-              rowGap: recipeParams.rowGap,
-              rowHeight: recipeParams.rowHeight,
-              rowMinHeight: recipeParams.rowMinHeight,
-              rowLayout: recipeParams.rowLayout,
-            },
+            rows: recipeParams.rows ?? [],
+            columnCount: recipeParams.columnCount,
+            unit: recipeParams.unit,
+            gap: recipeParams.gap,
+            rowGap: recipeParams.rowGap,
+            rowHeight: recipeParams.rowHeight,
+            rowMinHeight: recipeParams.rowMinHeight,
+            rowLayout: recipeParams.rowLayout,
             behaviors: [],
           };
           break;
         case 'overlay_grid':
           resolvedComposition = {
             type: 'layout_parametric_grid',
-            params: {
-              rows: recipeParams.rows ?? [],
-              overlay: recipeParams.overlay ?? [],
-              columnCount: recipeParams.columnCount,
-              unit: recipeParams.unit,
-              gap: recipeParams.gap,
-              rowGap: recipeParams.rowGap,
-              rowHeight: recipeParams.rowHeight,
-              rowMinHeight: recipeParams.rowMinHeight,
-              rowLayout: recipeParams.rowLayout,
-            },
+            rows: recipeParams.rows ?? [],
+            layers: recipeParams.layers ?? [],
+            columnCount: recipeParams.columnCount,
+            unit: recipeParams.unit,
+            gap: recipeParams.gap,
+            rowGap: recipeParams.rowGap,
+            rowHeight: recipeParams.rowHeight,
+            rowMinHeight: recipeParams.rowMinHeight,
+            rowLayout: recipeParams.rowLayout,
             behaviors: [],
           };
           break;
@@ -2052,7 +2439,8 @@ export const layoutLiveEditing = defineTool({
             ? {
                 composition: {
                   type: 'layout_parametric_stack',
-                  params: {direction: 'row', items: ['Footer']},
+                  direction: 'row',
+                  items: ['Footer'],
                 },
                 style: {height: String(footerHeight)},
                 className: `${prefix}-util-panel`,
@@ -2060,46 +2448,45 @@ export const layoutLiveEditing = defineTool({
             : null;
           resolvedComposition = {
             type: 'layout_parametric_stack',
-            params: {
-              direction: 'column',
-              items: [
-                {
-                  composition: {
-                    type: 'layout_parametric_stack',
-                    params: {direction: 'row', items: ['Header']},
-                  },
-                  style: {height: String(headerHeight)},
-                  className: `${prefix}-util-panel`,
+            direction: 'column',
+            items: [
+              {
+                composition: {
+                  type: 'layout_parametric_stack',
+                  direction: 'row',
+                  items: ['Header'],
                 },
-                {
-                  composition: {
-                    type: 'layout_parametric_stack',
-                    params: {
-                      direction: 'row',
-                      items: [
-                        {
-                          composition: {
-                            type: 'layout_parametric_stack',
-                            params: {direction: 'column', items: ['Sidebar']},
-                          },
-                          style: {width: String(sidebarWidth)},
-                          className: `${prefix}-util-panel`,
-                        },
-                        {
-                          composition: {
-                            type: 'layout_parametric_stack',
-                            params: {direction: 'column', items: ['Main']},
-                          },
-                          className: `${prefix}-util-panel`,
-                        },
-                      ],
+                style: {height: String(headerHeight)},
+                className: `${prefix}-util-panel`,
+              },
+              {
+                composition: {
+                  type: 'layout_parametric_stack',
+                  direction: 'row',
+                  items: [
+                    {
+                      composition: {
+                        type: 'layout_parametric_stack',
+                        direction: 'column',
+                        items: ['Sidebar'],
+                      },
+                      style: {width: String(sidebarWidth)},
+                      className: `${prefix}-util-panel`,
                     },
-                  },
-                  style: {minHeight: String(minHeight)},
+                    {
+                      composition: {
+                        type: 'layout_parametric_stack',
+                        direction: 'column',
+                        items: ['Main'],
+                      },
+                      className: `${prefix}-util-panel`,
+                    },
+                  ],
                 },
-                ...(footer ? [footer] : []),
-              ],
-            },
+                style: {minHeight: String(minHeight)},
+              },
+              ...(footer ? [footer] : []),
+            ],
           };
           break;
         }
@@ -2108,27 +2495,27 @@ export const layoutLiveEditing = defineTool({
           const minHeight = recipeParams.minHeight ?? '360px';
           resolvedComposition = {
             type: 'layout_parametric_stack',
-            params: {
-              direction: 'row',
-              items: [
-                {
-                  composition: {
-                    type: 'layout_parametric_stack',
-                    params: {direction: 'column', items: ['Sidebar']},
-                  },
-                  style: {width: String(sidebarWidth)},
-                  className: `${prefix}-util-panel`,
+            direction: 'row',
+            items: [
+              {
+                composition: {
+                  type: 'layout_parametric_stack',
+                  direction: 'column',
+                  items: ['Sidebar'],
                 },
-                {
-                  composition: {
-                    type: 'layout_parametric_stack',
-                    params: {direction: 'column', items: ['Main']},
-                  },
-                  style: {minHeight: String(minHeight)},
-                  className: `${prefix}-util-panel`,
+                style: {width: String(sidebarWidth)},
+                className: `${prefix}-util-panel`,
+              },
+              {
+                composition: {
+                  type: 'layout_parametric_stack',
+                  direction: 'column',
+                  items: ['Main'],
                 },
-              ],
-            },
+                style: {minHeight: String(minHeight)},
+                className: `${prefix}-util-panel`,
+              },
+            ],
           };
           break;
         }
@@ -2138,35 +2525,36 @@ export const layoutLiveEditing = defineTool({
           const minHeight = recipeParams.minHeight ?? '360px';
           resolvedComposition = {
             type: 'layout_parametric_stack',
-            params: {
-              direction: 'row',
-              items: [
-                {
-                  composition: {
-                    type: 'layout_parametric_stack',
-                    params: {direction: 'column', items: ['Nav']},
-                  },
-                  style: {width: String(navWidth)},
-                  className: `${prefix}-util-panel`,
+            direction: 'row',
+            items: [
+              {
+                composition: {
+                  type: 'layout_parametric_stack',
+                  direction: 'column',
+                  items: ['Nav'],
                 },
-                {
-                  composition: {
-                    type: 'layout_parametric_stack',
-                    params: {direction: 'column', items: ['Content']},
-                  },
-                  style: {minHeight: String(minHeight)},
-                  className: `${prefix}-util-panel`,
+                style: {width: String(navWidth)},
+                className: `${prefix}-util-panel`,
+              },
+              {
+                composition: {
+                  type: 'layout_parametric_stack',
+                  direction: 'column',
+                  items: ['Content'],
                 },
-                {
-                  composition: {
-                    type: 'layout_parametric_stack',
-                    params: {direction: 'column', items: ['Inspector']},
-                  },
-                  style: {width: String(inspectorWidth)},
-                  className: `${prefix}-util-panel`,
+                style: {minHeight: String(minHeight)},
+                className: `${prefix}-util-panel`,
+              },
+              {
+                composition: {
+                  type: 'layout_parametric_stack',
+                  direction: 'column',
+                  items: ['Inspector'],
                 },
-              ],
-            },
+                style: {width: String(inspectorWidth)},
+                className: `${prefix}-util-panel`,
+              },
+            ],
           };
           break;
         }
@@ -2174,23 +2562,19 @@ export const layoutLiveEditing = defineTool({
           const groups = Array.isArray(recipeParams.groups) ? recipeParams.groups : [];
           resolvedComposition = {
             type: 'layout_parametric_stack',
-            params: {
-              direction: 'row',
-              items: groups.map((group: any) => ({
-                composition: {
-                  type: 'layout_parametric_stack',
-                  params: {
-                    direction: 'row',
-                    items: (group.items ?? []).map((label: string) => ({
-                      label,
-                      content: escapeHtml(label),
-                      className: `${prefix}-util-btn`,
-                    })),
-                  },
-                },
-                className: `${prefix}-util-toolbar-group`,
-              })),
-            },
+            direction: 'row',
+            items: groups.map((group: any) => ({
+              composition: {
+                type: 'layout_parametric_stack',
+                direction: 'row',
+                items: (group.items ?? []).map((label: string) => ({
+                  label,
+                  content: escapeHtml(label),
+                  className: `${prefix}-util-btn`,
+                })),
+              },
+              className: `${prefix}-util-toolbar-group`,
+            })),
           };
           break;
         }
@@ -2215,11 +2599,9 @@ export const layoutLiveEditing = defineTool({
           }));
           resolvedComposition = {
             type: 'layout_parametric_grid',
-            params: {
-              rows: rowsDef,
-              unit: cellSize,
-              gap: 0,
-            },
+            rows: rowsDef,
+            unit: cellSize,
+            gap: 0,
           };
           break;
         }

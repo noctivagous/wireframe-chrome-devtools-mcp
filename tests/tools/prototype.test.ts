@@ -25,7 +25,7 @@ describe('prototype export', () => {
 
       // Inject CSS + JS patches.
       await insertCss.handler(
-        {params: {cssText: '.x { color: red; }', replaceExisting: false, patchId: 'p1'}},
+        {params: {mode: 'apply', cssText: '.x { color: red; }', replaceExisting: false, patchId: 'p1'}},
         response,
         context,
       );

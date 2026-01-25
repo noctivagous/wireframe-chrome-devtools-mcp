@@ -175,7 +175,16 @@
             <li>Params: <code>headerHeight: "48px"</code>, <code>sidebarWidth: "200px"</code>, <code>showFooter: true</code>.</li>
         </ul>
 
-        <h3>2. Computer Keyboard Challenge (REQUIRED: Do All Three Methods)</h3>
+        <h3>2. Piano Keyboard Challenge</h3>
+        <p>Goal: Build a piano keyboard with white and black keys arranged in the standard piano layout.</p>
+        <ul>
+            <li>Use <code>layout_live_editing</code> to create a piano keyboard interface.</li>
+            <li>Target: <code>#piano-playground</code>.</li>
+            <li>Consider using <code>overlay_grid</code> or absolute positioning for black keys that sit on top of white keys.</li>
+            <li>Test with <code>simulate_event</code> to "play" the keys.</li>
+        </ul>
+
+        <h3>3. Computer Keyboard Challenge (REQUIRED: Do All Three Methods)</h3>
         <p><strong>IMPORTANT:</strong> You must implement all three methods (A, B, and C) for creating a computer keyboard layout. This is for a computer keyboard (QWERTY layout), not a piano keyboard.</p>
         <ul>
             <li><strong>Method A (Flex):</strong> Use <code>layout_parametric_stack</code> with <code>direction: "row"</code> to create keyboard rows.</li>
@@ -185,7 +194,7 @@
             <li><strong>Complete all three methods in the Keyboard Methods tab.</strong></li>
         </ul>
 
-        <h3>3. Recipes & Components</h3>
+        <h3>4. Recipes & Components</h3>
         <p>Goal: Test advanced UI components.</p>
         <ul>
             <li><strong>Selectable View:</strong> Use recipe <code>"selectable_view"</code> for a tabbed/gallery interface.</li>
@@ -193,14 +202,14 @@
             <li>Target: <code>#component-playground</code>.</li>
         </ul>
 
-        <h3>4. Mobile & Desktop Patterns</h3>
+        <h3>5. Mobile & Desktop Patterns</h3>
         <ul>
             <li><strong>Mobile:</strong> Test bottom bars and FABs in <code>#mobile-playground</code>. Use <code>emulate</code> to see mobile views.</li>
             <li><strong>Dashboard:</strong> Build a 3-column stats row in <code>#dashboard-playground</code>.</li>
             <li><strong>Editor:</strong> Target <code>#editor-playground</code> to test complex multi-pane layouts.</li>
         </ul>
 
-        <h3>5. Interaction & Feedback</h3>
+        <h3>6. Interaction & Feedback</h3>
         <ul>
             <li>Use <code>simulate_event</code> to "play" the keys or click the transport.</li>
             <li>Use <code>annotate</code> to tag specific tracks or keys with AI notes.</li>
@@ -233,7 +242,16 @@
             </div>
         </section>
 
-        <!-- Test 2: Components & Recipes -->
+        <!-- Test 2: Piano Keyboard -->
+        <section id="piano-section">
+            <h2>2. Piano Keyboard</h2>
+            <p class="description">Build a piano keyboard with white and black keys. Use <code>layout_live_editing</code> to create the keyboard layout. Consider using <code>overlay_grid</code> or absolute positioning for black keys that sit on top of white keys. Test interactions with <code>simulate_event</code> to "play" the keys.</p>
+            <div class="playground" id="piano-playground">
+                <!-- AI Insertions go here -->
+            </div>
+        </section>
+
+        <!-- Test 3: Components & Recipes -->
         <section id="component-section">
             <h2>3. UI Component Playground</h2>
             <p class="description">Test standalone recipes like <code>selectable_view</code> or <code>parametric_grid</code>.</p>

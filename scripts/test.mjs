@@ -10,6 +10,7 @@
 import {spawn} from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
+import {execSync} from 'node:child_process';
 
 const args = process.argv.slice(2);
 const userArgs = args.filter(arg => !arg.startsWith('-'));
@@ -45,6 +46,33 @@ if (userArgs.length > 0) {
   }
 }
 
+// Find the actual Node.js binary, not the bun alias
+function findNodeBinary() {
+  // Try system node first
+  try {
+    const systemNode = '/usr/bin/node';
+    execSync(`${systemNode} --version`, {stdio: 'ignore'});
+    return systemNode;
+  } catch {
+    // Fall back to nvm node if available
+    try {
+      const nvmNode = process.env.NVM_BIN
+        ? `${process.env.NVM_BIN}/node`
+        : null;
+      if (nvmNode) {
+        execSync(`${nvmNode} --version`, {stdio: 'ignore'});
+        return nvmNode;
+      }
+    } catch {
+      // Continue to fallback
+    }
+    // Last resort: use 'node' and hope it's in PATH correctly
+    return 'node';
+  }
+}
+
+const nodeBinary = findNodeBinary();
+
 const nodeArgs = [
   '--import',
   './build/tests/setup.js',
@@ -63,7 +91,7 @@ async function runTests(attempt) {
     console.log(`\nRun attempt ${attempt}...\n`);
   }
   return new Promise(resolve => {
-    const child = spawn('node', nodeArgs, {
+    const child = spawn(nodeBinary, nodeArgs, {
       stdio: 'inherit',
     });
 
