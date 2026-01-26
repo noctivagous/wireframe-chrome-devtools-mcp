@@ -915,7 +915,7 @@ async function captureWireframeSnapshot(
       request.params.includeComputedStyles ?? (includeClippingAnalysis ? true : false);
     const includeShadowDom = request.params.includeShadowDom ?? false;
     const includePseudoElements = request.params.includePseudoElements ?? false;
-    const includeOverlapAnalysis = request.params.includeOverlapAnalysis ?? false;
+    const includeOverlapAnalysis = request.params.includeOverlapAnalysis ?? true;
     const includeGapAnalysis = request.params.includeGapAnalysis ?? false;
     const analysisMaxPairs =
       typeof request.params.analysisMaxPairs === 'number' && Number.isFinite(request.params.analysisMaxPairs)
@@ -1737,7 +1737,7 @@ export const wireframeSnapshot = defineTool({
       ),
     includeOverlapAnalysis: zod
       .boolean()
-      .default(false)
+      .default(true)
       .optional()
       .describe('If true, computes overlap findings between elements (bounded).'),
     includeGapAnalysis: zod
@@ -2311,7 +2311,7 @@ export const svgSnapshot = defineTool({
       ),
     includeOverlapAnalysis: zod
       .boolean()
-      .default(false)
+      .default(true)
       .optional()
       .describe('If true, computes overlap findings between elements (bounded).'),
     includeGapAnalysis: zod

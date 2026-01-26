@@ -163,6 +163,67 @@ export const clearEditSession = defineTool({
   },
 });
 
+export const listSessionChanges = defineTool({
+  name: 'list_session_changes',
+  description:
+    'List all changes recorded in an edit session. Shows a summary of what operations have been recorded, useful for understanding what changes would be exported or committed.',
+  annotations: {
+    category: ToolCategory.EDIT_SESSION,
+    readOnlyHint: true,
+  },
+  schema: {
+    sessionId: zod.string().optional().describe('Optional session id. If omitted, lists changes from the active session.'),
+    summary: zod.boolean().optional().default(true).describe('If true, returns a summary view. If false, returns full change details.'),
+  },
+  handler: async (request, response, context) => {
+    const session = getEditSessionOrThrow(context, request.params.sessionId);
+    const summary = request.params.summary ?? true;
+    
+    if (summary) {
+      // Group changes by type
+      const changesByType: Record<string, number> = {};
+      for (const change of session.changes) {
+        const type = change.type || 'unknown';
+        changesByType[type] = (changesByType[type] || 0) + 1;
+      }
+      
+      response.appendResponseLine('```json');
+      response.appendResponseLine(
+        JSON.stringify(
+          {
+            sessionId: session.sessionId,
+            label: session.label,
+            totalChanges: session.changes.length,
+            changesByType,
+            recentChanges: session.changes.slice(-5).map(c => ({
+              type: c.type,
+              description: c.description,
+              createdAt: new Date(c.createdAt).toISOString(),
+            })),
+          },
+          null,
+          2,
+        ),
+      );
+      response.appendResponseLine('```');
+    } else {
+      response.appendResponseLine('```json');
+      response.appendResponseLine(
+        JSON.stringify(
+          {
+            sessionId: session.sessionId,
+            label: session.label,
+            changes: session.changes,
+          },
+          null,
+          2,
+        ),
+      );
+      response.appendResponseLine('```');
+    }
+  },
+});
+
 export const exportEditSession = defineTool({
   name: 'export_edit_session',
   description:
@@ -898,14 +959,14 @@ export const liveEditingSession = defineTool({
     const exportPrototypeStateParam = (request.params as any).export_prototype_state;
     const annotateParam = (request.params as any).annotate;
     const edit = (request.params as any).edit;
-    const exportEditSession = (request.params as any).export_edit_session;
+    const exportEditSessionParams = (request.params as any).export_edit_session;
     const commitEditSessionToFiles = (request.params as any).commit_edit_session_to_files;
     const clearEditSession = (request.params as any).clear_edit_session;
     const questionnaire = (request.params as any).questionnaire;
     const plans_notification = (request.params as any).plans_notification;
     const hasInteract = Boolean(questionnaire || plans_notification);
     const hasEditAction = Boolean(exportPrototypeStateParam || annotateParam || edit);
-    const provided = [begin, hasEditAction, exportEditSession, commitEditSessionToFiles, clearEditSession, hasInteract].filter(Boolean).length;
+    const provided = [begin, hasEditAction, exportEditSessionParams, commitEditSessionToFiles, clearEditSession, hasInteract].filter(Boolean).length;
     if (provided !== 1) {
       throw new Error('Provide exactly one of: begin, export_prototype_state, annotate, edit, export_edit_session, commit_edit_session_to_files, clear_edit_session, questionnaire, plans_notification.');
     }
@@ -990,8 +1051,8 @@ export const liveEditingSession = defineTool({
       throw new Error(`Unsupported edit action: ${String(action)}`);
     }
 
-    if (exportEditSession) {
-      await exportEditSession.handler({params: exportEditSession as any}, response, context);
+    if (exportEditSessionParams) {
+      await exportEditSession.handler({params: exportEditSessionParams as any}, response, context);
       const workflowState = context.getLiveEditingWorkflowState();
       response.appendResponseLine('```json');
       response.appendResponseLine(

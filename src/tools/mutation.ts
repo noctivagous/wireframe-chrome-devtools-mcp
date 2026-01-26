@@ -1313,6 +1313,25 @@ export const manipulateDom = defineTool({
       .optional()
       .describe('Options to control response richness. All options default to false for backward compatibility. Enable specific features as needed.'),
 
+    // Preview and dry-run options
+    dryRun: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true, shows what would happen without making changes. Returns information about matching elements and the operation that would be performed.'),
+    
+    preview: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true, shows all matching elements with their details before performing the operation. Useful for understanding which elements would be affected.'),
+    
+    showAllMatches: zod
+      .boolean()
+      .default(false)
+      .optional()
+      .describe('If true and multiple elements match, shows information about all matching elements instead of just the first one. Automatically enabled for query actions.'),
+
     // Common options
     patchId: zod
       .string()
@@ -1357,6 +1376,9 @@ export const manipulateDom = defineTool({
       containsSearchIn = 'textContent',
       getEntireHTMLDocument,
       responseOptions,
+      dryRun = false,
+      preview = false,
+      showAllMatches = false,
     } = request.params;
 
     if (!action || !selector) {
@@ -1564,7 +1586,7 @@ export const manipulateDom = defineTool({
     }
 
     const result: DomManipulationEvalResult = await page.evaluate(
-      ({operations, patchId, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE, isQueryOnly}: {
+      ({operations, patchId, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE, isQueryOnly, dryRun, preview, showAllMatches}: {
         operations: DomOperation[];
         patchId: string;
         PATCH_ID_ATTR: string;
@@ -1572,6 +1594,9 @@ export const manipulateDom = defineTool({
         PATCH_KIND_ATTR: string;
         PATCH_OWNER_VALUE: string;
         isQueryOnly: boolean;
+        dryRun: boolean;
+        preview: boolean;
+        showAllMatches: boolean;
       }) => {
         // Utility function to generate selector for an element
         function generateSelectorForElement(el: HTMLElement): string {
@@ -1828,20 +1853,66 @@ export const manipulateDom = defineTool({
               }
               elements = [allElements[index]];
             } else {
+              // Handle preview mode and showAllMatches
+              const shouldShowAll = op.action === 'query' || op.action === 'validate-structure' || showAllMatches || preview;
+              
               // Default to first match when multiple elements match (for non-query operations)
               // This prevents unintended operations on multiple elements
-              if (op.action !== 'query' && op.action !== 'validate-structure' && allElements.length > 1) {
+              if (!shouldShowAll && op.action !== 'query' && op.action !== 'validate-structure' && allElements.length > 1) {
                 elements = [allElements[0]];
-                opResults.push({
+                const warningResult: DomManipulationOpResult = {
                   selector: op.selector,
                   found: true,
                   action: op.action,
                   success: true,
-                  message: `⚠️ Warning: Selector matched ${allElements.length} elements. Applied operation to the first match only. Use array index notation (e.g., "${baseSelector}[0]" for first, "${baseSelector}[1]" for second) to target a specific element, or "${baseSelector}[${allElements.length - 1}]" for the last.`,
-                });
+                  message: `⚠️ Warning: Selector matched ${allElements.length} elements. Applied operation to the first match only. Use array index notation (e.g., "${baseSelector}[0]" for first, "${baseSelector}[1]" for second) to target a specific element, or "${baseSelector}[${allElements.length - 1}]" for the last. Use preview: true or showAllMatches: true to see all matches.`,
+                  data: {
+                    textContent: `Multiple matches (${allElements.length} total). Showing first 5:`,
+                    attributes: {
+                      'totalMatches': String(allElements.length),
+                    },
+                  },
+                };
+                // Store match details in a custom field
+                (warningResult as any).matchedElements = allElements.slice(0, 5).map((el, idx) => ({
+                  index: idx,
+                  tagName: el.tagName.toLowerCase(),
+                  id: el.id || undefined,
+                  className: el.className || undefined,
+                  textContent: (el.textContent || '').substring(0, 50),
+                }));
+                opResults.push(warningResult);
               } else {
-                // For query operations or single matches, use all elements
+                // For query operations, preview mode, or when showAllMatches is true, use all elements
                 elements = allElements;
+                if (preview && allElements.length > 1) {
+                  // Add preview information showing all matches
+                  // Store preview info in a way that's compatible with the result type
+                  const previewInfo: DomManipulationOpResult = {
+                    selector: op.selector,
+                    found: true,
+                    action: op.action,
+                    success: true,
+                    message: `Preview: Selector matched ${allElements.length} elements. Showing all matches:`,
+                    data: {
+                      textContent: `Total matches: ${allElements.length}. Use array index notation to target specific elements.`,
+                      attributes: {
+                        'totalMatches': String(allElements.length),
+                        'preview': 'true',
+                      },
+                    },
+                  };
+                  // Store detailed match info in a custom field that will be serialized
+                  (previewInfo as any).previewMatches = allElements.map((el, idx) => ({
+                    index: idx,
+                    tagName: el.tagName.toLowerCase(),
+                    id: el.id || undefined,
+                    className: el.className || undefined,
+                    textContent: (el.textContent || '').substring(0, 100),
+                    selector: `${baseSelector}[${idx}]`,
+                  }));
+                  opResults.push(previewInfo);
+                }
               }
             }
 
@@ -1860,6 +1931,8 @@ export const manipulateDom = defineTool({
                 let success = true;
                 let message = '';
                 let elementData: DomManipulationOpResult['data'] | undefined;
+                // Skip actual DOM manipulation if dryRun is true (except for query which is read-only)
+                const shouldSkip = dryRun && op.action !== 'query' && op.action !== 'validate-structure';
 
                 try {
                   switch (op.action) {
@@ -2009,7 +2082,13 @@ export const manipulateDom = defineTool({
                         }
                       }
                       
-                      if (op.properties) {
+                      if (shouldSkip) {
+                        message = `[DRY RUN] Would set styles: ${JSON.stringify(op.properties)}`;
+                        elementData = {
+                          textContent: `Would apply: ${JSON.stringify(op.properties)}`,
+                          computedStyles: beforeState,
+                        };
+                      } else if (op.properties) {
                         for (const [prop, value] of Object.entries(op.properties)) {
                           element.style.setProperty(prop, value, 'important');
                         }
@@ -2051,36 +2130,71 @@ export const manipulateDom = defineTool({
                     }
 
                     case 'add-class':
-                      if (op.className) {
+                      if (shouldSkip) {
+                        message = `[DRY RUN] Would add class: ${op.className}`;
+                        elementData = {
+                          className: element.className,
+                          textContent: `Would add class: ${op.className}`,
+                        };
+                      } else if (op.className) {
                         element.classList.add(op.className);
                       }
                       break;
 
                     case 'remove-class':
-                      if (op.className) {
+                      if (shouldSkip) {
+                        message = `[DRY RUN] Would remove class: ${op.className}`;
+                        elementData = {
+                          className: element.className,
+                          textContent: `Would remove class: ${op.className}`,
+                        };
+                      } else if (op.className) {
                         element.classList.remove(op.className);
                       }
                       break;
 
                     case 'remove-element':
-                      element.remove();
+                      if (shouldSkip) {
+                        message = '[DRY RUN] Would remove element';
+                        elementData = {
+                          tagName: element.tagName.toLowerCase(),
+                          textContent: `Would remove: ${element.tagName}`,
+                        };
+                      } else {
+                        element.remove();
+                      }
                       break;
 
                     case 'insert-html':
-                      if (op.html) {
+                      if (shouldSkip) {
+                        message = `[DRY RUN] Would insert HTML at position: ${op.position || 'beforeend'}`;
+                        elementData = {
+                          textContent: `Would insert: ${(op.html || '').substring(0, 100)}`,
+                        };
+                      } else if (op.html) {
                         const position = (op.position || 'beforeend') as InsertPosition;
                         element.insertAdjacentHTML(position, op.html);
                       }
                       break;
 
                     case 'replace-html':
-                      if (op.html !== undefined) {
+                      if (shouldSkip) {
+                        message = '[DRY RUN] Would replace innerHTML';
+                        elementData = {
+                          textContent: `Would replace with: ${(op.html || '').substring(0, 100)}`,
+                        };
+                      } else if (op.html !== undefined) {
                         element.innerHTML = op.html;
                       }
                       break;
 
                     case 'replace-content': {
-                      if (op.html !== undefined) {
+                      if (shouldSkip) {
+                        message = `[DRY RUN] Would replace content (preserveStructure: ${op.preserveStructure !== false})`;
+                        elementData = {
+                          textContent: `Would replace with: ${(op.html || '').substring(0, 100)}`,
+                        };
+                      } else if (op.html !== undefined) {
                         const preserve = op.preserveStructure !== false; // Default to true
                         if (preserve) {
                           // Preserve wrapper structure by only replacing direct children/text nodes
@@ -2330,11 +2444,14 @@ export const manipulateDom = defineTool({
         PATCH_KIND_ATTR,
         PATCH_OWNER_VALUE,
         isQueryOnly,
+        dryRun,
+        preview,
+        showAllMatches,
       },
     );
 
-    // Register patch if successful (only for non-query operations)
-    if (result.success && !isQueryOnly) {
+    // Register patch if successful (only for non-query operations and not dry-run)
+    if (result.success && !isQueryOnly && !dryRun) {
       context.registerPatch({
         patchId,
         patchType: 'dom-manipulation',
@@ -2364,7 +2481,15 @@ export const manipulateDom = defineTool({
     const successfulOps = result.operations.filter(op => op.success === true).length;
     const totalOps = result.operations.length;
 
-    if (isQueryOnly) {
+    if (dryRun) {
+      response.appendResponseLine(`🔍 DRY RUN: Preview of what would happen (no changes made)`);
+      response.appendResponseLine(`Found ${totalOps} operation(s) that would be performed:`);
+      for (const op of result.operations) {
+        if (op.found) {
+          response.appendResponseLine(`  - ${op.action} on "${op.selector}": ${op.message || 'Would be applied'}`);
+        }
+      }
+    } else if (isQueryOnly) {
       const queryOps = result.operations.filter(op => op.action === 'query');
       const validateOps = result.operations.filter(op => op.action === 'validate-structure');
       const foundCount = queryOps.filter(op => op.found).length;

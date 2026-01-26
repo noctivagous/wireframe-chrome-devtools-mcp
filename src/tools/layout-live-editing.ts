@@ -145,13 +145,17 @@ const gridOverlayLayerSchema: zod.ZodTypeAny = zod.object({
 // Base schema without refinements (for merging)
 const layoutParametricGridSchemaBase = zod.object({
   rows: zod.array(gridRowSchema).min(1).optional().describe('Grid rows definition. Either rows or itemsForAllRows must be provided.'),
-  itemsForAllRows: zod.array(contentItemSchema).min(1).optional().describe('Flat array of items for all rows (row-major order). Requires columnCount. Either rows or itemsForAllRows must be provided.'),
+  itemsForAllRows: zod.array(contentItemSchema).min(1).optional().describe('Flat array of items for all rows (row-major order). Either columnCount or minItemWidth must be provided when using itemsForAllRows.'),
   columnCount: zod
     .number()
     .int()
     .positive()
     .optional()
-    .describe('Explicit column count for all rows (prevents implicit wrapping). Required when using itemsForAllRows.'),
+    .describe('Explicit column count for all rows (prevents implicit wrapping). Required when using itemsForAllRows unless minItemWidth is provided.'),
+  minItemWidth: zod
+    .union([zod.string(), zod.number()])
+    .optional()
+    .describe('Minimum item width for responsive grids. When provided with itemsForAllRows, automatically calculates columnCount based on viewport width. Supports CSS length values (e.g., "240px", "20rem") or numbers (treated as pixels).'),
   unit: lengthSchema.optional().describe('Base unit size (e.g., "1fr").'),
   gap: lengthSchema.optional().describe('Shorthand: sets both columnGap and rowGap to the same value.'),
   columnGap: lengthSchema.optional().describe('Gap between columns (within each row).'),
@@ -175,9 +179,9 @@ const layoutParametricGridSchema: zod.ZodTypeAny = layoutParametricGridSchemaBas
     message: 'Either rows or itemsForAllRows must be provided, but not both.',
   }
 ).refine(
-  (data) => !data.itemsForAllRows || (data.columnCount !== undefined && data.columnCount > 0),
+  (data) => !data.itemsForAllRows || (data.columnCount !== undefined && data.columnCount > 0) || data.minItemWidth !== undefined,
   {
-    message: 'columnCount is required when using itemsForAllRows and must be a positive integer.',
+    message: 'Either columnCount or minItemWidth is required when using itemsForAllRows.',
   }
 );
 
@@ -364,10 +368,10 @@ compositionSchema = zod.discriminatedUnion('type', [
         path: [],
       });
     }
-    if (data.itemsForAllRows && (data.columnCount === undefined || data.columnCount <= 0)) {
+    if (data.itemsForAllRows && (data.columnCount === undefined || data.columnCount <= 0) && !data.minItemWidth) {
       ctx.addIssue({
         code: zod.ZodIssueCode.custom,
-        message: 'columnCount is required when using itemsForAllRows and must be a positive integer.',
+        message: 'Either columnCount or minItemWidth is required when using itemsForAllRows.',
         path: [],
       });
     }
@@ -1428,10 +1432,15 @@ function buildGridLayout(params: LayoutGridParams, prefix: string, componentMap?
     </div>
   `;
 
+  // Base grid row CSS: ensure display: grid is set when rowLayout is grid
+  const baseGridRowCss = rowLayout === 'grid' 
+    ? `display:grid;align-items:stretch;`
+    : `display:flex;align-items:stretch;`;
+  
   const css = `
     .${prefix}-grid{position:relative;display:block;}
     .${prefix}-grid-base{display:flex;flex-direction:column;gap:${rowGap};}
-    .${prefix}-grid-row{align-items:stretch;}
+    .${prefix}-grid-row{${baseGridRowCss}}
     .${prefix}-grid-item,.${prefix}-grid-overlay-item{display:flex;align-items:center;justify-content:center;}
     .${prefix}-grid-overlay{position:absolute;inset:0;display:grid;pointer-events:none;align-items:stretch;}
     .${prefix}-grid-overlay-item{pointer-events:auto;align-self:stretch;min-height:100%;}
@@ -2409,6 +2418,11 @@ export const layoutLiveEditing = defineTool({
     theme: themeSchema.optional(),
     patch: patchSchema.optional(),
     verify: verifySchema.optional(),
+    componentMapMode: zod
+      .enum(['summary', 'full'])
+      .default('full')
+      .optional()
+      .describe('Component map output mode: "summary" shows only key elements overview, "full" shows detailed component listing with all properties.'),
   },
   handler: async (request, response, context) => {
     const catalog = (request.params as any).catalog;
@@ -2444,12 +2458,56 @@ export const layoutLiveEditing = defineTool({
           // Convert itemsForAllRows to rows if provided
           const gridParams = {...parametricGrid};
           if (gridParams.itemsForAllRows) {
+            // Auto-calculate columnCount from minItemWidth if provided
+            if (gridParams.minItemWidth && !gridParams.columnCount) {
+              const page = context.getSelectedPage();
+              const viewport = await page.viewport();
+              const viewportWidth = viewport?.width ?? 1200;
+              
+              // Parse minItemWidth (supports CSS length values or numbers)
+              let minWidthPx: number;
+              if (typeof gridParams.minItemWidth === 'number') {
+                minWidthPx = gridParams.minItemWidth;
+              } else {
+                const minWidthStr = String(gridParams.minItemWidth).trim();
+                // Parse CSS length values (e.g., "240px", "20rem")
+                if (minWidthStr.endsWith('px')) {
+                  minWidthPx = Number.parseFloat(minWidthStr.slice(0, -2));
+                } else if (minWidthStr.endsWith('rem')) {
+                  // Assume 16px = 1rem
+                  minWidthPx = Number.parseFloat(minWidthStr.slice(0, -3)) * 16;
+                } else if (minWidthStr.endsWith('em')) {
+                  minWidthPx = Number.parseFloat(minWidthStr.slice(0, -2)) * 16;
+                } else {
+                  // Try parsing as number
+                  minWidthPx = Number.parseFloat(minWidthStr);
+                }
+              }
+              
+              if (Number.isFinite(minWidthPx) && minWidthPx > 0) {
+                // Account for gaps (estimate based on columnGap or gap)
+                const gap = gridParams.columnGap || gridParams.gap || '8px';
+                const gapPx = typeof gap === 'string' && gap.endsWith('px') 
+                  ? Number.parseFloat(gap.slice(0, -2)) 
+                  : 8;
+                
+                // Calculate how many items fit: (viewportWidth - gaps) / (minItemWidth + gap)
+                const itemsPerRow = Math.floor((viewportWidth - gapPx) / (minWidthPx + gapPx));
+                gridParams.columnCount = Math.max(1, itemsPerRow);
+                
+                response.appendResponseLine(`📐 Auto-calculated columnCount: ${gridParams.columnCount} (based on minItemWidth: ${gridParams.minItemWidth}, viewport: ${viewportWidth}px)`);
+              } else {
+                throw new Error(`Invalid minItemWidth value: ${gridParams.minItemWidth}. Must be a positive number or CSS length (e.g., "240px").`);
+              }
+            }
+            
             gridParams.rows = convertItemsForAllRowsToRows(
               gridParams.itemsForAllRows,
               gridParams.columnCount,
             );
             // Remove itemsForAllRows from params since we've converted it to rows
             delete gridParams.itemsForAllRows;
+            delete gridParams.minItemWidth; // Remove from composition since it's only used for calculation
           }
           compositionToValidate = {
             type: 'layout_parametric_grid',
@@ -2720,7 +2778,11 @@ export const layoutLiveEditing = defineTool({
       </div>
     `;
 
-    if (mode === 'export_only') {
+    // Component map output mode (summary vs full)
+    const componentMapMode = (request.params as any).componentMapMode ?? 'full';
+    const componentMapSummary = componentMapMode === 'summary';
+    
+    if (mode === 'export_only' || componentMapSummary) {
       // Add prominent Component Map summary for AI
       response.appendResponseLine('');
       response.appendResponseLine('# 📋 Component Map');
@@ -2752,31 +2814,34 @@ export const layoutLiveEditing = defineTool({
         response.appendResponseLine(`- **Stack Layout**: ${stackElementsExport.length} elements (container, items)`);
       }
       
-      response.appendResponseLine('');
-      
-      // Detailed component listing
-      response.appendResponseLine('## 📦 Component Details');
-      response.appendResponseLine('');
-      
-      componentMap.forEach((entry, index) => {
-        response.appendResponseLine(`### ${index + 1}. ${entry.elementName}`);
-        if (entry.id) {
-          response.appendResponseLine(`   - **ID**: \`${entry.id}\``);
-        }
-        if (entry.classes.length > 0) {
-          response.appendResponseLine(`   - **Classes**: \`${entry.classes.join('`, `')}\``);
-        }
-        if (entry.selector) {
-          response.appendResponseLine(`   - **Selector**: \`${entry.selector}\``);
-        }
-        if (entry.cssVariables.length > 0) {
-          const varList = entry.cssVariables.map(v => `\`--${prefix}-${v}\``).join(', ');
-          response.appendResponseLine(`   - **CSS Variables** (${entry.cssVariables.length}): ${varList}`);
-        }
-        if (index < componentMap.length - 1) {
-          response.appendResponseLine('');
-        }
-      });
+      // Only show detailed listing if not in summary mode
+      if (!componentMapSummary) {
+        response.appendResponseLine('');
+        
+        // Detailed component listing
+        response.appendResponseLine('## 📦 Component Details');
+        response.appendResponseLine('');
+        
+        componentMap.forEach((entry, index) => {
+          response.appendResponseLine(`### ${index + 1}. ${entry.elementName}`);
+          if (entry.id) {
+            response.appendResponseLine(`   - **ID**: \`${entry.id}\``);
+          }
+          if (entry.classes.length > 0) {
+            response.appendResponseLine(`   - **Classes**: \`${entry.classes.join('`, `')}\``);
+          }
+          if (entry.selector) {
+            response.appendResponseLine(`   - **Selector**: \`${entry.selector}\``);
+          }
+          if (entry.cssVariables.length > 0) {
+            const varList = entry.cssVariables.map(v => `\`--${prefix}-${v}\``).join(', ');
+            response.appendResponseLine(`   - **CSS Variables** (${entry.cssVariables.length}): ${varList}`);
+          }
+          if (index < componentMap.length - 1) {
+            response.appendResponseLine('');
+          }
+        });
+      }
       
       response.appendResponseLine('');
       
@@ -3408,6 +3473,74 @@ export const layoutLiveEditing = defineTool({
       }
     } else if (replaceExisting) {
       await rollbackPatch.handler({params: {patchId: jsPatchId}}, response, context);
+    }
+
+    // Validate grid layout for overlapping items (if this is a grid layout)
+    if (resolvedComposition?.type === 'layout_parametric_grid' && mode === 'apply') {
+      try {
+        const {captureWireframeSnapshot} = await import('./wireframe.js');
+        const {output} = await captureWireframeSnapshot(
+          {
+            params: {
+              scopeSelector: `#${rootId}`,
+              includeDescendants: true,
+              includeComputedStyles: true,
+              computedStylePreset: 'layout',
+              includeOverlapAnalysis: true,
+              analysisMaxPairs: 1000,
+              analysisMaxFindings: 20,
+              analysisMinOverlapArea: 4,
+            },
+          },
+          context,
+        );
+
+        if (output.analysis?.overlaps && output.analysis.overlaps.length > 0) {
+          response.appendResponseLine('');
+          response.appendResponseLine('⚠️ **Grid Layout Validation: Overlapping Items Detected**');
+          response.appendResponseLine('');
+          response.appendResponseLine(`Found ${output.analysis.overlaps.length} overlapping element pair(s) in the grid layout.`);
+          response.appendResponseLine('');
+          response.appendResponseLine('**Top overlapping pairs:**');
+          const topOverlaps = output.analysis.overlaps.slice(0, 5);
+          topOverlaps.forEach((overlap, idx) => {
+            response.appendResponseLine(`${idx + 1}. Elements \`${overlap.a}\` and \`${overlap.b}\` overlap by ${Math.round(overlap.area)}px²`);
+            response.appendResponseLine(`   - Overlap ratio: ${Math.round(overlap.overlapRatioA * 100)}% of element A, ${Math.round(overlap.overlapRatioB * 100)}% of element B`);
+          });
+          if (output.analysis.overlaps.length > 5) {
+            response.appendResponseLine(`   ... and ${output.analysis.overlaps.length - 5} more overlapping pair(s)`);
+          }
+          response.appendResponseLine('');
+          response.appendResponseLine('**Possible causes:**');
+          response.appendResponseLine('- Grid rows may not have `display: grid` applied correctly');
+          response.appendResponseLine('- Grid column template may not match the number of items');
+          response.appendResponseLine('- CSS specificity issues preventing grid styles from applying');
+          response.appendResponseLine('- Items may have explicit positioning (absolute/fixed)');
+          response.appendResponseLine('');
+          response.appendResponseLine('**Suggested fixes:**');
+          response.appendResponseLine(`1. Verify grid rows have \`display: grid\` applied (check \`.${prefix}-grid-row\` styles)`);
+          response.appendResponseLine('2. Ensure grid-template-columns matches the number of items per row');
+          response.appendResponseLine('3. Check for CSS conflicts using browser DevTools');
+          response.appendResponseLine('4. Use `insert_css` to add explicit grid styles if needed:');
+          response.appendResponseLine('```css');
+          response.appendResponseLine(`.${prefix}-grid-row {`);
+          response.appendResponseLine('  display: grid !important;');
+          response.appendResponseLine('  grid-template-columns: repeat(4, 1fr) !important;');
+          response.appendResponseLine('  gap: 24px !important;');
+          response.appendResponseLine('}');
+          response.appendResponseLine('```');
+          response.appendResponseLine('');
+        } else {
+          response.appendResponseLine('');
+          response.appendResponseLine('✅ **Grid Layout Validation: No overlapping items detected**');
+          response.appendResponseLine('');
+        }
+      } catch (error) {
+        // Don't fail the operation if validation fails, just log a warning
+        response.appendResponseLine('');
+        response.appendResponseLine(`⚠️ **Grid Layout Validation**: Could not validate layout (${error instanceof Error ? error.message : String(error)})`);
+        response.appendResponseLine('');
+      }
     }
 
     if (request.params.verify?.wireframeSnapshot) {
