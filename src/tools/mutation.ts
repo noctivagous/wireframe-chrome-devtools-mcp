@@ -25,7 +25,8 @@ export const insertCss = defineTool({
   name: 'insert_css',
   description:
     'Insert a <style> tag into the current page with a patch id for later rollback.\n\n' +
-    '**Preview Mode:** When `mode: "preview"` is used with `selector`, `property`, and `values`, the tool automatically generates visual wireframe feedback, supports testing multiple values, responsive breakpoints, and before/after comparisons. Preview mode includes automatic rollback by default.',
+    '**Preview Mode:** When `mode: "preview"` is used with `selector`, `property`, and `values`, the tool automatically generates visual wireframe feedback, supports testing multiple values, responsive breakpoints, and before/after comparisons. Preview mode includes automatic rollback by default.\n\n' +
+    '**SVG Snapshots:** By default, this tool includes an SVG wireframe snapshot after applying CSS changes (in both apply and preview modes) to provide visual confirmation of layout changes. Set `includeSvgSnapshot: false` to disable.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -168,6 +169,15 @@ export const insertCss = defineTool({
       .optional()
       .describe(
         'Optional hint for later commit: which local file this CSS should be rolled into at end-of-session.',
+      ),
+
+    // SVG snapshot option (for apply mode)
+    includeSvgSnapshot: zod
+      .boolean()
+      .default(true)
+      .optional()
+      .describe(
+        'If true, automatically generates an SVG wireframe snapshot after applying CSS changes. Provides visual confirmation of layout changes. Defaults to true.',
       ),
   },
   handler: async (request, response, context) => {
@@ -780,6 +790,49 @@ export const insertCss = defineTool({
           ),
         );
         response.appendResponseLine('```');
+
+        // Generate SVG snapshot if requested
+        if (request.params.includeSvgSnapshot !== false) {
+          const {captureWireframeSnapshot, renderSvgWireframe} =
+            await import('./wireframe.js');
+          const {output: snapshot} = await captureWireframeSnapshot(
+            {
+              params: {
+                includeComputedStyles: true,
+                stylePreset: 'standard',
+                coordinateSpace: 'viewport',
+                maxTotal: 50,
+              },
+            },
+            context,
+          );
+
+          const svg = renderSvgWireframe(snapshot, {
+            scale: 1,
+            background: 'transparent',
+            showLabels: true,
+            showDimensions: false,
+            showSpacing: false,
+            showOverlaps: false,
+            showGaps: false,
+            showClipping: false,
+            strokeWidth: 1,
+            fillOpacity: 0.08,
+            highlightChanged: false,
+          });
+
+          const result = {
+            svg: svg,
+            elementCount: snapshot.elements.length,
+            truncated: snapshot.truncated || false,
+            viewport: snapshot.page.viewport,
+          };
+
+          response.appendResponseLine('\n## SVG Snapshot');
+          response.appendResponseLine('```json');
+          response.appendResponseLine(JSON.stringify(result, null, 2));
+          response.appendResponseLine('```');
+        }
         return;
       }
 
@@ -883,6 +936,49 @@ export const insertCss = defineTool({
       ),
     );
     response.appendResponseLine('```');
+
+    // Generate SVG snapshot if requested
+    if (request.params.includeSvgSnapshot !== false) {
+      const {captureWireframeSnapshot, renderSvgWireframe} =
+        await import('./wireframe.js');
+      const {output: snapshot} = await captureWireframeSnapshot(
+        {
+          params: {
+            includeComputedStyles: true,
+            stylePreset: 'standard',
+            coordinateSpace: 'viewport',
+            maxTotal: 50,
+          },
+        },
+        context,
+      );
+
+      const svg = renderSvgWireframe(snapshot, {
+        scale: 1,
+        background: 'transparent',
+        showLabels: true,
+        showDimensions: false,
+        showSpacing: false,
+        showOverlaps: false,
+        showGaps: false,
+        showClipping: false,
+        strokeWidth: 1,
+        fillOpacity: 0.08,
+        highlightChanged: false,
+      });
+
+      const result = {
+        svg: svg,
+        elementCount: snapshot.elements.length,
+        truncated: snapshot.truncated || false,
+        viewport: snapshot.page.viewport,
+      };
+
+      response.appendResponseLine('\n## SVG Snapshot');
+      response.appendResponseLine('```json');
+      response.appendResponseLine(JSON.stringify(result, null, 2));
+      response.appendResponseLine('```');
+    }
     }
   },
 });
@@ -1117,7 +1213,7 @@ export const rollbackPatch = defineTool({
 export const manipulateDom = defineTool({
   name: 'manipulate_dom',
   description:
-    'Perform DOM manipulations on web pages including setting styles, adding/removing classes, inserting/removing elements, replacing innerHTML, and batch operations. Also supports querying elements to retrieve their properties, styles, and other information.',
+    'Perform DOM manipulations on web pages including setting styles, adding/removing classes, inserting/removing elements, replacing innerHTML. Also supports querying elements to retrieve their properties, styles, and other information. For multiple operations, call this tool multiple times or use batch_ops. Supports array index notation in selectors (e.g., ".item[3]" selects the 4th matching element) to select nth element across all matches regardless of parent structure.',
   annotations: {
     category: ToolCategory.DEBUGGING,
     readOnlyHint: false,
@@ -1125,15 +1221,13 @@ export const manipulateDom = defineTool({
   schema: {
     // Single action mode
     action: zod
-      .enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html', 'replace-html', 'query'])
-      .optional()
-      .describe('Single DOM manipulation action to perform. Use "query" to retrieve element information without modifying the DOM.'),
+      .enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html', 'replace-html', 'replace-content', 'validate-structure', 'query'])
+      .describe('DOM manipulation action to perform. Use "query" to retrieve element information without modifying the DOM. Use "replace-content" for safer content replacement that preserves wrapper structure. Use "validate-structure" to check structure integrity.'),
 
     // Action parameters
     selector: zod
       .string()
-      .optional()
-      .describe('CSS selector to target elements for the action or query.'),
+      .describe('CSS selector to target elements for the action or query. Supports array index notation (e.g., ".item[3]") to select the nth element (0-based) from all matching elements, useful when elements are nested in different parent containers. Also supports :contains("text") pseudo-selector to match elements containing specific text content (case-sensitive).'),
 
     properties: zod
       .record(zod.string())
@@ -1148,12 +1242,30 @@ export const manipulateDom = defineTool({
     html: zod
       .string()
       .optional()
-      .describe('HTML content to insert for insert-html action, or to replace innerHTML for replace-html action.'),
+      .describe('HTML content to insert for insert-html action, to replace innerHTML for replace-html action, or to replace content for replace-content action.'),
 
     position: zod
       .enum(['beforebegin', 'afterbegin', 'beforeend', 'afterend'])
       .optional()
       .describe('Position for insert-html action relative to the selected element. Defaults to "beforeend".'),
+
+    preserveStructure: zod
+      .boolean()
+      .optional()
+      .describe('For replace-content action: if true, preserves wrapper structure by only replacing direct children/text nodes. Defaults to true if not specified.'),
+
+    required: zod
+      .object({
+        elements: zod.array(zod.string()).optional().describe('Required CSS selectors that must exist within the target structure.'),
+        classes: zod.array(zod.string()).optional().describe('Required CSS classes that must exist within the target structure.'),
+        count: zod.record(zod.object({
+          min: zod.number().optional(),
+          max: zod.number().optional(),
+          exact: zod.number().optional(),
+        })).optional().describe('Required element counts by selector (e.g., {".store-stack-item": {min: 3}}).'),
+      })
+      .optional()
+      .describe('For validate-structure action: requirements that must be met for structure to be considered valid.'),
 
     // Query parameters
     queryFields: zod
@@ -1161,19 +1273,45 @@ export const manipulateDom = defineTool({
       .optional()
       .describe('Fields to include in query results. If omitted, returns all available fields.'),
 
-    // Batch operations mode
-    operations: zod
-      .array(zod.object({
-        action: zod.enum(['set-style', 'add-class', 'remove-class', 'remove-element', 'insert-html', 'replace-html', 'query']).describe('DOM manipulation action. Use "query" to retrieve element information.'),
-        selector: zod.string().describe('CSS selector to target elements.'),
-        properties: zod.record(zod.string()).optional().describe('CSS properties for set-style action.'),
-        className: zod.string().optional().describe('CSS class name for add-class/remove-class actions.'),
-        html: zod.string().optional().describe('HTML content for insert-html or replace-html action.'),
-        position: zod.enum(['beforebegin', 'afterbegin', 'beforeend', 'afterend']).optional().describe('Position for insert-html action. Defaults to "beforeend". Not used for replace-html.'),
-        queryFields: zod.array(zod.enum(['tagName', 'id', 'className', 'textContent', 'innerHTML', 'attributes', 'computedStyles', 'boundingRect', 'classes'])).optional().describe('Fields to include in query results (for query action).'),
-      }))
+    // Text-based filtering (alternative to :contains() in selector)
+    checkIfElementContains: zod
+      .string()
       .optional()
-      .describe('Array of DOM operations to perform in batch.'),
+      .describe('Filter matching elements to only those whose text content includes this string. Works with any selector - applies text filter after selector matching. Case-sensitive by default.'),
+    
+    containsCaseSensitive: zod
+      .boolean()
+      .optional()
+      .describe('Whether checkIfElementContains search is case-sensitive. Defaults to true if not specified.'),
+
+    containsSearchIn: zod
+      .enum(['textContent', 'innerHTML', 'innerText'])
+      .optional()
+      .describe('Where to search for checkIfElementContains: "textContent", "innerHTML", or "innerText". Defaults to "textContent" if not specified.'),
+
+    // Get entire HTML document (for query action only)
+    getEntireHTMLDocument: zod
+      .object({
+        includeCSS: zod.boolean().optional().describe('Include all <style> tags and CSS patches. Defaults to true if not specified.'),
+        includeJS: zod.boolean().optional().describe('Include all <script> tags and JS patches. Defaults to true if not specified.'),
+        includePatches: zod.boolean().optional().describe('Include MCP-injected CSS/JS patches. Defaults to true if not specified.'),
+        format: zod.enum(['string', 'structured']).optional().describe('Return format: "string" (HTML string) or "structured" (parsed object). Defaults to "string" if not specified.'),
+      })
+      .optional()
+      .describe('Get the complete HTML document. Only valid for query action with selector "html". Returns full document including CSS/JS and patches.'),
+
+    // Rich response options (opt-in for enhanced responses)
+    responseOptions: zod
+      .object({
+        includeContext: zod.boolean().optional().describe('Include information about parent, siblings, and children elements. Defaults to false.'),
+        includeAlternatives: zod.boolean().optional().describe('Include alternative selectors that target the same element. Defaults to false.'),
+        includeHints: zod.boolean().optional().describe('Include hints and suggestions for next steps. Defaults to false.'),
+        includeResultingState: zod.boolean().optional().describe('Include resulting state after manipulation (computed styles, dimensions). Only for manipulation actions. Defaults to false.'),
+        maxContextDepth: zod.number().int().min(0).max(3).optional().describe('Maximum depth for context information (0-3). Higher values include more nested children. Defaults to 1.'),
+        maxAlternatives: zod.number().int().min(0).max(10).optional().describe('Maximum number of alternative selectors to return (0-10). Defaults to 5.'),
+      })
+      .optional()
+      .describe('Options to control response richness. All options default to false for backward compatibility. Enable specific features as needed.'),
 
     // Common options
     patchId: zod
@@ -1203,47 +1341,83 @@ export const manipulateDom = defineTool({
   handler: async (request, response, context) => {
     const page = context.getSelectedPage();
     const pageId = context.getPageId(page) ?? 0;
-    const { action, selector, properties, className, html, position, operations, patchId: requestedPatchId, description } = request.params;
+    const { 
+      action, 
+      selector, 
+      properties, 
+      className, 
+      html, 
+      position, 
+      preserveStructure, 
+      required, 
+      patchId: requestedPatchId, 
+      description,
+      checkIfElementContains,
+      containsCaseSensitive = true,
+      containsSearchIn = 'textContent',
+      getEntireHTMLDocument,
+      responseOptions,
+    } = request.params;
 
-    // Determine if we're in single action or batch mode
-    const isBatchMode = operations && operations.length > 0;
-    const isSingleMode = action && selector;
-
-    if (!isBatchMode && !isSingleMode) {
-      throw new Error('Either provide a single action with selector, or provide operations array for batch mode.');
+    if (!action || !selector) {
+      throw new Error('Both action and selector are required.');
     }
 
-    if (isBatchMode && isSingleMode) {
-      throw new Error('Cannot use both single action and batch operations. Choose one mode.');
-    }
-
-    // Prepare operations array
-    let domOperations: Array<{
+    // Prepare operations array (single operation)
+    type DomOperation = {
       action: string;
       selector: string;
       properties?: Record<string, string>;
       className?: string;
       html?: string;
       position?: string;
+      preserveStructure?: boolean;
+      required?: {
+        elements?: string[];
+        classes?: string[];
+        count?: Record<string, {min?: number; max?: number; exact?: number}>;
+      };
       queryFields?: string[];
-    }> = [];
+      checkIfElementContains?: string;
+      containsCaseSensitive?: boolean;
+      containsSearchIn?: 'textContent' | 'innerHTML' | 'innerText';
+      getEntireHTMLDocument?: {
+        includeCSS?: boolean;
+        includeJS?: boolean;
+        includePatches?: boolean;
+        format?: 'string' | 'structured';
+      };
+      responseOptions?: {
+        includeContext?: boolean;
+        includeAlternatives?: boolean;
+        includeHints?: boolean;
+        includeResultingState?: boolean;
+        maxContextDepth?: number;
+        maxAlternatives?: number;
+      };
+    };
+    
+    const domOperations: DomOperation[] = [{
+      action,
+      selector,
+      ...(properties !== undefined ? {properties} : {}),
+      ...(className !== undefined ? {className} : {}),
+      ...(html !== undefined ? {html} : {}),
+      ...(position !== undefined ? {position} : {}),
+      ...(preserveStructure !== undefined ? {preserveStructure} : {}),
+      ...(required !== undefined ? {required} : {}),
+      ...(request.params.queryFields !== undefined ? {queryFields: request.params.queryFields} : {}),
+      ...(checkIfElementContains !== undefined ? {
+        checkIfElementContains,
+        containsCaseSensitive,
+        containsSearchIn,
+      } : {}),
+      ...(getEntireHTMLDocument !== undefined ? {getEntireHTMLDocument} : {}),
+      ...(responseOptions !== undefined ? {responseOptions} : {}),
+    }];
 
-    if (isSingleMode) {
-      domOperations = [{
-        action,
-        selector,
-        properties,
-        className,
-        html,
-        position,
-        queryFields: request.params.queryFields,
-      }];
-    } else if (isBatchMode) {
-      domOperations = operations;
-    }
-
-    // Check if this is a query-only operation
-    const isQueryOnly = domOperations.every(op => op.action === 'query');
+    // Check if this is a query-only operation (query and validate-structure don't modify DOM)
+    const isQueryOnly = domOperations.every(op => op.action === 'query' || op.action === 'validate-structure');
 
     // Validate operations
     for (const op of domOperations) {
@@ -1258,6 +1432,12 @@ export const manipulateDom = defineTool({
       }
       if (op.action === 'replace-html' && !op.html) {
         throw new Error('replace-html action requires html parameter.');
+      }
+      if (op.action === 'replace-content' && !op.html) {
+        throw new Error('replace-content action requires html parameter.');
+      }
+      if (op.action === 'validate-structure' && !op.required) {
+        throw new Error('validate-structure action requires required parameter.');
       }
       // Query action doesn't require any additional parameters
     }
@@ -1292,6 +1472,88 @@ export const manipulateDom = defineTool({
           bottom: number;
         };
       };
+      // Rich response fields (opt-in)
+      context?: {
+        parent?: {
+          selector?: string;
+          tagName?: string;
+          className?: string;
+          id?: string;
+          computedStyles?: Record<string, string>;
+          attributes?: Record<string, string>;
+        };
+        siblings?: {
+          before?: Array<{
+            selector?: string;
+            tagName?: string;
+            textContent?: string;
+            className?: string;
+          }>;
+          after?: Array<{
+            selector?: string;
+            tagName?: string;
+            textContent?: string;
+            className?: string;
+          }>;
+          count?: number;
+        };
+        children?: {
+          direct?: Array<{
+            selector?: string;
+            tagName?: string;
+            className?: string;
+            textContent?: string;
+          }>;
+          count?: {
+            direct?: number;
+            total?: number;
+          };
+        };
+      };
+      alternativeSelectors?: Array<{
+        selector: string;
+        reason?: string;
+        confidence?: 'high' | 'medium' | 'low';
+        matches?: number;
+      }>;
+      hints?: {
+        nextSteps?: string[];
+        warnings?: string[];
+        bestPractices?: string[];
+      };
+      changes?: {
+        before?: Record<string, string>;
+        after?: Record<string, string>;
+      };
+      resultingState?: {
+        computedStyles?: Record<string, string>;
+        boundingRect?: {
+          width: number;
+          height: number;
+          x: number;
+          y: number;
+        };
+      };
+      document?: {
+        html?: string;
+        length?: number;
+        includes?: {
+          css?: boolean;
+          js?: boolean;
+          patches?: boolean;
+        };
+        statistics?: {
+          totalElements?: number;
+          styleTags?: number;
+          scriptTags?: number;
+          mcpPatches?: {
+            css?: number;
+            js?: number;
+          };
+        };
+      };
+      containsMatch?: boolean;
+      matchedText?: string;
     }
     interface DomManipulationEvalResult {
       patchId?: string;
@@ -1302,14 +1564,286 @@ export const manipulateDom = defineTool({
     }
 
     const result: DomManipulationEvalResult = await page.evaluate(
-      ({operations, patchId, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE, isQueryOnly}) => {
+      ({operations, patchId, PATCH_ID_ATTR, PATCH_OWNER_ATTR, PATCH_KIND_ATTR, PATCH_OWNER_VALUE, isQueryOnly}: {
+        operations: DomOperation[];
+        patchId: string;
+        PATCH_ID_ATTR: string;
+        PATCH_OWNER_ATTR: string;
+        PATCH_KIND_ATTR: string;
+        PATCH_OWNER_VALUE: string;
+        isQueryOnly: boolean;
+      }) => {
+        // Utility function to generate selector for an element
+        function generateSelectorForElement(el: HTMLElement): string {
+          if (el.id) {
+            return `#${el.id}`;
+          }
+          const classes = Array.from(el.classList);
+          if (classes.length > 0) {
+            return `.${classes.join('.')}`;
+          }
+          return el.tagName.toLowerCase();
+        }
+
+        // Utility function to get element context
+        function getElementContext(element: HTMLElement, maxDepth: number = 1): {
+          parent?: any;
+          siblings?: any;
+          children?: any;
+        } {
+          const context: any = {};
+          
+          // Parent context
+          if (element.parentElement) {
+            const parent = element.parentElement;
+            const parentStyles = window.getComputedStyle(parent);
+            context.parent = {
+              selector: generateSelectorForElement(parent),
+              tagName: parent.tagName.toLowerCase(),
+              className: parent.className || undefined,
+              id: parent.id || undefined,
+              computedStyles: {
+                display: parentStyles.display,
+                flexDirection: parentStyles.flexDirection,
+                gridTemplateColumns: parentStyles.gridTemplateColumns,
+              },
+            };
+          }
+          
+          // Siblings context
+          if (element.parentElement) {
+            const siblings = Array.from(element.parentElement.children) as HTMLElement[];
+            const elementIndex = siblings.indexOf(element);
+            const before = siblings.slice(0, elementIndex).slice(-3).map(s => ({
+              selector: generateSelectorForElement(s),
+              tagName: s.tagName.toLowerCase(),
+              textContent: (s.textContent || '').substring(0, 50),
+              className: s.className || undefined,
+            }));
+            const after = siblings.slice(elementIndex + 1).slice(0, 3).map(s => ({
+              selector: generateSelectorForElement(s),
+              tagName: s.tagName.toLowerCase(),
+              textContent: (s.textContent || '').substring(0, 50),
+              className: s.className || undefined,
+            }));
+            context.siblings = {
+              before: before.length > 0 ? before : undefined,
+              after: after.length > 0 ? after : undefined,
+              count: siblings.length - 1,
+            };
+          }
+          
+          // Children context (limited by maxDepth)
+          if (maxDepth > 0) {
+            const directChildren = Array.from(element.children).slice(0, 10) as HTMLElement[];
+            context.children = {
+              direct: directChildren.map(c => ({
+                selector: generateSelectorForElement(c),
+                tagName: c.tagName.toLowerCase(),
+                className: c.className || undefined,
+                textContent: (c.textContent || '').substring(0, 50),
+              })),
+              count: {
+                direct: element.children.length,
+                total: element.querySelectorAll('*').length,
+              },
+            };
+          }
+          
+          return context;
+        }
+
+        // Utility function to generate alternative selectors
+        function generateAlternativeSelectors(element: HTMLElement, baseSelector: string, maxAlternatives: number = 5): Array<{selector: string; reason: string; confidence: 'high' | 'medium' | 'low'; matches: number}> {
+          const alternatives: Array<{selector: string; reason: string; confidence: 'high' | 'medium' | 'low'; matches: number}> = [];
+          
+          // ID selector (highest confidence)
+          if (element.id) {
+            const idSelector = `#${element.id}`;
+            const matches = document.querySelectorAll(idSelector).length;
+            alternatives.push({
+              selector: idSelector,
+              reason: 'Uses element ID',
+              confidence: 'high',
+              matches,
+            });
+          }
+          
+          // Class-based selectors
+          const classes = Array.from(element.classList);
+          if (classes.length > 0) {
+            const classSelector = `.${classes.join('.')}`;
+            const matches = document.querySelectorAll(classSelector).length;
+            if (matches === 1) {
+              alternatives.push({
+                selector: classSelector,
+                reason: 'Unique class combination',
+                confidence: 'high',
+                matches,
+              });
+            }
+          }
+          
+          // Position-based selectors
+          if (element.parentElement) {
+            const siblings = Array.from(element.parentElement.children);
+            const index = siblings.indexOf(element);
+            if (index === 0) {
+              const firstChildSelector = `${baseSelector}:first-child`;
+              const matches = document.querySelectorAll(firstChildSelector).length;
+              alternatives.push({
+                selector: firstChildSelector,
+                reason: 'First child in parent',
+                confidence: 'medium',
+                matches,
+              });
+            }
+            if (index === siblings.length - 1) {
+              const lastChildSelector = `${baseSelector}:last-child`;
+              const matches = document.querySelectorAll(lastChildSelector).length;
+              alternatives.push({
+                selector: lastChildSelector,
+                reason: 'Last child in parent',
+                confidence: 'medium',
+                matches,
+              });
+            }
+          }
+          
+          // Data attribute selectors
+          const dataAttrs = Array.from(element.attributes).filter(attr => attr.name.startsWith('data-'));
+          for (const attr of dataAttrs.slice(0, 2)) {
+            const dataSelector = `[${attr.name}="${attr.value}"]`;
+            const matches = document.querySelectorAll(dataSelector).length;
+            if (matches === 1) {
+              alternatives.push({
+                selector: dataSelector,
+                reason: `Uses data attribute ${attr.name}`,
+                confidence: 'high',
+                matches,
+              });
+            }
+          }
+          
+          return alternatives.slice(0, maxAlternatives);
+        }
         const results = [];
         const executedOperations = [];
 
+        // Parse selector for array index notation (e.g., ".item[3]" selects 4th element)
+        // and :contains() pseudo-selector (e.g., ".item:contains('text')")
+        // This allows selecting nth element across all matches, regardless of parent structure
+        function parseSelectorWithIndex(selector: string): {baseSelector: string; index: number | null; containsText: string | null} {
+          // First, extract :contains() pseudo-selector if present
+          // Pattern: :contains("text") or :contains('text')
+          let containsText: string | null = null;
+          let baseSelector = selector;
+          
+          const containsMatch = selector.match(/:contains\(["']([^"']+)["']\)/);
+          if (containsMatch) {
+            containsText = containsMatch[1];
+            // Remove :contains() from selector
+            baseSelector = selector.replace(/:contains\(["'][^"']+["']\)/, '');
+          }
+          
+          // Match pattern: selector ending with [number] where number is a non-negative integer
+          // This is different from CSS attribute selectors which have values like [data-id="value"]
+          const arrayIndexMatch = baseSelector.match(/^(.+)\[(\d+)\]$/);
+          if (arrayIndexMatch) {
+            const finalBaseSelector = arrayIndexMatch[1];
+            const index = parseInt(arrayIndexMatch[2], 10);
+            return {baseSelector: finalBaseSelector, index, containsText};
+          }
+          return {baseSelector, index: null, containsText};
+        }
+        
+        // Filter elements by :contains() text if specified (from selector)
+        function filterByContains(elements: HTMLElement[], text: string | null): HTMLElement[] {
+          if (!text) return elements;
+          return elements.filter(el => {
+            const elementText = el.textContent || '';
+            return elementText.includes(text);
+          });
+        }
+
+        // Filter elements by checkIfElementContains parameter (separate from selector)
+        function filterByContainsParam(elements: HTMLElement[], text: string | null, caseSensitive: boolean, searchIn: 'textContent' | 'innerHTML' | 'innerText'): HTMLElement[] {
+          if (!text) return elements;
+          const searchText = caseSensitive ? text : text.toLowerCase();
+          return elements.filter(el => {
+            let elementText: string;
+            if (searchIn === 'innerHTML') {
+              elementText = el.innerHTML || '';
+            } else if (searchIn === 'innerText') {
+              elementText = el.innerText || '';
+            } else {
+              elementText = el.textContent || '';
+            }
+            const normalizedText = caseSensitive ? elementText : elementText.toLowerCase();
+            return normalizedText.includes(searchText);
+          });
+        }
+
         try {
-          for (const op of operations) {
-            const elements = Array.from(document.querySelectorAll(op.selector)) as HTMLElement[];
+          for (const op of operations as DomOperation[]) {
+            const {baseSelector, index, containsText} = parseSelectorWithIndex(op.selector);
+            let allElements = Array.from(document.querySelectorAll(baseSelector)) as HTMLElement[];
+            
+            // Filter by :contains() if specified in selector
+            allElements = filterByContains(allElements, containsText);
+            
+            // Filter by checkIfElementContains parameter if specified (separate from selector)
+            if (op.checkIfElementContains) {
+              const caseSensitive = op.containsCaseSensitive !== false; // Default true
+              const searchIn = op.containsSearchIn || 'textContent';
+              allElements = filterByContainsParam(allElements, op.checkIfElementContains, caseSensitive, searchIn);
+            }
+            
             const opResults = [];
+
+            // If array index notation is used, select only the element at that index
+            let elements: HTMLElement[];
+            if (index !== null) {
+              if (index < 0) {
+                opResults.push({
+                  selector: op.selector,
+                  found: false,
+                  action: op.action,
+                  message: `Invalid array index: ${index}. Index must be non-negative.`,
+                });
+                results.push(...opResults);
+                executedOperations.push(op);
+                continue;
+              }
+              if (index >= allElements.length) {
+                opResults.push({
+                  selector: op.selector,
+                  found: false,
+                  action: op.action,
+                  message: `Array index ${index} is out of bounds. Found ${allElements.length} element(s) matching "${baseSelector}".`,
+                });
+                results.push(...opResults);
+                executedOperations.push(op);
+                continue;
+              }
+              elements = [allElements[index]];
+            } else {
+              // Default to first match when multiple elements match (for non-query operations)
+              // This prevents unintended operations on multiple elements
+              if (op.action !== 'query' && op.action !== 'validate-structure' && allElements.length > 1) {
+                elements = [allElements[0]];
+                opResults.push({
+                  selector: op.selector,
+                  found: true,
+                  action: op.action,
+                  success: true,
+                  message: `⚠️ Warning: Selector matched ${allElements.length} elements. Applied operation to the first match only. Use array index notation (e.g., "${baseSelector}[0]" for first, "${baseSelector}[1]" for second) to target a specific element, or "${baseSelector}[${allElements.length - 1}]" for the last.`,
+                });
+              } else {
+                // For query operations or single matches, use all elements
+                elements = allElements;
+              }
+            }
 
             if (elements.length === 0) {
               opResults.push({
@@ -1321,6 +1855,8 @@ export const manipulateDom = defineTool({
             } else {
               for (let i = 0; i < elements.length; i++) {
                 const element = elements[i];
+                // When array index notation is used, preserve the original index
+                const originalIndex = index !== null ? index : (allElements.indexOf(element));
                 let success = true;
                 let message = '';
                 let elementData: DomManipulationOpResult['data'] | undefined;
@@ -1386,16 +1922,133 @@ export const manipulateDom = defineTool({
                         };
                       }
                       elementData = data;
+                      
+                      // Handle getEntireHTMLDocument for query action
+                      if (op.getEntireHTMLDocument && op.selector.toLowerCase() === 'html' && element === document.documentElement) {
+                        const includeCSS = op.getEntireHTMLDocument.includeCSS !== false;
+                        const includeJS = op.getEntireHTMLDocument.includeJS !== false;
+                        const includePatches = op.getEntireHTMLDocument.includePatches !== false;
+                        const format = op.getEntireHTMLDocument.format || 'string';
+                        
+                        if (format === 'string') {
+                          let html = document.documentElement.outerHTML;
+                          
+                          // Count elements
+                          const totalElements = document.querySelectorAll('*').length;
+                          const styleTags = document.querySelectorAll('style').length;
+                          const scriptTags = document.querySelectorAll('script').length;
+                          
+                          // Count patches if needed
+                          let cssPatches = 0;
+                          let jsPatches = 0;
+                          if (includePatches) {
+                            const patchElements = document.querySelectorAll(`[${PATCH_ID_ATTR}]`);
+                            for (const el of Array.from(patchElements)) {
+                              const kind = el.getAttribute(PATCH_KIND_ATTR);
+                              if (kind === 'css') cssPatches++;
+                              if (kind === 'js') jsPatches++;
+                            }
+                          }
+                          
+                          // If patches should be included but aren't in outerHTML, we'd need to append them
+                          // For now, we return the HTML as-is and note what's included
+                          // Store document info separately (will be added to opResult later)
+                          (elementData as any).__document = {
+                            html: html,
+                            length: html.length,
+                            includes: {
+                              css: includeCSS && styleTags > 0,
+                              js: includeJS && scriptTags > 0,
+                              patches: includePatches && (cssPatches > 0 || jsPatches > 0),
+                            },
+                            statistics: {
+                              totalElements,
+                              styleTags: includeCSS ? styleTags : 0,
+                              scriptTags: includeJS ? scriptTags : 0,
+                              mcpPatches: includePatches ? {
+                                css: cssPatches,
+                                js: jsPatches,
+                              } : undefined,
+                            },
+                          };
+                        }
+                        // TODO: structured format would require more complex parsing
+                      }
+                      
+                      // Track contains match if checkIfElementContains was used
+                      if (op.checkIfElementContains) {
+                        const caseSensitive = op.containsCaseSensitive !== false;
+                        const searchIn = op.containsSearchIn || 'textContent';
+                        let elementText: string;
+                        if (searchIn === 'innerHTML') {
+                          elementText = element.innerHTML || '';
+                        } else if (searchIn === 'innerText') {
+                          elementText = element.innerText || '';
+                        } else {
+                          elementText = element.textContent || '';
+                        }
+                        const searchText = caseSensitive ? op.checkIfElementContains : op.checkIfElementContains.toLowerCase();
+                        const matchText = caseSensitive ? elementText : elementText.toLowerCase();
+                        if (matchText.includes(searchText)) {
+                          (elementData as any).__containsMatch = true;
+                          (elementData as any).__matchedText = elementText.substring(0, 100);
+                        }
+                      }
+                      
                       break;
                     }
 
-                    case 'set-style':
+                    case 'set-style': {
+                      // Capture before state if responseOptions.includeResultingState is enabled
+                      let beforeState: Record<string, string> | undefined;
+                      if (op.responseOptions?.includeResultingState && op.properties) {
+                        const styles = window.getComputedStyle(element);
+                        beforeState = {};
+                        for (const prop of Object.keys(op.properties)) {
+                          beforeState[prop] = styles.getPropertyValue(prop) || '';
+                        }
+                      }
+                      
                       if (op.properties) {
                         for (const [prop, value] of Object.entries(op.properties)) {
                           element.style.setProperty(prop, value, 'important');
                         }
                       }
+                      
+                      // Capture after state if responseOptions.includeResultingState is enabled
+                      if (op.responseOptions?.includeResultingState && op.properties) {
+                        const styles = window.getComputedStyle(element);
+                        const afterState: Record<string, string> = {};
+                        for (const prop of Object.keys(op.properties)) {
+                          afterState[prop] = styles.getPropertyValue(prop) || '';
+                        }
+                        // Store changes and resulting state separately (will be added to opResult later)
+                        (elementData as any).__changes = {
+                          before: beforeState,
+                          after: afterState,
+                        };
+                        (elementData as any).__resultingState = {
+                          computedStyles: {
+                            ...Object.fromEntries(
+                              ['display', 'position', 'width', 'height', 'padding', 'margin', 'background'].map(p => [
+                                p,
+                                styles.getPropertyValue(p) || '',
+                              ])
+                            ),
+                          },
+                          boundingRect: (() => {
+                            const rect = element.getBoundingClientRect();
+                            return {
+                              width: rect.width,
+                              height: rect.height,
+                              x: rect.x,
+                              y: rect.y,
+                            };
+                          })(),
+                        };
+                      }
                       break;
+                    }
 
                     case 'add-class':
                       if (op.className) {
@@ -1426,6 +2079,96 @@ export const manipulateDom = defineTool({
                       }
                       break;
 
+                    case 'replace-content': {
+                      if (op.html !== undefined) {
+                        const preserve = op.preserveStructure !== false; // Default to true
+                        if (preserve) {
+                          // Preserve wrapper structure by only replacing direct children/text nodes
+                          // Remove all child nodes
+                          while (element.firstChild) {
+                            element.removeChild(element.firstChild);
+                          }
+                          // Insert new HTML as a fragment
+                          const temp = document.createElement('div');
+                          temp.innerHTML = op.html;
+                          while (temp.firstChild) {
+                            element.appendChild(temp.firstChild);
+                          }
+                        } else {
+                          // Fallback to innerHTML if preserveStructure is false
+                          element.innerHTML = op.html;
+                        }
+                      }
+                      break;
+                    }
+
+                    case 'validate-structure': {
+                      if (!op.required) {
+                        success = false;
+                        message = 'validate-structure action requires required parameter';
+                        break;
+                      }
+                      
+                      const validationResults: string[] = [];
+                      let isValid = true;
+                      
+                      // Check required elements
+                      if (op.required.elements) {
+                        for (const selector of op.required.elements) {
+                          const matches = element.querySelectorAll(selector);
+                          if (matches.length === 0) {
+                            validationResults.push(`Missing required element: "${selector}"`);
+                            isValid = false;
+                          }
+                        }
+                      }
+                      
+                      // Check required classes
+                      if (op.required.classes) {
+                        for (const className of op.required.classes) {
+                          const hasClass = element.classList.contains(className) || 
+                                         element.querySelector(`.${className}`) !== null;
+                          if (!hasClass) {
+                            validationResults.push(`Missing required class: "${className}"`);
+                            isValid = false;
+                          }
+                        }
+                      }
+                      
+                      // Check element counts
+                      if (op.required.count) {
+                        for (const [selector, constraints] of Object.entries(op.required.count)) {
+                          const matches = element.querySelectorAll(selector);
+                          const count = matches.length;
+                          
+                          if (constraints.exact !== undefined && count !== constraints.exact) {
+                            validationResults.push(`Selector "${selector}" matched ${count} elements, expected exactly ${constraints.exact}`);
+                            isValid = false;
+                          } else if (constraints.min !== undefined && count < constraints.min) {
+                            validationResults.push(`Selector "${selector}" matched ${count} elements, expected at least ${constraints.min}`);
+                            isValid = false;
+                          } else if (constraints.max !== undefined && count > constraints.max) {
+                            validationResults.push(`Selector "${selector}" matched ${count} elements, expected at most ${constraints.max}`);
+                            isValid = false;
+                          }
+                        }
+                      }
+                      
+                      success = isValid;
+                      message = isValid 
+                        ? 'Structure validation passed'
+                        : `Structure validation failed:\n${validationResults.join('\n')}`;
+                      
+                      elementData = {
+                        textContent: message,
+                        attributes: {
+                          'validation-result': isValid ? 'valid' : 'invalid',
+                          'validation-errors': validationResults.length.toString(),
+                        },
+                      };
+                      break;
+                    }
+
                     default:
                       success = false;
                       message = `Unknown action: ${op.action}`;
@@ -1437,15 +2180,113 @@ export const manipulateDom = defineTool({
 
                 const opResult: DomManipulationOpResult = {
                   selector: op.selector,
-                  elementIndex: i,
+                  elementIndex: originalIndex,
                   found: true,
                   action: op.action,
                   success,
                   message,
                 };
                 if (elementData) {
-                  opResult.data = elementData;
+                  // Extract special fields that should be on opResult, not data
+                  const {__document, __containsMatch, __matchedText, __changes, __resultingState, ...cleanData} = elementData as any;
+                  opResult.data = cleanData;
+                  
+                  // Move special fields to opResult
+                  if (__document) {
+                    opResult.document = __document;
+                  }
+                  if (__containsMatch !== undefined) {
+                    opResult.containsMatch = __containsMatch;
+                  }
+                  if (__matchedText) {
+                    opResult.matchedText = __matchedText;
+                  }
+                  if (__changes) {
+                    opResult.changes = __changes;
+                  }
+                  if (__resultingState) {
+                    opResult.resultingState = __resultingState;
+                  }
                 }
+                
+                // Add rich response data based on responseOptions
+                const respOpts = op.responseOptions;
+                if (respOpts) {
+                  // Context information
+                  if (respOpts.includeContext) {
+                    const maxDepth = respOpts.maxContextDepth || 1;
+                    opResult.context = getElementContext(element, maxDepth);
+                  }
+                  
+                  // Alternative selectors
+                  if (respOpts.includeAlternatives) {
+                    const maxAlternatives = respOpts.maxAlternatives || 5;
+                    opResult.alternativeSelectors = generateAlternativeSelectors(element, baseSelector, maxAlternatives);
+                  }
+                  
+                  // Hints
+                  if (respOpts.includeHints) {
+                    const hints: DomManipulationOpResult['hints'] = {
+                      nextSteps: [],
+                      warnings: [],
+                      bestPractices: [],
+                    };
+                    
+                    // Add warnings for multiple matches
+                    if (allElements.length > 1 && op.action !== 'query') {
+                      hints.warnings?.push(
+                        `Selector matched ${allElements.length} elements. Operation was applied to the first match only. Use array index notation (e.g., "${baseSelector}[0]" for first, "${baseSelector}[1]" for second) to target a specific element.`
+                      );
+                    }
+                    
+                    // Add next steps based on action
+                    if (op.action === 'query') {
+                      hints.nextSteps?.push('Query sibling elements to understand layout structure');
+                      hints.nextSteps?.push('Check parent element for layout constraints (flex/grid)');
+                    } else if (op.action === 'set-style') {
+                      hints.nextSteps?.push('Consider checking if parent container needs height constraints');
+                      const parent = element.parentElement;
+                      if (parent) {
+                        const parentStyles = window.getComputedStyle(parent);
+                        if (parentStyles.display === 'flex') {
+                          hints.nextSteps?.push('Parent uses flexbox - consider flex-direction and flex properties');
+                        }
+                      }
+                    }
+                    
+                    // Best practices
+                    hints.bestPractices?.push('Use data attributes (data-*) for stable selectors in dynamic layouts');
+                    hints.bestPractices?.push('Prefer semantic selectors over positional (:nth-child)');
+                    if (!element.id) {
+                      hints.bestPractices?.push('Consider adding an ID for frequently accessed elements');
+                    }
+                    
+                    opResult.hints = hints;
+                  }
+                  
+                  // For manipulation actions, include resulting state if not already included
+                  if (respOpts.includeResultingState && op.action !== 'query' && !opResult.resultingState) {
+                    const styles = window.getComputedStyle(element);
+                    const rect = element.getBoundingClientRect();
+                    opResult.resultingState = {
+                      computedStyles: {
+                        display: styles.display,
+                        position: styles.position,
+                        width: styles.width,
+                        height: styles.height,
+                        padding: styles.padding,
+                        margin: styles.margin,
+                      },
+                      boundingRect: {
+                        width: rect.width,
+                        height: rect.height,
+                        x: rect.x,
+                        y: rect.y,
+                      },
+                    };
+                  }
+                }
+                
                 opResults.push(opResult);
               }
             }
@@ -1525,11 +2366,37 @@ export const manipulateDom = defineTool({
 
     if (isQueryOnly) {
       const queryOps = result.operations.filter(op => op.action === 'query');
+      const validateOps = result.operations.filter(op => op.action === 'validate-structure');
       const foundCount = queryOps.filter(op => op.found).length;
       const totalElements = queryOps.reduce((sum, op) => sum + (op.elementIndex !== undefined ? 1 : 0), 0);
-      response.appendResponseLine(`Query completed: ${foundCount}/${queryOps.length} selector(s) matched elements (${totalElements} total elements found)`);
+      if (queryOps.length > 0) {
+        response.appendResponseLine(`Query completed: ${foundCount}/${queryOps.length} selector(s) matched elements (${totalElements} total elements found)`);
+        
+        // Add summary for checkIfElementContains if used
+        if (checkIfElementContains) {
+          const containsOps = queryOps.filter(op => op.containsMatch === true);
+          if (containsOps.length > 0) {
+            response.appendResponseLine(`Text filter "${checkIfElementContains}": ${containsOps.length} element(s) matched both selector and text content`);
+          } else {
+            response.appendResponseLine(`Text filter "${checkIfElementContains}": No elements matched the text filter`);
+          }
+        }
+      }
+      if (validateOps.length > 0) {
+        const validCount = validateOps.filter(op => op.success === true).length;
+        response.appendResponseLine(`Structure validation completed: ${validCount}/${validateOps.length} validation(s) passed`);
+      }
     } else {
       response.appendResponseLine(`DOM manipulation completed: ${successfulOps}/${totalOps} operations successful`);
+    }
+
+    // Show warnings for multiple element matches
+    const warnings = result.operations.filter(op => op.message && op.message.includes('⚠️ Warning: Selector matched'));
+    if (warnings.length > 0) {
+      response.appendResponseLine(`\n⚠️  Warning: ${warnings.length} selector(s) matched multiple elements:`);
+      for (const op of warnings) {
+        response.appendResponseLine(`  - "${op.selector}": ${op.message}`);
+      }
     }
 
     if (result.operations.some(op => op.found === false)) {

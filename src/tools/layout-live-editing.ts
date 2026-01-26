@@ -12,6 +12,13 @@ import {ToolCategory} from './categories.js';
 import {defineTool, type Context, type Response} from './ToolDefinition.js';
 import {rollbackPatch} from './mutation.js';
 import {svgSnapshotLiveEditing, wireframeSnapshotLiveEditing} from './wireframe.js';
+import {recipeRegistry} from './recipes/index.js';
+import {
+  lengthSchema,
+  normalizeLength,
+  escapeHtml,
+  convertItemsForAllRowsToRows,
+} from './recipes/utils.js';
 
 // Debug logging helper
 const DEBUG_LOG_PATH = path.join(process.cwd(), '.cursor', 'debug.log');
@@ -61,15 +68,14 @@ type RenderedComposition = {
   componentMap?: ComponentMap;
 };
 
-const lengthSchema = zod
-  .union([zod.number(), zod.string()])
-  .describe('CSS length (number interpreted as px) or token string (e.g., "1fr", "0.5rem").');
-
+// Schemas are imported from ./recipes/utils.js for basic types
+// We extend them here to support composition (needs access to compositionSchemaWithStringSupport)
 const offsetVectorSchema = zod.object({
   x: lengthSchema.optional().describe('Horizontal offset.'),
   y: lengthSchema.optional().describe('Vertical offset.'),
 });
 
+// Extended contentItemSchema with composition support (for use in layout-live-editing.ts)
 const contentItemSchema: zod.ZodTypeAny = zod.union([
   zod.string().describe('Shorthand content label/string.'),
   zod.object({
@@ -136,16 +142,19 @@ const gridOverlayLayerSchema: zod.ZodTypeAny = zod.object({
   zIndex: zod.number().int().optional().describe('Optional z-index for the layer.'),
 });
 
-const layoutParametricGridSchema: zod.ZodTypeAny = zod.object({
-  rows: zod.array(gridRowSchema).min(1).describe('Grid rows definition.'),
+// Base schema without refinements (for merging)
+const layoutParametricGridSchemaBase = zod.object({
+  rows: zod.array(gridRowSchema).min(1).optional().describe('Grid rows definition. Either rows or itemsForAllRows must be provided.'),
+  itemsForAllRows: zod.array(contentItemSchema).min(1).optional().describe('Flat array of items for all rows (row-major order). Requires columnCount. Either rows or itemsForAllRows must be provided.'),
   columnCount: zod
     .number()
     .int()
     .positive()
     .optional()
-    .describe('Explicit column count for all rows (prevents implicit wrapping).'),
+    .describe('Explicit column count for all rows (prevents implicit wrapping). Required when using itemsForAllRows.'),
   unit: lengthSchema.optional().describe('Base unit size (e.g., "1fr").'),
-  gap: lengthSchema.optional().describe('Default gap within each row.'),
+  gap: lengthSchema.optional().describe('Shorthand: sets both columnGap and rowGap to the same value.'),
+  columnGap: lengthSchema.optional().describe('Gap between columns (within each row).'),
   rowGap: lengthSchema.optional().describe('Gap between rows.'),
   rowHeight: lengthSchema.optional().describe('Fixed row height for all rows.'),
   rowMinHeight: lengthSchema.optional().describe('Minimum row height for all rows.'),
@@ -158,6 +167,19 @@ const layoutParametricGridSchema: zod.ZodTypeAny = zod.object({
     .optional()
     .describe('Optional overlay layers (e.g., piano black keys).'),
 });
+
+// Schema with refinements (for validation)
+const layoutParametricGridSchema: zod.ZodTypeAny = layoutParametricGridSchemaBase.refine(
+  (data) => Boolean(data.rows) !== Boolean(data.itemsForAllRows),
+  {
+    message: 'Either rows or itemsForAllRows must be provided, but not both.',
+  }
+).refine(
+  (data) => !data.itemsForAllRows || (data.columnCount !== undefined && data.columnCount > 0),
+  {
+    message: 'columnCount is required when using itemsForAllRows and must be a positive integer.',
+  }
+);
 
 const layoutParametricStackSchema: zod.ZodTypeAny = zod.object({
   direction: zod
@@ -238,6 +260,50 @@ const behaviorSchema = zod.discriminatedUnion('type', [
   }),
 ]);
 
+/**
+ * Converts flattened behavior parameters to the internal behaviors array format.
+ * This allows users to use simpler flat parameters instead of nested discriminated unions.
+ */
+function convertFlattenedBehaviorsToArray(params: any): BehaviorSpec[] {
+  const behaviors: BehaviorSpec[] = [];
+  
+  // Convert ariaPattern (string) to behavior_aria_pattern
+  if (params.ariaPattern) {
+    behaviors.push({
+      type: 'behavior_aria_pattern',
+      params: { pattern: params.ariaPattern },
+    });
+  }
+  
+  // Convert selectable (object) to behavior_selectable
+  if (params.selectable) {
+    behaviors.push({
+      type: 'behavior_selectable',
+      params: params.selectable,
+    });
+  }
+  
+  // Convert rovingFocus (object) to behavior_roving_focus
+  if (params.rovingFocus) {
+    behaviors.push({
+      type: 'behavior_roving_focus',
+      params: params.rovingFocus,
+    });
+  }
+  
+  // Convert dragResize (object) to behavior_drag_resize
+  if (params.dragResize) {
+    behaviors.push({
+      type: 'behavior_drag_resize',
+      params: params.dragResize,
+    });
+  }
+  
+  return behaviors;
+}
+
+// convertItemsForAllRowsToRows is imported from ./recipes/utils.js
+
 const componentParametricViewerSchema: zod.ZodTypeAny = zod.object({
   variant: zod
     .enum(['tabs', 'carousel'])
@@ -276,22 +342,37 @@ const componentParametricViewerSchema: zod.ZodTypeAny = zod.object({
 });
 
 compositionSchema = zod.discriminatedUnion('type', [
-  zod.object({
+  layoutParametricGridSchemaBase.extend({
     type: zod.literal('layout_parametric_grid'),
-  }).merge(layoutParametricGridSchema as any).extend({
     behaviors: zod.array(behaviorSchema).optional(),
-  }) as any,
-  zod.object({
+  }),
+  (layoutParametricStackSchema as zod.ZodObject<any>).extend({
     type: zod.literal('layout_parametric_stack'),
-  }).merge(layoutParametricStackSchema as any).extend({
     behaviors: zod.array(behaviorSchema).optional(),
-  }) as any,
-  zod.object({
+  }),
+  (componentParametricViewerSchema as zod.ZodObject<any>).extend({
     type: zod.literal('component_parametric_viewer'),
-  }).merge(componentParametricViewerSchema as any).extend({
     behaviors: zod.array(behaviorSchema).optional(),
-  }) as any,
-]);
+  }),
+]).superRefine((data, ctx) => {
+  // Apply grid-specific refinements
+  if (data.type === 'layout_parametric_grid') {
+    if (Boolean(data.rows) === Boolean(data.itemsForAllRows)) {
+      ctx.addIssue({
+        code: zod.ZodIssueCode.custom,
+        message: 'Either rows or itemsForAllRows must be provided, but not both.',
+        path: [],
+      });
+    }
+    if (data.itemsForAllRows && (data.columnCount === undefined || data.columnCount <= 0)) {
+      ctx.addIssue({
+        code: zod.ZodIssueCode.custom,
+        message: 'columnCount is required when using itemsForAllRows and must be a positive integer.',
+        path: [],
+      });
+    }
+  }
+});
 
 // Helper function to format Zod error paths for better readability
 function formatZodErrorPath(path: (string | number)[]): string {
@@ -341,6 +422,35 @@ function formatCompositionValidationError(error: zod.ZodError): string {
         message += '\n  Expected: array of overlay layer objects with "items" field';
       } else if (lastPath === 'items' && issue.code === zod.ZodIssueCode.invalid_type) {
         message += '\n  Expected: array of item objects or strings';
+      }
+      
+      // Special handling for behaviors validation errors
+      const pathStr = issue.path.join('.');
+      if (pathStr.includes('behaviors')) {
+        // Check if this is a discriminated union error
+        if (issue.path.length >= 2 && issue.path[issue.path.length - 2] === 'behaviors') {
+          const behaviorIndex = issue.path[issue.path.length - 2];
+          const fieldName = issue.path[issue.path.length - 1];
+          
+          if (fieldName === 'type' || fieldName === 'params') {
+            message += '\n\n  💡 TIP: The behaviors array uses a discriminated union structure which can be complex.';
+            message += '\n  Consider using flattened parameters instead:';
+            message += '\n  - ariaPattern: "tabs" (instead of behaviors with behavior_aria_pattern)';
+            message += '\n  - selectable: { multiSelect: false } (instead of behaviors with behavior_selectable)';
+            message += '\n  - rovingFocus: { axis: "x" } (instead of behaviors with behavior_roving_focus)';
+            message += '\n  - dragResize: { axis: "x" } (instead of behaviors with behavior_drag_resize)';
+            message += '\n\n  Example of correct behaviors array format:';
+            message += '\n  {';
+            message += '\n    "behaviors": [';
+            message += '\n      { "type": "behavior_aria_pattern", "params": { "pattern": "tabs" } }';
+            message += '\n    ]';
+            message += '\n  }';
+            message += '\n\n  Example using flattened format (recommended):';
+            message += '\n  {';
+            message += '\n    "ariaPattern": "tabs"';
+            message += '\n  }';
+          }
+        }
       }
     }
     
@@ -422,16 +532,15 @@ composition
 5. Using overlay_grid recipe (recommended for overlays):
 {
   "recipe": "overlay_grid",
-  "recipeParams": {
-    "rows": [
-      { "items": ["C", "D", "E", "F", "G", "A", "B"] }
-    ],
-    "layers": [
-      {
-        "items": ["C#", "D#", "F#", "G#", "A#"],
-        "offset": { "x": "0.5fr", "y": "0px" }
-      }
-    ],
+  "rows": [
+    { "items": ["C", "D", "E", "F", "G", "A", "B"] }
+  ],
+  "layers": [
+    {
+      "items": ["C#", "D#", "F#", "G#", "A#"],
+      "offset": { "x": "0.5fr", "y": "0px" }
+    }
+  ],
     "columnCount": 7
   }
 }`;
@@ -681,18 +790,12 @@ const verifySchema = zod.object({
     .describe('If true, capture a wireframe snapshot after applying.'),
   svgSnapshot: zod
     .boolean()
+    .default(true)
     .optional()
-    .describe('If true, capture an SVG wireframe snapshot after applying.'),
+    .describe('If true, capture an SVG wireframe snapshot after applying. Defaults to true for visual confirmation of layout changes.'),
 });
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
+// escapeHtml is imported from ./recipes/utils.js
 
 function extractCssVariables(cssText: string, selector: string, prefix: string): string[] {
   const variables = new Set<string>();
@@ -713,10 +816,7 @@ function extractCssVariables(cssText: string, selector: string, prefix: string):
   return Array.from(variables).sort();
 }
 
-function normalizeLength(value: number | string | undefined): string | undefined {
-  if (value === undefined) {return undefined;}
-  return typeof value === 'number' ? `${value}px` : value;
-}
+// normalizeLength is imported from ./recipes/utils.js
 
 function parseUnitOffset(offset: number | string | undefined): number | null {
   if (offset === undefined) {return null;}
@@ -1037,10 +1137,15 @@ function summarizeRecipeSchema(schema: zod.ZodTypeAny): Record<string, {type: st
   );
 }
 
+// Convert camelCase CSS property names to kebab-case
+function camelToKebab(str: string): string {
+  return str.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
 function buildInlineStyle(style?: Record<string, string>): string {
   if (!style) {return '';}
   const entries = Object.entries(style)
-    .map(([key, value]) => `${key}:${value}`)
+    .map(([key, value]) => `${camelToKebab(key)}:${value}`)
     .join(';');
   return entries ? ` style="${escapeHtml(entries)}"` : '';
 }
@@ -1104,7 +1209,7 @@ function buildGridRowHtml(
 } {
   const spans = normalizeSpans(row.spans, row.items.length, `row ${rowIndex}`);
   const offsetUnits = parseUnitOffset(row.offset);
-  const rowGap = normalizeLength(row.gap ?? defaultGap);
+  const columnGap = normalizeLength(row.gap ?? defaultGap);
   const totalUnits =
     spans.reduce((acc: number, span: number) => acc + (Number.isFinite(span) ? span : 1), 0) +
     (offsetUnits ? Math.ceil(offsetUnits) : 0);
@@ -1112,7 +1217,7 @@ function buildGridRowHtml(
   const rowStyles: string[] = [];
   const nestedCss: string[] = [];
   const nestedBehaviors: BehaviorSpec[] = [];
-  if (rowGap) {rowStyles.push(`gap: ${rowGap};`);}
+  if (columnGap) {rowStyles.push(`gap: ${columnGap};`);}
   if (options?.rowHeight) {rowStyles.push(`height: ${options.rowHeight};`);}
   if (options?.rowMinHeight) {rowStyles.push(`min-height: ${options.rowMinHeight};`);}
   if (row.offset && offsetUnits === null) {
@@ -1268,7 +1373,7 @@ function buildGridOverlayHtml(
 
 function buildGridLayout(params: LayoutGridParams, prefix: string, componentMap?: ComponentMap): RenderedComposition {
   const unit = normalizeLength(params.unit) ?? '1fr';
-  const baseGap = normalizeLength(params.gap);
+  const columnGap = normalizeLength((params as any).columnGap ?? params.gap);
   const rowGap = normalizeLength(params.rowGap ?? params.gap) ?? '0.75rem';
   const rowHeight = normalizeLength(params.rowHeight);
   const rowMinHeight = normalizeLength(params.rowMinHeight) ?? '56px';
@@ -1280,7 +1385,7 @@ function buildGridLayout(params: LayoutGridParams, prefix: string, componentMap?
   let maxRowUnits = 1;
   params.rows.forEach((row: GridRow, index: number) => {
     const {html, rowCss, nestedCss: nestedRowCss, nestedBehaviors: nestedRowBehaviors, totalUnits} =
-      buildGridRowHtml(row, prefix, index, unit, baseGap, {
+      buildGridRowHtml(row, prefix, index, unit, columnGap, {
         rowHeight,
         rowMinHeight,
         rowLayout,
@@ -1410,17 +1515,45 @@ function buildStackLayout(
       const fixedSize = normalizeLength((resolved as any).size);
       const minSize = normalizeLength((resolved as any).minSize);
       const maxSize = normalizeLength((resolved as any).maxSize);
+      const style = resolved.style ?? {};
+      
+      // For flex layouts, if width/height is specified in style, use it for flex-basis
+      // This ensures proper flex behavior (e.g., sidebar with fixed width in row layout)
+      let flexBasisFromStyle: string | undefined;
+      if (!fixedSize) {
+        if (direction === 'row' && style.width) {
+          flexBasisFromStyle = normalizeLength(style.width);
+        } else if (direction === 'column' && style.height) {
+          flexBasisFromStyle = normalizeLength(style.height);
+        }
+      }
+      
       const flex = fixedSize
         ? `flex:0 0 ${fixedSize};`
-        : resolved.span
-          ? `flex:${resolved.span} 1 0;`
-          : '';
-      const style = resolved.style ?? {};
+        : flexBasisFromStyle
+          ? `flex:0 0 ${flexBasisFromStyle};`
+          : resolved.span
+            ? `flex:${resolved.span} 1 0;`
+            : 'flex:1 1 0;'; // Default to flex-grow to fill remaining space when no size is specified
+      
       const sizing =
         direction === 'row'
           ? `${minSize ? `min-width:${minSize};` : ''}${maxSize ? `max-width:${maxSize};` : ''}`
           : `${minSize ? `min-height:${minSize};` : ''}${maxSize ? `max-height:${maxSize};` : ''}`;
-      const styleString = `${flex}${sizing}${Object.entries(style).map(([k, v]) => `${k}:${v}`).join(';')}`;
+      
+      // Build style string, excluding width/height if we used them for flex-basis
+      // (to avoid redundant CSS properties)
+      const styleEntries = Object.entries(style).filter(([k]) => {
+        if (direction === 'row' && k === 'width' && flexBasisFromStyle) {
+          return false; // Already handled by flex-basis
+        }
+        if (direction === 'column' && k === 'height' && flexBasisFromStyle) {
+          return false; // Already handled by flex-basis
+        }
+        return true;
+      });
+      
+      const styleString = `${flex}${sizing}${styleEntries.map(([k, v]) => `${camelToKebab(k)}:${v}`).join(';')}`;
       const styleAttr = styleString ? ` style="${escapeHtml(styleString)}"` : '';
       if (rendered.css) {nestedCss.push(rendered.css);}
       if (rendered.behaviors.length) {nestedBehaviors.push(...rendered.behaviors);}
@@ -1429,13 +1562,13 @@ function buildStackLayout(
     .join('\n');
 
   const html = `
-    <div class="${prefix}-stack" data-le-layout="stack">
+    <div class="${prefix}-stack" data-le-layout="stack" data-le-direction="${direction}">
       ${itemsHtml}
     </div>
   `;
 
   const css = `
-    .${prefix}-stack{display:flex;flex-direction:${direction};gap:${gap};align-items:${align};justify-content:${justify};flex-wrap:${params.wrap ? 'wrap' : 'nowrap'};}
+    .${prefix}-stack[data-le-direction="${direction}"]{display:flex;flex-direction:${direction};gap:${gap};align-items:${align};justify-content:${justify};flex-wrap:${params.wrap ? 'wrap' : 'nowrap'};}
     .${prefix}-stack-item{min-width:0;min-height:0;}
   `;
 
@@ -2084,107 +2217,7 @@ export const componentRegistry = {
   },
 } as const;
 
-export const recipeRegistry = {
-  selectable_view: {
-    name: 'selectable_view',
-    description: 'Generic selectable view (tabs/carousel-like) with accessibility behaviors.',
-    schema: zod.object({
-      items: zod
-        .array(
-          zod.object({
-            label: zod.string(),
-            content: zod.string(),
-          }),
-        )
-        .min(1),
-      orientation: zod.enum(['horizontal', 'vertical']).optional(),
-      variant: zod.enum(['tabs', 'carousel']).optional(),
-      showControls: zod.boolean().optional(),
-      showIndicators: zod.boolean().optional(),
-    }),
-  },
-  parametric_grid: {
-    name: 'parametric_grid',
-    description: 'Generic grid layout recipe with rows/spans/gaps.',
-    schema: zod.object({
-      rows: zod.array(gridRowSchema).min(1),
-      columnCount: zod.number().int().positive().optional(),
-      unit: lengthSchema.optional(),
-      gap: lengthSchema.optional(),
-      rowGap: lengthSchema.optional(),
-      rowHeight: lengthSchema.optional(),
-      rowMinHeight: lengthSchema.optional(),
-      rowLayout: zod.enum(['grid', 'flex']).optional(),
-    }),
-  },
-  overlay_grid: {
-    name: 'overlay_grid',
-    description: 'Generic grid layout with overlay layers.',
-    schema: zod.object({
-      rows: zod.array(gridRowSchema).min(1),
-      layers: zod.array(gridOverlayLayerSchema).optional(),
-      columnCount: zod.number().int().positive().optional(),
-      unit: lengthSchema.optional(),
-      gap: lengthSchema.optional(),
-      rowGap: lengthSchema.optional(),
-      rowHeight: lengthSchema.optional(),
-      rowMinHeight: lengthSchema.optional(),
-      rowLayout: zod.enum(['grid', 'flex']).optional(),
-    }),
-  },
-  app_shell: {
-    name: 'app_shell',
-    description: 'Generic app shell with header/side/main regions.',
-    schema: zod.object({
-      headerHeight: lengthSchema.optional(),
-      sidebarWidth: lengthSchema.optional(),
-      showFooter: zod.boolean().optional(),
-      footerHeight: lengthSchema.optional(),
-      minHeight: lengthSchema.optional(),
-    }),
-  },
-  two_column: {
-    name: 'two_column',
-    description: 'Two-column layout with sidebar and main content.',
-    schema: zod.object({
-      sidebarWidth: lengthSchema.optional(),
-      minHeight: lengthSchema.optional(),
-    }),
-  },
-  three_panel: {
-    name: 'three_panel',
-    description: 'Three-panel layout with nav, content, inspector.',
-    schema: zod.object({
-      navWidth: lengthSchema.optional(),
-      inspectorWidth: lengthSchema.optional(),
-      minHeight: lengthSchema.optional(),
-    }),
-  },
-  toolbar: {
-    name: 'toolbar',
-    description: 'Generic toolbar with grouped buttons.',
-    schema: zod.object({
-      groups: zod
-        .array(
-          zod.object({
-            label: zod.string().optional(),
-            items: zod.array(zod.string()).min(1),
-          }),
-        )
-        .min(1),
-    }),
-  },
-  grid_canvas: {
-    name: 'grid_canvas',
-    description: 'Grid-based canvas for timeline/piano-roll style layouts.',
-    schema: zod.object({
-      rows: zod.number().int().positive(),
-      columns: zod.number().int().positive(),
-      cellSize: lengthSchema.optional(),
-      showGrid: zod.boolean().optional(),
-    }),
-  },
-} as const;
+// Recipe registry is now imported from ./recipes/index.js
 
 export const layoutLiveEditingRecipeCatalogSchema = {
   recipe: recipeNameSchema.optional().describe('Optional recipe name to filter results.'),
@@ -2213,7 +2246,8 @@ export async function layoutLiveEditingRecipeCatalogHandler(
 export const layoutLiveEditing = defineTool({
   name: 'layout_live_editing',
   description:
-    'Generate a parametric layout in the live browser using layout atoms, behavior modules, and component compositions. Use either a recipe (preset) or one of the flattened composition parameters: parametric_grid, parametric_stack, or component_parametric_viewer.',
+    'Generate a parametric layout in the live browser using layout atoms, behavior modules, and component compositions. Use either a recipe (preset) or one of the flattened composition parameters: parametric_grid, parametric_stack, or component_parametric_viewer.\n\n' +
+    '**SVG Snapshots:** By default, this tool includes an SVG wireframe snapshot after applying layout changes (via `verify.svgSnapshot`, which defaults to `true`) to provide visual confirmation of the created or modified layout. Set `verify: { svgSnapshot: false }` to disable.',
   annotations: {
     category: ToolCategory.PATCH,
     readOnlyHint: false,
@@ -2230,20 +2264,45 @@ export const layoutLiveEditing = defineTool({
       .object(layoutLiveEditingRecipeCatalogSchema as Record<string, any>)
       .optional()
       .describe('List layout_live_editing recipes and summarize their parameter schemas.'),
-    recipe: recipeNameSchema.optional().describe('Named recipe/preset to use.'),
-    recipeParams: zod
-      .record(zod.any())
-      .optional()
-      .describe('Parameters for the selected recipe.'),
+    recipe: recipeNameSchema.optional().describe('Named recipe/preset to use. When using a recipe, pass its parameters directly at the top level (not nested in recipeParams).'),
+    // Recipe parameters are flattened to top level - all optional
+    rows: zod.any().optional().describe('Recipe parameter: rows array (for parametric_grid, overlay_grid, grid_canvas).'),
+    itemsForAllRows: zod.any().optional().describe('Recipe parameter: flat array of items for all rows (for parametric_grid, requires columnCount).'),
+    columnCount: zod.any().optional().describe('Recipe parameter: column count (for parametric_grid, overlay_grid).'),
+    unit: zod.any().optional().describe('Recipe parameter: unit (for parametric_grid, overlay_grid).'),
+    gap: zod.any().optional().describe('Recipe parameter: gap shorthand - sets both columnGap and rowGap (for parametric_grid, overlay_grid).'),
+    columnGap: zod.any().optional().describe('Recipe parameter: column gap (for parametric_grid, overlay_grid).'),
+    rowGap: zod.any().optional().describe('Recipe parameter: row gap (for parametric_grid, overlay_grid).'),
+    rowHeight: zod.any().optional().describe('Recipe parameter: row height (for parametric_grid, overlay_grid).'),
+    rowMinHeight: zod.any().optional().describe('Recipe parameter: row min height (for parametric_grid, overlay_grid).'),
+    rowLayout: zod.any().optional().describe('Recipe parameter: row layout (for parametric_grid, overlay_grid).'),
+    layers: zod.any().optional().describe('Recipe parameter: overlay layers (for overlay_grid).'),
+    items: zod.any().optional().describe('Recipe parameter: items array (for selectable_view).'),
+    orientation: zod.any().optional().describe('Recipe parameter: orientation (for selectable_view).'),
+    variant: zod.any().optional().describe('Recipe parameter: variant (for selectable_view).'),
+    showControls: zod.any().optional().describe('Recipe parameter: show controls (for selectable_view).'),
+    showIndicators: zod.any().optional().describe('Recipe parameter: show indicators (for selectable_view).'),
+    headerHeight: zod.any().optional().describe('Recipe parameter: header height (for app_shell).'),
+    sidebarWidth: zod.any().optional().describe('Recipe parameter: sidebar width (for app_shell, two_column).'),
+    showFooter: zod.any().optional().describe('Recipe parameter: show footer (for app_shell).'),
+    footerHeight: zod.any().optional().describe('Recipe parameter: footer height (for app_shell).'),
+    minHeight: zod.any().optional().describe('Recipe parameter: min height (for app_shell, two_column, three_panel).'),
+    navWidth: zod.any().optional().describe('Recipe parameter: nav width (for three_panel).'),
+    inspectorWidth: zod.any().optional().describe('Recipe parameter: inspector width (for three_panel).'),
+    groups: zod.any().optional().describe('Recipe parameter: groups array (for toolbar).'),
+    columns: zod.any().optional().describe('Recipe parameter: columns (for grid_canvas).'),
+    cellSize: zod.any().optional().describe('Recipe parameter: cell size (for grid_canvas).'),
+    showGrid: zod.any().optional().describe('Recipe parameter: show grid (for grid_canvas).'),
     parametric_grid: layoutParametricGridSchema
       .optional()
       .describe(
         'Create a parametric grid layout. ' +
-        'Required: rows (array of row objects with items). ' +
-        'Optional: columnCount (number), gap (string), rowGap (string), unit (string), ' +
+        'Required: either rows (array of row objects with items) or itemsForAllRows (flat array of items, requires columnCount). ' +
+        'Optional: columnCount (number, required with itemsForAllRows), gap (string, shorthand for both columnGap and rowGap), columnGap (string), rowGap (string), unit (string), ' +
         'rowHeight (string), rowMinHeight (string), rowLayout ("grid"|"flex"), ' +
         'layers (array of overlay layers). ' +
-        'Example: { rows: [{ items: ["A", "B", "C"] }, { items: ["D", "E"] }], columnCount: 3, gap: "8px" }',
+        'Example with rows: { rows: [{ items: ["A", "B", "C"] }, { items: ["D", "E"] }], columnCount: 3, gap: "8px" } ' +
+        'Example with itemsForAllRows: { itemsForAllRows: ["A", "B", "C", "D", "E"], columnCount: 3, columnGap: "8px", rowGap: "4px" }',
       ),
     parametric_stack: layoutParametricStackSchema
       .optional()
@@ -2264,10 +2323,72 @@ export const layoutLiveEditing = defineTool({
         'showControls (boolean), showIndicators (boolean), ariaLabel (string). ' +
         'Example: { variant: "tabs", items: [{ label: "Tab 1", content: "<p>Content 1</p>" }] }',
       ),
+    ariaPattern: zod
+      .enum(['tabs', 'listbox', 'menu', 'grid', 'toolbar', 'radiogroup'])
+      .optional()
+      .describe(
+        'ARIA pattern to apply (flattened alternative to behaviors array). ' +
+        'Example: "tabs" for tab navigation pattern. ' +
+        'This is easier to use than the nested behaviors array format.',
+      ),
+    selectable: zod
+      .object({
+        multiSelect: zod.boolean().optional().describe('Allow multiple selections.'),
+        defaultSelectedIndex: zod
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('Index of the initially selected item.'),
+        onActivate: zod
+          .string()
+          .optional()
+          .describe('Action identifier to invoke when an item is activated.'),
+      })
+      .optional()
+      .describe(
+        'Selection behavior (flattened alternative to behaviors array). ' +
+        'Example: { multiSelect: false, defaultSelectedIndex: 0 }',
+      ),
+    rovingFocus: zod
+      .object({
+        axis: zod
+          .enum(['x', 'y', 'both'])
+          .optional()
+          .describe('Arrow-key navigation axis.'),
+        loop: zod
+          .boolean()
+          .optional()
+          .describe('Wrap focus at the ends of the list.'),
+      })
+      .optional()
+      .describe(
+        'Roving focus behavior (flattened alternative to behaviors array). ' +
+        'Example: { axis: "x", loop: true }',
+      ),
+    dragResize: zod
+      .object({
+        axis: zod
+          .enum(['x', 'y', 'both'])
+          .optional()
+          .describe('Resize axis for drag handles.'),
+        minSize: lengthSchema.optional().describe('Minimum size for resizable panes.'),
+        maxSize: lengthSchema.optional().describe('Maximum size for resizable panes.'),
+        handleSize: lengthSchema.optional().describe('Size of drag handle.'),
+      })
+      .optional()
+      .describe(
+        'Drag-to-resize behavior (flattened alternative to behaviors array). ' +
+        'Example: { axis: "x", minSize: "100px", maxSize: "500px" }',
+      ),
     behaviors: zod
       .array(behaviorSchema)
       .optional()
-      .describe('Top-level behaviors to attach to the composition.'),
+      .describe(
+        'Top-level behaviors to attach to the composition (legacy format). ' +
+        'For easier use, prefer flattened parameters: ariaPattern, selectable, rovingFocus, dragResize. ' +
+        'Both formats can be used together - flattened params are converted first, then array behaviors are added.',
+      ),
     theme: themeSchema.optional(),
     patch: patchSchema.optional(),
     verify: verifySchema.optional(),
@@ -2286,7 +2407,7 @@ export const layoutLiveEditing = defineTool({
     const hasComposition = Boolean(parametricGrid || parametricStack || componentViewer);
     
     if (!hasRecipe && !hasComposition) {
-      throw new Error('Provide either recipe (with recipeParams) or one of: parametric_grid, parametric_stack, component_parametric_viewer.');
+      throw new Error('Provide either recipe (with flattened parameters) or one of: parametric_grid, parametric_stack, component_parametric_viewer.');
     }
 
     if (hasComposition) {
@@ -2303,9 +2424,19 @@ export const layoutLiveEditing = defineTool({
         let compositionToValidate: any;
         
         if (parametricGrid) {
+          // Convert itemsForAllRows to rows if provided
+          const gridParams = {...parametricGrid};
+          if (gridParams.itemsForAllRows) {
+            gridParams.rows = convertItemsForAllRowsToRows(
+              gridParams.itemsForAllRows,
+              gridParams.columnCount,
+            );
+            // Remove itemsForAllRows from params since we've converted it to rows
+            delete gridParams.itemsForAllRows;
+          }
           compositionToValidate = {
             type: 'layout_parametric_grid',
-            ...parametricGrid,
+            ...gridParams,
           };
         } else if (parametricStack) {
           compositionToValidate = {
@@ -2356,258 +2487,58 @@ export const layoutLiveEditing = defineTool({
     const cssPatchId = `${patchIdPrefix}-css`;
     const jsPatchId = `${patchIdPrefix}-js`;
     const replaceExisting = patch.replaceExisting ?? false;
-    const cssMode = patch.cssMode ?? (replaceExisting ? 'replace' : 'append');
+    // Default to 'merge' for safer CSS updates (preserves existing styles)
+    // Only use 'replace' if explicitly requested via replaceExisting: true
+    const cssMode = patch.cssMode ?? (replaceExisting ? 'replace' : 'merge');
     const recordToSession = patch.recordToSession ?? false;
     const editSessionId = patch.editSessionId;
+
+    // Helper function to extract recipe parameters from top-level params
+    const extractRecipeParams = (): Record<string, any> => {
+      const knownParams = new Set([
+        'target', 'root', 'mode', 'catalog', 'recipe',
+        'parametric_grid', 'parametric_stack', 'component_parametric_viewer',
+        'behaviors', 'ariaPattern', 'selectable', 'rovingFocus', 'dragResize',
+        'theme', 'patch', 'verify'
+      ]);
+      const recipeParams: Record<string, any> = {};
+      for (const [key, value] of Object.entries(request.params)) {
+        if (!knownParams.has(key) && value !== undefined) {
+          recipeParams[key] = value;
+        }
+      }
+      return recipeParams;
+    };
 
     if (hasRecipe && request.params.recipe) {
       const registry = recipeRegistry[request.params.recipe];
       if (!registry) {
         throw new Error(`Unknown recipe: ${request.params.recipe}`);
       }
-      if (request.params.recipeParams) {
-        const parsed = registry.schema.safeParse(request.params.recipeParams);
-        if (!parsed.success) {
-          throw new Error(`Invalid recipeParams for ${request.params.recipe}: ${parsed.error.message}`);
-        }
+      const recipeParams = extractRecipeParams();
+      const parsed = registry.schema.safeParse(recipeParams);
+      if (!parsed.success) {
+        throw new Error(`Invalid parameters for recipe ${request.params.recipe}: ${parsed.error.message}`);
       }
     }
 
     // Use validated composition (already parsed and validated above)
     let resolvedComposition = validatedComposition;
-    let resolvedBehaviors = request.params.behaviors ?? [];
+    
+    // Convert flattened behavior parameters to behaviors array format
+    const flattenedBehaviors = convertFlattenedBehaviorsToArray(request.params);
+    const arrayBehaviors = request.params.behaviors ?? [];
+    let resolvedBehaviors = [...flattenedBehaviors, ...arrayBehaviors];
 
     if (request.params.recipe) {
-      const recipeParams = (request.params.recipeParams ?? {}) as Record<string, any>;
-      switch (request.params.recipe) {
-        case 'selectable_view':
-          resolvedComposition = {
-            type: 'component_parametric_viewer',
-            items: recipeParams.items ?? [],
-            orientation: recipeParams.orientation,
-            variant: recipeParams.variant,
-            showControls: recipeParams.showControls,
-            showIndicators: recipeParams.showIndicators,
-            behaviors: [],
-          };
-          resolvedBehaviors = [
-            {type: 'behavior_selectable', params: {multiSelect: false}},
-            {
-              type: 'behavior_roving_focus',
-              params: {axis: recipeParams.orientation === 'vertical' ? 'y' : 'x'},
-            },
-            {type: 'behavior_aria_pattern', params: {pattern: 'tabs'}},
-            ...resolvedBehaviors,
-          ];
-          break;
-        case 'parametric_grid':
-          resolvedComposition = {
-            type: 'layout_parametric_grid',
-            rows: recipeParams.rows ?? [],
-            columnCount: recipeParams.columnCount,
-            unit: recipeParams.unit,
-            gap: recipeParams.gap,
-            rowGap: recipeParams.rowGap,
-            rowHeight: recipeParams.rowHeight,
-            rowMinHeight: recipeParams.rowMinHeight,
-            rowLayout: recipeParams.rowLayout,
-            behaviors: [],
-          };
-          break;
-        case 'overlay_grid':
-          resolvedComposition = {
-            type: 'layout_parametric_grid',
-            rows: recipeParams.rows ?? [],
-            layers: recipeParams.layers ?? [],
-            columnCount: recipeParams.columnCount,
-            unit: recipeParams.unit,
-            gap: recipeParams.gap,
-            rowGap: recipeParams.rowGap,
-            rowHeight: recipeParams.rowHeight,
-            rowMinHeight: recipeParams.rowMinHeight,
-            rowLayout: recipeParams.rowLayout,
-            behaviors: [],
-          };
-          break;
-        case 'app_shell': {
-          const headerHeight = recipeParams.headerHeight ?? '56px';
-          const sidebarWidth = recipeParams.sidebarWidth ?? '240px';
-          const showFooter = recipeParams.showFooter ?? false;
-          const footerHeight = recipeParams.footerHeight ?? '48px';
-          const minHeight = recipeParams.minHeight ?? '420px';
-          const footer = showFooter
-            ? {
-                composition: {
-                  type: 'layout_parametric_stack',
-                  direction: 'row',
-                  items: ['Footer'],
-                },
-                style: {height: String(footerHeight)},
-                className: `${prefix}-util-panel`,
-              }
-            : null;
-          resolvedComposition = {
-            type: 'layout_parametric_stack',
-            direction: 'column',
-            items: [
-              {
-                composition: {
-                  type: 'layout_parametric_stack',
-                  direction: 'row',
-                  items: ['Header'],
-                },
-                style: {height: String(headerHeight)},
-                className: `${prefix}-util-panel`,
-              },
-              {
-                composition: {
-                  type: 'layout_parametric_stack',
-                  direction: 'row',
-                  items: [
-                    {
-                      composition: {
-                        type: 'layout_parametric_stack',
-                        direction: 'column',
-                        items: ['Sidebar'],
-                      },
-                      style: {width: String(sidebarWidth)},
-                      className: `${prefix}-util-panel`,
-                    },
-                    {
-                      composition: {
-                        type: 'layout_parametric_stack',
-                        direction: 'column',
-                        items: ['Main'],
-                      },
-                      className: `${prefix}-util-panel`,
-                    },
-                  ],
-                },
-                style: {minHeight: String(minHeight)},
-              },
-              ...(footer ? [footer] : []),
-            ],
-          };
-          break;
-        }
-        case 'two_column': {
-          const sidebarWidth = recipeParams.sidebarWidth ?? '280px';
-          const minHeight = recipeParams.minHeight ?? '360px';
-          resolvedComposition = {
-            type: 'layout_parametric_stack',
-            direction: 'row',
-            items: [
-              {
-                composition: {
-                  type: 'layout_parametric_stack',
-                  direction: 'column',
-                  items: ['Sidebar'],
-                },
-                style: {width: String(sidebarWidth)},
-                className: `${prefix}-util-panel`,
-              },
-              {
-                composition: {
-                  type: 'layout_parametric_stack',
-                  direction: 'column',
-                  items: ['Main'],
-                },
-                style: {minHeight: String(minHeight)},
-                className: `${prefix}-util-panel`,
-              },
-            ],
-          };
-          break;
-        }
-        case 'three_panel': {
-          const navWidth = recipeParams.navWidth ?? '220px';
-          const inspectorWidth = recipeParams.inspectorWidth ?? '280px';
-          const minHeight = recipeParams.minHeight ?? '360px';
-          resolvedComposition = {
-            type: 'layout_parametric_stack',
-            direction: 'row',
-            items: [
-              {
-                composition: {
-                  type: 'layout_parametric_stack',
-                  direction: 'column',
-                  items: ['Nav'],
-                },
-                style: {width: String(navWidth)},
-                className: `${prefix}-util-panel`,
-              },
-              {
-                composition: {
-                  type: 'layout_parametric_stack',
-                  direction: 'column',
-                  items: ['Content'],
-                },
-                style: {minHeight: String(minHeight)},
-                className: `${prefix}-util-panel`,
-              },
-              {
-                composition: {
-                  type: 'layout_parametric_stack',
-                  direction: 'column',
-                  items: ['Inspector'],
-                },
-                style: {width: String(inspectorWidth)},
-                className: `${prefix}-util-panel`,
-              },
-            ],
-          };
-          break;
-        }
-        case 'toolbar': {
-          const groups = Array.isArray(recipeParams.groups) ? recipeParams.groups : [];
-          resolvedComposition = {
-            type: 'layout_parametric_stack',
-            direction: 'row',
-            items: groups.map((group: any) => ({
-              composition: {
-                type: 'layout_parametric_stack',
-                direction: 'row',
-                items: (group.items ?? []).map((label: string) => ({
-                  label,
-                  content: escapeHtml(label),
-                  className: `${prefix}-util-btn`,
-                })),
-              },
-              className: `${prefix}-util-toolbar-group`,
-            })),
-          };
-          break;
-        }
-        case 'grid_canvas': {
-          const rows = Math.max(1, Number(recipeParams.rows ?? 8));
-          const columns = Math.max(1, Number(recipeParams.columns ?? 16));
-          const cellSize = normalizeLength(recipeParams.cellSize ?? 24) ?? '24px';
-          const showGrid = recipeParams.showGrid ?? true;
-          const rowItems = Array.from({length: columns}, (_, i) => ({
-            content: '',
-            className: showGrid ? `${prefix}-util-muted` : '',
-            style: showGrid
-              ? {
-                  borderRight: `1px solid var(--${prefix}-border)`,
-                  borderBottom: `1px solid var(--${prefix}-border)`,
-                  minHeight: cellSize,
-                }
-              : {minHeight: cellSize},
-          }));
-          const rowsDef = Array.from({length: rows}, () => ({
-            items: rowItems,
-          }));
-          resolvedComposition = {
-            type: 'layout_parametric_grid',
-            rows: rowsDef,
-            unit: cellSize,
-            gap: 0,
-          };
-          break;
-        }
-        default:
-          throw new Error(`Unknown recipe: ${request.params.recipe}`);
+      const recipeParams = extractRecipeParams();
+      const recipe = recipeRegistry[request.params.recipe];
+      if (!recipe) {
+        throw new Error(`Unknown recipe: ${request.params.recipe}`);
       }
+      const result = recipe.execute(recipeParams, prefix);
+      resolvedComposition = result.composition;
+      resolvedBehaviors = [...result.behaviors, ...resolvedBehaviors];
     }
 
     if (!resolvedComposition) {
@@ -2738,6 +2669,7 @@ export const layoutLiveEditing = defineTool({
     const baseCss = `
       .${prefix}-selected{outline:2px solid var(--${prefix}-accent);outline-offset:2px;}
       .${prefix}-root{color:var(--${prefix}-text);}
+      .${prefix}-nested{display:contents;}
       .${prefix}-util-panel{background:var(--${prefix}-surface);border:var(--${prefix}-border-width,1px) solid var(--${prefix}-border);border-radius:var(--${prefix}-radius,6px);box-shadow:var(--${prefix}-shadow);padding:0.5rem;}
       .${prefix}-util-toolbar{display:flex;align-items:center;gap:0.5rem;}
       .${prefix}-util-toolbar-group{display:flex;align-items:center;gap:0.35rem;}
@@ -2977,8 +2909,25 @@ export const layoutLiveEditing = defineTool({
     );
 
     if (!domResult.success && domResult.reason === 'patch_exists' && !replaceExisting) {
+      // Get information about the existing patch for better messaging
+      const existingPatch = context.getPatch(domPatchId);
+      const patchInfo = existingPatch
+        ? ` (created ${new Date(existingPatch.createdAt).toLocaleString()}${existingPatch.description ? `: ${existingPatch.description}` : ''})`
+        : '';
       response.appendResponseLine(
-        `DOM patch skipped (patch exists): ${domPatchId}. Use replaceExisting to overwrite.`,
+        `⚠️ **DOM patch skipped**: Patch \`${domPatchId}\` already exists${patchInfo}.`,
+      );
+      response.appendResponseLine(
+        `💡 **Options**:`,
+      );
+      response.appendResponseLine(
+        `   - Use \`patch: { replaceExisting: true }\` to overwrite the existing patch`,
+      );
+      response.appendResponseLine(
+        `   - Use a different \`patchIdPrefix\` to create a new patch`,
+      );
+      response.appendResponseLine(
+        `   - The existing patch will remain unchanged and the operation was skipped`,
       );
     } else if (!domResult.success) {
       throw new Error(`Failed to insert DOM: ${domResult.reason ?? 'unknown error'}`);
@@ -3201,10 +3150,22 @@ export const layoutLiveEditing = defineTool({
     }
 
     if (request.params.verify?.wireframeSnapshot) {
-      await wireframeSnapshotLiveEditing.handler({params: {} as any}, response, context);
+      await wireframeSnapshotLiveEditing.handler({
+        params: {
+          maxTotal: undefined, // Unlimited for complete verification
+        }
+      }, response, context);
     }
-    if (request.params.verify?.svgSnapshot) {
-      await svgSnapshotLiveEditing.handler({params: {} as any}, response, context);
+    // Default to true if not explicitly set to false
+    // If verify is not provided at all, or svgSnapshot is not explicitly false, capture snapshot
+    const shouldCaptureSvg = request.params.verify === undefined || 
+                             request.params.verify.svgSnapshot !== false;
+    if (shouldCaptureSvg) {
+      await svgSnapshotLiveEditing.handler({
+        params: {
+          maxTotal: undefined, // Unlimited for complete verification
+        }
+      }, response, context);
     }
 
     if (mode === 'preview') {

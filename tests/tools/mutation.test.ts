@@ -145,7 +145,7 @@ describe('mutation', () => {
       });
     });
 
-    it('batch operations', async () => {
+    it('multiple operations', async () => {
       await withMcpContext(async (response, context) => {
         const page = await context.newPage();
         await page.setContent(html`
@@ -155,27 +155,42 @@ describe('mutation', () => {
           </div>
         `);
 
+        // First operation: set style
         await manipulateDom.handler(
           {
             params: {
-              operations: [
-                {
-                  action: 'set-style',
-                  selector: '.item',
-                  properties: { 'color': 'blue' },
-                },
-                {
-                  action: 'add-class',
-                  selector: '.container',
-                  className: 'processed',
-                },
-                {
-                  action: 'insert-html',
-                  selector: '.container',
-                  html: '<div class="footer">Footer</div>',
-                  position: 'beforeend',
-                },
-              ],
+              action: 'set-style',
+              selector: '.item',
+              properties: { 'color': 'blue' },
+            },
+          },
+          response,
+          context,
+        );
+
+        // Second operation: add class
+        response.resetResponseLineForTesting();
+        await manipulateDom.handler(
+          {
+            params: {
+              action: 'add-class',
+              selector: '.container',
+              className: 'processed',
+            },
+          },
+          response,
+          context,
+        );
+
+        // Third operation: insert HTML
+        response.resetResponseLineForTesting();
+        await manipulateDom.handler(
+          {
+            params: {
+              action: 'insert-html',
+              selector: '.container',
+              html: '<div class="footer">Footer</div>',
+              position: 'beforeend',
             },
           },
           response,
@@ -245,6 +260,88 @@ describe('mutation', () => {
           },
           /set-style action requires properties parameter/,
         );
+      });
+    });
+
+    it('supports array index notation for selecting nth element across parents', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = await context.newPage();
+        // Create a structure where items are nested in different parent rows
+        // This simulates the dashboard grid scenario
+        await page.setContent(html`
+          <div class="dashboard-grid-row">
+            <div class="dashboard-grid-item">Item 1</div>
+            <div class="dashboard-grid-item">Item 2</div>
+          </div>
+          <div class="dashboard-grid-row">
+            <div class="dashboard-grid-item">Item 3</div>
+            <div class="dashboard-grid-item">Item 4</div>
+          </div>
+          <div class="dashboard-grid-row">
+            <div class="dashboard-grid-item">Item 5</div>
+            <div class="dashboard-grid-item">Item 6</div>
+          </div>
+        `);
+
+        // Use array index notation to select the 4th item (index 3)
+        await manipulateDom.handler(
+          {
+            params: {
+              action: 'set-style',
+              selector: '.dashboard-grid-item[3]',
+              properties: {
+                'color': 'red',
+              },
+            },
+          },
+          response,
+          context,
+        );
+
+        // Verify the 4th item (Item 4) has the style applied
+        const item4Color = await page.evaluate(() => {
+          const items = Array.from(document.querySelectorAll('.dashboard-grid-item'));
+          const item4 = items[3] as HTMLElement;
+          return window.getComputedStyle(item4).color;
+        });
+        assert.strictEqual(item4Color, 'rgb(255, 0, 0)');
+
+        // Verify other items don't have the style
+        const item1Color = await page.evaluate(() => {
+          const items = Array.from(document.querySelectorAll('.dashboard-grid-item'));
+          const item1 = items[0] as HTMLElement;
+          return window.getComputedStyle(item1).color;
+        });
+        assert.notStrictEqual(item1Color, 'rgb(255, 0, 0)');
+      });
+    });
+
+    it('handles out of bounds array index gracefully', async () => {
+      await withMcpContext(async (response, context) => {
+        const page = await context.newPage();
+        await page.setContent(html`
+          <div class="item">Item 1</div>
+          <div class="item">Item 2</div>
+        `);
+
+        await manipulateDom.handler(
+          {
+            params: {
+              action: 'set-style',
+              selector: '.item[5]',
+              properties: {
+                'color': 'red',
+              },
+            },
+          },
+          response,
+          context,
+        );
+
+        // Should not throw, and response should indicate index out of bounds
+        assert(response.responseLines.length > 0);
+        const responseText = response.responseLines.join('\n');
+        assert(responseText.includes('out of bounds'));
       });
     });
   });

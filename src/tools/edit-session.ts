@@ -56,7 +56,7 @@ export const beginEditSession = defineTool({
     // Return AI instructions for live editing mode
     response.appendResponseLine('\n**AI instructions:** The chat is now in live editing mode. This mode is about editing exclusively in the browser, navigated with _page tools. Do not make any files. Do not make any file edits until the user finalizes by saying something sounding like `commit_edit_session_to_files`.  After you receive this, affirm it to the user in the chat that you won\'t.\n');
     response.appendResponseLine('Here are the tools to use during the session that let you prototype, fix, and edit live:\n');
-    response.appendResponseLine('- **`live_editing_session`** - Minimal session lifecycle tool (begin/edit/export) that wraps: begin live editing, export prototype state, export/commit/clear edit sessions.\n');
+    response.appendResponseLine('- **`live_editing_session`** - Minimal session lifecycle tool (begin/edit/export/commit/clear) that wraps: begin live editing, export prototype state, export/commit/clear edit sessions.\n');
     response.appendResponseLine('- **`batch_ops`** - Execute multiple tool operations in a single call to reduce round-trips. Supports sequential execution and returns structured results for observability. Use this to chain multiple operations efficiently.\n');
     response.appendResponseLine('- **`insert_css`** - Insert a `<style>` tag into the current page with a patch id for later rollback. Supports preview mode for testing multiple CSS values with visual wireframe feedback, responsive breakpoints, and before/after comparisons. Can optionally return wireframe results as SVG or JSON.\n');
     response.appendResponseLine('- **`insert_js`** - Insert a `<script>` tag into the current page with a patch id for later rollback. Supports preview mode for testing multiple script variants with visual wireframe feedback, responsive breakpoints, and before/after comparisons. Can optionally return wireframe results as SVG or JSON. Note: rollback removes script tags but cannot reliably undo side-effects like DOM mutations, timers, or event listeners.\n');
@@ -738,12 +738,16 @@ export const liveEditingSession = defineTool({
   name: 'live_editing_session',
   description:
     'Minimal session lifecycle tool for the Live Editing Minimal workflow.\n\n' +
-    'Use exactly one of: `begin`, `edit`, `export`, or `interact`.\n\n' +
+    'Use exactly one of: `begin`, `export_prototype_state`, `annotate`, `edit`, `export_edit_session`, `commit_edit_session_to_files`, `clear_edit_session`, or `interact`.\n\n' +
     '- `begin`: start a live editing session (wraps `begin_live_editing_session`).\n' +
-    '- `edit`: session-adjacent utilities (export prototype state, or post AI annotations).\n' +
+    '- `export_prototype_state`: export prototype state (flattened, recommended).\n' +
+    '- `annotate`: post AI annotations (flattened, recommended).\n' +
+    '- `edit`: session-adjacent utilities (legacy format with discriminated union).\n' +
     '  - `edit.action` must be one of: `export_prototype_state` or `annotate`.\n' +
-    '- `export`: export/commit/clear session data (wraps `export_edit_session`, `commit_edit_session_to_files`, `clear_edit_session`).\n' +
-    '  - `export.action` must be one of: `export_edit_session`, `commit_edit_session_to_files`, or `clear_edit_session`.\n' +
+    '  - For easier use, prefer flattened parameters: `export_prototype_state` or `annotate`.\n' +
+    '- `export_edit_session`: export session to JSON file.\n' +
+    '- `commit_edit_session_to_files`: commit recorded changes to local files.\n' +
+    '- `clear_edit_session`: clear session from memory.\n' +
     '- `questionnaire` or `plans_notification`: gather information or notify user of plans via interactive forms.\n\n' +
     '**Note on batch calls:** When using `batch_ops` or making batch tool calls, use `functions.<tool_name>` exactly (no double namespace). For example: `functions.live_editing_session`, not `functions.functions.live_editing_session`.',
   annotations: {
@@ -757,11 +761,76 @@ export const liveEditingSession = defineTool({
       .describe(
         'Begin a live editing session (opens a URL, optionally injects overlay, optionally creates an edit session).',
       ),
+    export_prototype_state: zod
+      .object({
+        outputDir: zod
+          .string()
+          .optional()
+          .describe('Optional output directory. If omitted, a temporary directory is created.'),
+        baseName: zod
+          .string()
+          .optional()
+          .default('prototype')
+          .describe('Base filename used for outputs (e.g. prototype.html).'),
+        mode: zod
+          .enum(['single_html', 'split_files'] as ['single_html', 'split_files'])
+          .optional()
+          .default('single_html')
+          .describe(
+            'Export mode. `single_html` writes one self-contained HTML file. `split_files` writes index.html + styles.css + app.js (exporting only MCP-injected patches into the CSS/JS files).',
+          ),
+        includeExternal: zod
+          .boolean()
+          .optional()
+          .default(true)
+          .describe('If true, keep existing external <link> and <script src> references in the exported HTML.'),
+      })
+      .optional()
+      .describe(
+        'Export prototype state (flattened alternative to edit parameter). ' +
+        'Example: { outputDir: "/tmp", baseName: "prototype", mode: "single_html" }',
+      ),
+    annotate: zod
+      .object({
+        selector: zod.string().describe('CSS selector for the element to annotate.'),
+        text: zod.string().describe('Annotation text.'),
+        type: zod
+          .enum(['note', 'change', 'warning', 'info'])
+          .default('info')
+          .optional()
+          .describe('Type of annotation.'),
+      })
+      .optional()
+      .describe(
+        'Post an AI annotation to explain a change (flattened alternative to edit parameter). ' +
+        'Users can respond with their own notes. ' +
+        'Example: { selector: ".header", text: "Updated header styling", type: "change" }',
+      ),
     edit: zod
       .discriminatedUnion('action', [
         zod.object({
           action: zod.literal('export_prototype_state'),
-          ...(exportPrototypeState.schema as Record<string, any>),
+          outputDir: zod
+            .string()
+            .optional()
+            .describe('Optional output directory. If omitted, a temporary directory is created.'),
+          baseName: zod
+            .string()
+            .optional()
+            .default('prototype')
+            .describe('Base filename used for outputs (e.g. prototype.html).'),
+          mode: zod
+            .enum(['single_html', 'split_files'] as ['single_html', 'split_files'])
+            .optional()
+            .default('single_html')
+            .describe(
+              'Export mode. `single_html` writes one self-contained HTML file. `split_files` writes index.html + styles.css + app.js (exporting only MCP-injected patches into the CSS/JS files).',
+            ),
+          includeExternal: zod
+            .boolean()
+            .optional()
+            .default(true)
+            .describe('If true, keep existing external <link> and <script src> references in the exported HTML.'),
         }),
         zod.object({
           action: zod.literal('annotate'),
@@ -772,25 +841,43 @@ export const liveEditingSession = defineTool({
       ])
       .optional()
       .describe(
-        'Session-adjacent operations during iteration (e.g. export prototype state or post AI annotations).',
+        'Session-adjacent operations during iteration (legacy format). ' +
+        'For easier use, prefer flattened parameters: export_prototype_state, annotate. ' +
+        'Both formats can be used together - flattened params are processed first, then edit parameter is processed.',
       ),
-    export: zod
-      .discriminatedUnion('action', [
-        zod.object({
-          action: zod.literal('export_edit_session'),
-          ...(exportEditSession.schema as Record<string, any>),
-        }),
-        zod.object({
-          action: zod.literal('commit_edit_session_to_files'),
-          ...(commitEditSessionToFiles.schema as Record<string, any>),
-        }),
-        zod.object({
-          action: zod.literal('clear_edit_session'),
-          ...(clearEditSession.schema as Record<string, any>),
-        }),
-      ])
+    export_edit_session: zod
+      .object({
+        sessionId: zod.string().optional().describe('Optional session id. If omitted, exports the active session.'),
+        filePath: zod.string().optional().describe('Optional output path. If omitted, writes to a temporary file.'),
+      })
       .optional()
-      .describe('Export/commit/clear session state. This is the explicit write/export step.'),
+      .describe('Export an edit session to a JSON file.'),
+    commit_edit_session_to_files: zod
+      .object({
+        sessionId: zod.string().optional().describe('Optional session id. If omitted, commits the active session.'),
+        rootDir: zod
+          .string()
+          .optional()
+          .describe(
+            'Safety root directory. All writes must stay within this directory. Defaults to the server process working directory.',
+          ),
+        skipIfAlreadyApplied: zod
+          .boolean()
+          .optional()
+          .default(true)
+          .describe(
+            'If true, skips appending chunks that appear to already be present in the target file (best-effort marker check).',
+          ),
+        dryRun: zod.boolean().optional().default(false).describe('If true, do not write files; only report what would happen.'),
+      })
+      .optional()
+      .describe('Commit recorded changes directly to local CSS/JS files.'),
+    clear_edit_session: zod
+      .object({
+        sessionId: zod.string().optional().describe('Session id to clear. If omitted, clears the active session.'),
+      })
+      .optional()
+      .describe('Clear an edit session from memory.'),
     questionnaire: zod
       .object({
         questions: zod.array(zod.string()).describe('List of questions for the user.'),
@@ -808,14 +895,19 @@ export const liveEditingSession = defineTool({
   },
   handler: async (request, response, context) => {
     const begin = (request.params as any).begin;
+    const exportPrototypeStateParam = (request.params as any).export_prototype_state;
+    const annotateParam = (request.params as any).annotate;
     const edit = (request.params as any).edit;
-    const exportOp = (request.params as any).export;
+    const exportEditSession = (request.params as any).export_edit_session;
+    const commitEditSessionToFiles = (request.params as any).commit_edit_session_to_files;
+    const clearEditSession = (request.params as any).clear_edit_session;
     const questionnaire = (request.params as any).questionnaire;
     const plans_notification = (request.params as any).plans_notification;
     const hasInteract = Boolean(questionnaire || plans_notification);
-    const provided = [begin, edit, exportOp, hasInteract].filter(Boolean).length;
+    const hasEditAction = Boolean(exportPrototypeStateParam || annotateParam || edit);
+    const provided = [begin, hasEditAction, exportEditSession, commitEditSessionToFiles, clearEditSession, hasInteract].filter(Boolean).length;
     if (provided !== 1) {
-      throw new Error('Provide exactly one of: begin, edit, export, questionnaire, plans_notification.');
+      throw new Error('Provide exactly one of: begin, export_prototype_state, annotate, edit, export_edit_session, commit_edit_session_to_files, clear_edit_session, questionnaire, plans_notification.');
     }
 
     if (begin) {
@@ -823,6 +915,43 @@ export const liveEditingSession = defineTool({
       return;
     }
 
+    // Process flattened parameters first (preferred format)
+    if (exportPrototypeStateParam) {
+      await exportPrototypeState.handler({params: exportPrototypeStateParam as any}, response, context);
+      return;
+    }
+
+    if (annotateParam) {
+      const page = context.getSelectedPage();
+      const success = await page.evaluate((params) => {
+        const api = (window as any).__MCP_LIVE_EDITING__;
+        if (!api?.addAnnotation) {
+          return false;
+        }
+        return api.addAnnotation({
+          ...params,
+          source: 'ai',
+        });
+      }, annotateParam);
+      const workflowState = context.getLiveEditingWorkflowState();
+      response.appendResponseLine('```json');
+      response.appendResponseLine(
+        JSON.stringify(
+          {
+            success,
+            workflow_state: workflowState,
+            ai_instruction:
+              workflowState === 'live_editing' ? LIVE_EDITING_AI_INSTRUCTION : undefined,
+          },
+          null,
+          2,
+        ),
+      );
+      response.appendResponseLine('```');
+      return;
+    }
+
+    // Process legacy edit parameter (backward compatibility)
     if (edit) {
       const {action, ...rest} = edit as Record<string, unknown>;
       if (action === 'export_prototype_state') {
@@ -861,43 +990,41 @@ export const liveEditingSession = defineTool({
       throw new Error(`Unsupported edit action: ${String(action)}`);
     }
 
-    if (exportOp) {
-      const {action, ...rest} = exportOp as Record<string, unknown>;
-      if (action === 'export_edit_session') {
-        await exportEditSession.handler({params: rest as any}, response, context);
-        const workflowState = context.getLiveEditingWorkflowState();
-        response.appendResponseLine('```json');
-        response.appendResponseLine(
-          JSON.stringify(
-            {
-              workflow_state: workflowState,
-              ai_instruction:
-                workflowState === 'live_editing' ? LIVE_EDITING_AI_INSTRUCTION : undefined,
-            },
-            null,
-            2,
-          ),
-        );
-        response.appendResponseLine('```');
-        return;
-      }
-      if (action === 'commit_edit_session_to_files') {
-        await commitEditSessionToFiles.handler({params: rest as any}, response, context);
-        context.setLiveEditingWorkflowState('idle');
-        response.appendResponseLine('```json');
-        response.appendResponseLine(JSON.stringify({workflow_state: 'idle'}, null, 2));
-        response.appendResponseLine('```');
-        return;
-      }
-      if (action === 'clear_edit_session') {
-        await clearEditSession.handler({params: rest as any}, response, context);
-        context.setLiveEditingWorkflowState('idle');
-        response.appendResponseLine('```json');
-        response.appendResponseLine(JSON.stringify({workflow_state: 'idle'}, null, 2));
-        response.appendResponseLine('```');
-        return;
-      }
-      throw new Error(`Unsupported export action: ${String(action)}`);
+    if (exportEditSession) {
+      await exportEditSession.handler({params: exportEditSession as any}, response, context);
+      const workflowState = context.getLiveEditingWorkflowState();
+      response.appendResponseLine('```json');
+      response.appendResponseLine(
+        JSON.stringify(
+          {
+            workflow_state: workflowState,
+            ai_instruction:
+              workflowState === 'live_editing' ? LIVE_EDITING_AI_INSTRUCTION : undefined,
+          },
+          null,
+          2,
+        ),
+      );
+      response.appendResponseLine('```');
+      return;
+    }
+
+    if (commitEditSessionToFiles) {
+      await commitEditSessionToFiles.handler({params: commitEditSessionToFiles as any}, response, context);
+      context.setLiveEditingWorkflowState('idle');
+      response.appendResponseLine('```json');
+      response.appendResponseLine(JSON.stringify({workflow_state: 'idle'}, null, 2));
+      response.appendResponseLine('```');
+      return;
+    }
+
+    if (clearEditSession) {
+      await clearEditSession.handler({params: clearEditSession as any}, response, context);
+      context.setLiveEditingWorkflowState('idle');
+      response.appendResponseLine('```json');
+      response.appendResponseLine(JSON.stringify({workflow_state: 'idle'}, null, 2));
+      response.appendResponseLine('```');
+      return;
     }
 
     if (questionnaire || plans_notification) {

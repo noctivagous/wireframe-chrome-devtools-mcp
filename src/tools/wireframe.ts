@@ -1147,8 +1147,10 @@ async function captureWireframeSnapshot(
     const maxTotalRaw =
       (typeof request.params.maxTotal === 'number' ? request.params.maxTotal : undefined) ??
       request.params.maxElements ??
-      50;
-    const maxTotal = Math.max(1, Math.floor(maxTotalRaw));
+      undefined; // No default - let caller decide (unlimited for live editing tools)
+    const maxTotal = maxTotalRaw === undefined 
+      ? Number.MAX_SAFE_INTEGER  // Effectively unlimited
+      : Math.max(1, Math.floor(maxTotalRaw));
     const maxDepth =
       typeof request.params.maxDepth === 'number' &&
       Number.isFinite(request.params.maxDepth) &&
@@ -2528,6 +2530,12 @@ export const wireframeSnapshotLiveEditing = defineTool({
   },
   schema: {
     ...wireframeSnapshot.schema,
+    maxTotal: zod
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Maximum number of elements to return. If not specified, all matching elements are included for complete verification.'),
     outputMode: liveEditingOutputModeSchema,
     maxBytesInline: liveEditingMaxBytesInlineSchema,
   },
@@ -2590,6 +2598,12 @@ export const svgSnapshotLiveEditing = defineTool({
   },
   schema: {
     ...svgSnapshot.schema,
+    maxTotal: zod
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Maximum number of elements to render. If not specified, all matching elements are included for complete verification.'),
     outputMode: zod
       .enum(['summary', 'inline', 'file'])
       .default('file')

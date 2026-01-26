@@ -58,7 +58,7 @@ Use a single session tool for begin/edit/export:
 "live_editing_session" with begin: { url: "https://example.com" }
 ... iterate with insert_css / manipulate_dom / insert_js ...
 "update_from_user_changes"
-"live_editing_session" with export: { action: "commit_edit_session_to_files", rootDir: "...", dryRun: true }
+"live_editing_session" with commit_edit_session_to_files: { rootDir: "...", dryRun: true }
 ```
 
 **Direct file edits (traditional approach):**

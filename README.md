@@ -110,7 +110,7 @@ The **default expectation** for this branch is:
 - write optional artifacts (snapshots/wireframes/screenshots) to temp/user paths.
 - **Only explicit tools write repo/source files**:
   - `apply_commit_plan` / `commit_edit_session_to_files` (write to specified target paths)
-  - `live_editing_session` with `export.action="commit_edit_session_to_files"` (write to specified target paths)
+  - `live_editing_session` with `commit_edit_session_to_files: {...}` (write to specified target paths)
   - `apply_unified_diff` (patches files)
 
 If you want the agent to keep iterating in-browser, say: **“keep it live; don’t write files yet.”**

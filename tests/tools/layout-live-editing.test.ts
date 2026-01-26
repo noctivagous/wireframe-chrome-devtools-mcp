@@ -94,12 +94,10 @@ describe('layout_live_editing', () => {
             root: {id: 'export-root', classPrefix: 'exp'},
             patch: {patchIdPrefix: 'export-test'},
             recipe: 'selectable_view',
-            recipeParams: {
-              items: [
-                {label: 'One', content: '<p>One</p>'},
-                {label: 'Two', content: '<p>Two</p>'},
-              ],
-            },
+            items: [
+              {label: 'One', content: '<p>One</p>'},
+              {label: 'Two', content: '<p>Two</p>'},
+            ],
           },
         },
         response,
@@ -336,12 +334,10 @@ describe('layout_live_editing', () => {
             root: {id: 'export-live-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'export-live', replaceExisting: true},
             recipe: 'selectable_view',
-            recipeParams: {
-              items: [
-                {label: 'One', content: '<p>One</p>'},
-                {label: 'Two', content: '<p>Two</p>'},
-              ],
-            },
+            items: [
+              {label: 'One', content: '<p>One</p>'},
+              {label: 'Two', content: '<p>Two</p>'},
+            ],
           },
         },
         response,
@@ -511,10 +507,8 @@ describe('layout_live_editing', () => {
             root: {id: 'shell-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'shell-test', replaceExisting: true},
             recipe: 'app_shell',
-            recipeParams: {
-              headerHeight: '48px',
-              sidebarWidth: '200px',
-            },
+            headerHeight: '48px',
+            sidebarWidth: '200px',
           },
         },
         response,
@@ -534,9 +528,7 @@ describe('layout_live_editing', () => {
             root: {id: 'toolbar-root', classPrefix: 'le'},
             patch: {patchIdPrefix: 'toolbar-test', replaceExisting: true},
             recipe: 'toolbar',
-            recipeParams: {
-              groups: [{items: ['Play', 'Stop']}],
-            },
+            groups: [{items: ['Play', 'Stop']}],
           },
         },
         response,
