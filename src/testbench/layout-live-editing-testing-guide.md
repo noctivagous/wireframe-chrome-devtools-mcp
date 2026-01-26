@@ -261,6 +261,214 @@ Test each recipe with default parameters first, then with custom parameters.
 }
 ```
 
+#### 9. classic_5_section
+**Purpose**: Classic 5-section layout (holy grail) with header, footer, left sidebar, main content, and right sidebar
+
+**Test Cases**:
+- [ ] Default parameters
+- [ ] Custom `headerHeight`, `leftSidebarWidth`, `rightSidebarWidth`, `footerHeight`
+- [ ] Custom `minHeight`
+- [ ] Verify: all 5 sections render correctly, sidebars on both sides
+
+**Example**:
+```json
+{
+  "name": "layout_live_editing",
+  "params": {
+    "recipe": "classic_5_section",
+    "headerHeight": 56,
+    "leftSidebarWidth": 240,
+    "rightSidebarWidth": 200,
+    "footerHeight": 48,
+    "minHeight": 400
+  }
+}
+```
+
+#### 10. masonry
+**Purpose**: Pinterest-style masonry grid layout with items of varying heights
+
+**Test Cases**:
+- [ ] Default items and `columnCount`
+- [ ] Custom `items` array
+- [ ] Custom `columnCount` (2, 3, 4, etc.)
+- [ ] Custom `gap` and `minItemWidth`
+- [ ] Verify: items pack efficiently, varying heights work
+
+**Example**:
+```json
+{
+  "name": "layout_live_editing",
+  "params": {
+    "recipe": "masonry",
+    "items": ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5", "Item 6"],
+    "columnCount": 3,
+    "gap": "16px",
+    "minItemWidth": "200px"
+  }
+}
+```
+
+#### 11. centered_hero
+**Purpose**: Centered content layout with optional hero section at top
+
+**Test Cases**:
+- [ ] With hero section (`showHero: true`)
+- [ ] Without hero section (`showHero: false`)
+- [ ] Custom `heroHeight`, `maxContentWidth`, `contentPadding`
+- [ ] Verify: content is centered, hero appears when enabled
+
+**Example**:
+```json
+{
+  "name": "layout_live_editing",
+  "params": {
+    "recipe": "centered_hero",
+    "showHero": true,
+    "heroHeight": 400,
+    "maxContentWidth": 1200,
+    "contentPadding": 24
+  }
+}
+```
+
+#### 12. sticky_header_footer
+**Purpose**: Fixed/sticky header and footer with scrollable main content area
+
+**Test Cases**:
+- [ ] Fixed header and footer (`headerSticky: false`, `footerSticky: false`)
+- [ ] Sticky header and footer (`headerSticky: true`, `footerSticky: true`)
+- [ ] Mixed (fixed header, sticky footer, etc.)
+- [ ] Custom `headerHeight` and `footerHeight`
+- [ ] Verify: header/footer stay in place, content scrolls, padding accounts for fixed elements
+
+**Example**:
+```json
+{
+  "name": "layout_live_editing",
+  "params": {
+    "recipe": "sticky_header_footer",
+    "headerHeight": 56,
+    "footerHeight": 48,
+    "headerSticky": false,
+    "footerSticky": false
+  }
+}
+```
+
+#### 13. mobile_bottom_nav
+**Purpose**: Mobile-style layout with bottom navigation bar
+
+**Test Cases**:
+- [ ] With top bar (`showTopBar: true`)
+- [ ] Without top bar (`showTopBar: false`)
+- [ ] Custom `navItems` array
+- [ ] Custom `navHeight` and `topBarHeight`
+- [ ] Verify: bottom nav is fixed, content has proper padding, nav items render
+
+**Example**:
+```json
+{
+  "name": "layout_live_editing",
+  "params": {
+    "recipe": "mobile_bottom_nav",
+    "navHeight": 56,
+    "navItems": ["Home", "Search", "Profile", "Settings"],
+    "showTopBar": true,
+    "topBarHeight": 56
+  }
+}
+```
+
+#### 14. master_detail
+**Purpose**: Split view with master list on left and detail panel on right
+
+**Test Cases**:
+- [ ] Without resizing (`resizable: false`)
+- [ ] With resizing (`resizable: true`)
+- [ ] Custom `masterWidth` and `detailMinWidth`
+- [ ] Custom `defaultSplit` ratio
+- [ ] Verify: master and detail panels side-by-side, resizing works when enabled
+
+**Example**:
+```json
+{
+  "name": "layout_live_editing",
+  "params": {
+    "recipe": "master_detail",
+    "masterWidth": 300,
+    "detailMinWidth": 400,
+    "resizable": true,
+    "defaultSplit": 0.3
+  }
+}
+```
+
+#### 15. dashboard
+**Purpose**: Multi-column dashboard layout optimized for metrics and stats
+
+**Test Cases**:
+- [ ] With header (`showHeader: true`)
+- [ ] Without header (`showHeader: false`)
+- [ ] Custom `columns` and `rowCount`
+- [ ] Custom `cardHeight` and `gap`
+- [ ] Verify: grid of metric cards, proper spacing, header when enabled
+
+**Example**:
+```json
+{
+  "name": "layout_live_editing",
+  "params": {
+    "recipe": "dashboard",
+    "columns": 4,
+    "rowCount": 3,
+    "cardHeight": 200,
+    "gap": 16,
+    "showHeader": true
+  }
+}
+```
+
+#### 16. split_screen
+**Purpose**: Two equal or custom-split panels side by side
+
+**Test Cases**:
+- [ ] Horizontal orientation (`orientation: "horizontal"`)
+- [ ] Vertical orientation (`orientation: "vertical"`)
+- [ ] Without resizing (`resizable: false`)
+- [ ] With resizing (`resizable: true`)
+- [ ] Custom `splitRatio` (0.3, 0.5, 0.7, etc.)
+- [ ] Custom `minPanelSize`
+- [ ] Verify: panels split correctly, resizing works when enabled, orientation respected
+
+**Example (horizontal)**:
+```json
+{
+  "name": "layout_live_editing",
+  "params": {
+    "recipe": "split_screen",
+    "splitRatio": 0.5,
+    "resizable": true,
+    "orientation": "horizontal",
+    "minPanelSize": 200
+  }
+}
+```
+
+**Example (vertical)**:
+```json
+{
+  "name": "layout_live_editing",
+  "params": {
+    "recipe": "split_screen",
+    "splitRatio": 0.3,
+    "resizable": false,
+    "orientation": "vertical",
+    "minPanelSize": 150
+  }
+}
+```
+
 ### Phase 2: Direct Composition Types (No Recipes)
 
 Test the three main composition types directly without using recipes.
