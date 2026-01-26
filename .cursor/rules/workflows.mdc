@@ -6,7 +6,7 @@ description: Workflow approaches and edit session patterns
 
 ## Two Approaches
 
-1. **Live Editing** (recommended): `begin_edit_session` → changes with `recordToSession: true` → preview/commit. Shorthand: "ble."
+1. **Live Editing** (recommended): `begin_edit_session` or `live_editing_session` → changes with `recordToSession: true` → preview/commit. Shorthand: "ble."
 2. **Traditional**: Edit files directly, reload browser.
 
 ## Edit Session Contract
@@ -15,7 +15,7 @@ description: Workflow approaches and edit session patterns
 
 **Key Principle**: Changes happen in browser first. Files only written when explicitly requested.
 
-**Tools**: `begin_edit_session`, `preview_commit_plan`, `apply_commit_plan`, `commit_edit_session_to_files`, `export_edit_session`
+**Tools**: `begin_edit_session`, `live_editing_session`, `preview_commit_plan`, `apply_commit_plan`, `commit_edit_session_to_files`, `export_edit_session`, `update_from_user_changes`
 
 ## Common Workflows
 
@@ -25,8 +25,10 @@ description: Workflow approaches and edit session patterns
 
 **A/B test**: `insert_css_preview` → compare wireframes → keep best, rollback
 
+**Layout prototyping**: `layout_live_editing` with parametric recipes → iterate in browser → commit when ready
+
 
 --------------
 ## Git Shortcuts During Chat
 
-**gitp**: try to npm run build and make sure it passes, then `git add . ; git commit -m '[your commit line based on the situation]' ; git push`
+**gitp**: try to bun run build and make sure it passes, then `git add . ; git commit -m '[your commit line based on the situation]' ; git push`

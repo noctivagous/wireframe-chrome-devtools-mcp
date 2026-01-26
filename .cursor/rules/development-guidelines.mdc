@@ -3,6 +3,9 @@ description: Development guidelines and best practices
 globs: ["src/**/*", "tests/**/*"]
 ---
 
+research any problems you are having by using the brave-search tool
+
+
 # Development Guidelines
 
 ## Live Editing
@@ -12,7 +15,7 @@ Use `begin_edit_session` for browser iteration. Set `recordToSession: true` to t
 Use `svg_snapshot` (visual) and `wireframe_snapshot` (structural). Prefer these over image processing.
 
 ## Tool Development
-Tools in `src/tools/`. Follow existing patterns. Enable/disable via web UI. Dependencies in `tool-dependencies.ts`.
+Tools in `src/tools/`. Follow existing patterns. Enable/disable via web UI. Use `bun` instead of `npm` for package management.
 
 ## Testing
 Tests mirror `src/` structure. Use `tests/setup.ts`. Snapshot tests use `.snapshot` files.

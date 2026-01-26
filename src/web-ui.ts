@@ -9,7 +9,7 @@ import http from 'node:http';
 import {URL} from 'node:url';
 import {promisify} from 'node:util';
 
-import {htmlPage} from './web-ui-template.js';
+import {htmlPage, type PageRoute} from './web-ui-template.js';
 import type {GuidanceConfigInput, GuidanceConfigV1} from './guidance-config.js';
 
 const execAsync = promisify(exec);
@@ -140,14 +140,47 @@ export function startWebUi(deps: WebUiDeps): http.Server {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-      if (req.method === 'GET' && url.pathname === '/') {
-        const body = htmlPage();
-        res.writeHead(200, {
-          'content-type': 'text/html; charset=utf-8',
-          'cache-control': 'no-store',
-        });
-        res.end(body);
-        return;
+      
+      // Route handling for different pages
+      if (req.method === 'GET') {
+        let route: PageRoute | null = null;
+        
+        // Determine route from pathname
+        if (url.pathname === '/' || url.pathname === '/index.html') {
+          route = 'index';
+        } else if (url.pathname === '/tools' || url.pathname === '/tools.html') {
+          route = 'tools';
+        } else if (url.pathname === '/guidance' || url.pathname === '/guidance.html') {
+          route = 'guidance';
+        } else if (url.pathname === '/workflows' || url.pathname === '/workflows.html') {
+          route = 'workflows';
+        } else {
+          // Check for workflow routes: /workflow/:workflowId
+          const workflowMatch = url.pathname.match(/^\/workflow\/([^\/]+)(\/)?$/);
+          if (workflowMatch) {
+            route = {type: 'workflow', workflowId: workflowMatch[1]};
+          } else {
+            // For any other path, try to serve as HTML page
+            const pathMatch = url.pathname.match(/^\/([^\/]+)(\.html)?$/);
+            if (pathMatch) {
+              const pageName = pathMatch[1];
+              if (['tools', 'guidance', 'workflows', 'index'].includes(pageName)) {
+                route = pageName as PageRoute;
+              }
+            }
+          }
+        }
+        
+        // Serve HTML page if it's a page route
+        if (route !== null) {
+          const body = htmlPage(route);
+          res.writeHead(200, {
+            'content-type': 'text/html; charset=utf-8',
+            'cache-control': 'no-store',
+          });
+          res.end(body);
+          return;
+        }
       }
 
       if (req.method === 'GET' && url.pathname === '/api/tools') {

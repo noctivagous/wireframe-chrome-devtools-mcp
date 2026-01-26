@@ -11,7 +11,8 @@ MCP server enabling AI assistants to control/inspect Chrome browser. Branch of `
 ## Key Features
 
 - Wireframe tools: `wireframe_snapshot`, `svg_snapshot` for layout analysis
-- Live editing: Edit in browser first, commit when ready
+- Live editing: `begin_edit_session`, `live_editing_session` for browser-first iteration
+- Layout prototyping: `layout_live_editing` with parametric grid/stack/viewer recipes
 - Edit sessions: Track changes, preview commits, export for review
 - Tool management: Web UI at `http://localhost:7332` to enable/disable tools
 - MCP Resources/Prompts: Docs and workflow templates exposed to agents

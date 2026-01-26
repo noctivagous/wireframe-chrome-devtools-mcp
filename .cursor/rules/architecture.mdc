@@ -9,7 +9,7 @@ globs: ["src/**/*", "tests/**/*"]
 
 **Core**: `index.ts`, `main.ts`, `cli.ts`, `browser.ts`
 **MCP**: `McpContext.ts`, `McpResponse.ts`, `DevToolsConnectionAdapter.ts`
-**Tools**: `tools/` (24 implementations)
+**Tools**: `tools/` (35+ implementations including wireframe, edit-session, layout-live-editing, live-editing)
 **Web UI**: `web-ui.ts`, `web-ui-template.ts`, `web-ui-settings.ts`
 **Utils**: `DevtoolsUtils.ts`, `PageCollector.ts`, `WaitForHelper.ts`, `Mutex.ts`
 **Other**: `formatters/`, `telemetry/`, `trace-processing/`

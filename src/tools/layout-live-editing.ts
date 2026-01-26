@@ -2249,6 +2249,7 @@ export const layoutLiveEditing = defineTool({
   name: 'layout_live_editing',
   description:
     'Generate a parametric layout in the live browser using layout atoms, behavior modules, and component compositions. Use either a recipe (preset) or one of the flattened composition parameters: parametric_grid, parametric_stack, or component_parametric_viewer.\n\n' +
+    '**Content Migration:** When using the `selectable_view` recipe, the `contents` parameter supports both static HTML strings and selector objects to migrate existing DOM elements into tab panels. Use `{selector: "css-selector", preserveEvents: true, hideOriginal: true}` to move existing content atomically.\n\n' +
     '**SVG Snapshots:** By default, this tool includes an SVG wireframe snapshot after applying layout changes (via `verify.svgSnapshot`, which defaults to `true`) to provide visual confirmation of the created or modified layout. Set `verify: { svgSnapshot: false }` to disable.',
   annotations: {
     category: ToolCategory.PATCH,
@@ -2283,7 +2284,14 @@ export const layoutLiveEditing = defineTool({
     rowLayout: zod.enum(['grid', 'flex']).optional().describe('Recipe parameter for parametric_grid, overlay_grid: Row layout mode ("grid" for CSS grid, "flex" for flex row).'),
     layers: zod.array(gridOverlayLayerSchema).min(1).optional().describe('Recipe parameter for overlay_grid: Array of overlay layer objects with items and optional offset/zIndex.'),
     labels: zod.array(zod.string()).min(1).optional().describe('Recipe parameter for selectable_view: Array of tab/panel labels. REQUIRED when recipe="selectable_view". Must match length of contents array.'),
-    contents: zod.array(zod.string()).min(1).optional().describe('Recipe parameter for selectable_view: Array of panel content strings. REQUIRED when recipe="selectable_view". Must match length of labels array.'),
+    contents: zod.union([
+      zod.array(zod.string()).min(1),
+      zod.array(zod.object({
+        selector: zod.string().describe('CSS selector to move existing DOM element into this panel.'),
+        preserveEvents: zod.boolean().optional().default(true).describe('Whether to preserve event listeners when moving (default: true).'),
+        hideOriginal: zod.boolean().optional().default(true).describe('Whether to hide the original element after moving (default: true).'),
+      })).min(1),
+    ]).optional().describe('Recipe parameter for selectable_view: Array of panel content strings OR selector objects to migrate existing DOM elements. REQUIRED when recipe="selectable_view". Must match length of labels array.'),
     orientation: zod.enum(['horizontal', 'vertical']).optional().describe('Recipe parameter for selectable_view: Orientation of the trigger list ("horizontal" or "vertical").'),
     variant: zod.enum(['tabs', 'carousel']).optional().describe('Recipe parameter for selectable_view: Presentation variant ("tabs" or "carousel", defaults to "tabs").'),
     showControls: zod.coerce.boolean().optional().describe('Recipe parameter for selectable_view: Whether carousel prev/next controls are shown (carousel variant only).'),
@@ -2539,6 +2547,7 @@ export const layoutLiveEditing = defineTool({
     const arrayBehaviors = request.params.behaviors ?? [];
     let resolvedBehaviors = [...flattenedBehaviors, ...arrayBehaviors];
 
+    let contentMigration: Array<{panelIndex: number; selector: string; preserveEvents: boolean; hideOriginal: boolean}> | undefined;
     if (request.params.recipe) {
       const recipeParams = extractRecipeParams();
       const recipe = recipeRegistry[request.params.recipe];
@@ -2548,6 +2557,7 @@ export const layoutLiveEditing = defineTool({
       const result = recipe.execute(recipeParams, prefix);
       resolvedComposition = result.composition;
       resolvedBehaviors = [...result.behaviors, ...resolvedBehaviors];
+      contentMigration = (result as any).contentMigration;
     }
 
     if (!resolvedComposition) {
@@ -2966,6 +2976,248 @@ export const layoutLiveEditing = defineTool({
           },
           {sessionId: editSessionId, autoCreate: true},
         );
+      }
+    }
+
+    // Perform content migration if needed (for selectable_view recipe with selector-based contents)
+    if (contentMigration && contentMigration.length > 0 && resolvedComposition?.type === 'component_parametric_viewer') {
+      // Pre-validate migrations before executing
+      const preValidation = await page.evaluate(
+        ({rootId, prefix, migrations, targetSelector}) => {
+          const root = document.getElementById(rootId);
+          const target = document.querySelector(targetSelector);
+          const warnings: string[] = [];
+          const errors: string[] = [];
+
+          // Check if root exists
+          if (!root) {
+            errors.push(`Layout root element with id "${rootId}" not found.`);
+            return {valid: false, errors, warnings: []};
+          }
+
+          // Check if target exists
+          if (!target) {
+            errors.push(`Target element "${targetSelector}" not found.`);
+            return {valid: false, errors, warnings: []};
+          }
+
+          // Validate each migration
+          for (const migration of migrations) {
+            const {panelIndex, selector} = migration;
+            const panelId = `${prefix}-panel-${panelIndex}`;
+            
+            // Check if panel will exist (it should, but validate)
+            // Note: panel doesn't exist yet, but we can check the structure
+            
+            // Check if source element exists
+            const sourceElement = document.querySelector(selector);
+            if (!sourceElement) {
+              errors.push(`Source element for panel ${panelIndex} not found: "${selector}"`);
+              continue;
+            }
+
+            // Check if source is the root itself (would cause issues)
+            if (sourceElement === root) {
+              errors.push(`Selector "${selector}" matches the layout root element. Cannot migrate root into itself.`);
+              continue;
+            }
+
+            // Check if source is the target (would cause issues)
+            if (sourceElement === target) {
+              warnings.push(`Selector "${selector}" matches the target element. This may cause the layout to be inserted inside itself.`);
+            }
+
+            // Check if source is already inside the root (potential duplication)
+            if (root.contains(sourceElement) && sourceElement !== root) {
+              warnings.push(`Selector "${selector}" matches an element already inside the layout root. This will cause duplication. Consider using a different selector or hiding the original.`);
+            }
+
+            // Check for multiple matches (ambiguous selector)
+            const allMatches = document.querySelectorAll(selector);
+            if (allMatches.length > 1) {
+              warnings.push(`Selector "${selector}" matches ${allMatches.length} elements. Only the first match will be migrated. Consider using a more specific selector.`);
+            }
+          }
+
+          return {
+            valid: errors.length === 0,
+            errors,
+            warnings,
+          };
+        },
+        {
+          rootId,
+          prefix,
+          migrations: contentMigration,
+          targetSelector: target.selector ?? 'body',
+        },
+      );
+
+      // Report pre-validation results
+      if (!preValidation.valid) {
+        response.appendResponseLine('');
+        response.appendResponseLine('❌ **Content Migration Validation Failed**');
+        preValidation.errors.forEach(error => {
+          response.appendResponseLine(`   - ${error}`);
+        });
+        if (preValidation.warnings.length > 0) {
+          response.appendResponseLine('');
+          response.appendResponseLine('⚠️ **Warnings**:');
+          preValidation.warnings.forEach(warning => {
+            response.appendResponseLine(`   - ${warning}`);
+          });
+        }
+        response.appendResponseLine('');
+        throw new Error('Content migration validation failed. Please fix the errors above.');
+      }
+
+      if (preValidation.warnings.length > 0) {
+        response.appendResponseLine('');
+        response.appendResponseLine('⚠️ **Pre-Migration Warnings**:');
+        preValidation.warnings.forEach(warning => {
+          response.appendResponseLine(`   - ${warning}`);
+        });
+        response.appendResponseLine('');
+      }
+
+      // Execute migrations
+      const migrationResults = await page.evaluate(
+        ({rootId, prefix, migrations}) => {
+          const root = document.getElementById(rootId);
+          if (!root) {
+            return {success: false, reason: 'root_not_found', rootId};
+          }
+
+          const results: Array<{success: boolean; panelIndex: number; selector: string; reason?: string; warnings?: string[]}> = [];
+          const warnings: string[] = [];
+
+          for (const migration of migrations) {
+            const {panelIndex, selector, preserveEvents, hideOriginal} = migration;
+            const panelId = `${prefix}-panel-${panelIndex}`;
+            const panel = document.getElementById(panelId);
+            
+            if (!panel) {
+              results.push({
+                success: false,
+                panelIndex,
+                selector,
+                reason: 'panel_not_found',
+              });
+              continue;
+            }
+
+            // Find the source element
+            const sourceElement = document.querySelector(selector);
+            if (!sourceElement) {
+              results.push({
+                success: false,
+                panelIndex,
+                selector,
+                reason: 'source_not_found',
+              });
+              continue;
+            }
+
+            // Check if source is already inside the root (potential duplication)
+            if (root.contains(sourceElement) && sourceElement !== root) {
+              warnings.push(`Selector "${selector}" matches an element already inside the layout root. This may cause duplication.`);
+            }
+
+            // Check if source is a descendant of another panel (potential nesting issue)
+            const otherPanels = Array.from(root.querySelectorAll(`[id^="${prefix}-panel-"]`));
+            for (const otherPanel of otherPanels) {
+              if (otherPanel !== panel && otherPanel.contains(sourceElement)) {
+                warnings.push(`Selector "${selector}" matches an element inside another panel (${otherPanel.id}). This may cause unexpected nesting.`);
+              }
+            }
+
+            // Clone or move the element
+            let movedElement: Element;
+            if (preserveEvents) {
+              // Clone to preserve original (and its event listeners)
+              movedElement = sourceElement.cloneNode(true) as Element;
+              // Copy all attributes
+              Array.from(sourceElement.attributes).forEach(attr => {
+                movedElement.setAttribute(attr.name, attr.value);
+              });
+            } else {
+              // Move directly
+              movedElement = sourceElement;
+            }
+
+            // Clear panel placeholder content if it exists
+            panel.innerHTML = '';
+            
+            // Move/clone into panel
+            panel.appendChild(movedElement);
+
+            // Hide original if requested and we cloned
+            if (hideOriginal && preserveEvents) {
+              (sourceElement as HTMLElement).style.display = 'none';
+            } else if (hideOriginal && !preserveEvents) {
+              // If we moved (not cloned), the element is already in the panel, so we can't hide it
+              warnings.push(`Cannot hide original element for "${selector}" because it was moved (not cloned). Set preserveEvents: true to hide the original.`);
+            }
+
+            results.push({
+              success: true,
+              panelIndex,
+              selector,
+            });
+          }
+
+          return {
+            success: true,
+            results,
+            warnings: warnings.length > 0 ? warnings : undefined,
+          };
+        },
+        {
+          rootId,
+          prefix,
+          migrations: contentMigration,
+        },
+      );
+
+      if (migrationResults.success && migrationResults.results) {
+        // Report successful migrations
+        const successful = migrationResults.results.filter(r => r.success);
+        const failed = migrationResults.results.filter(r => !r.success);
+        
+        if (successful.length > 0) {
+          response.appendResponseLine('');
+          response.appendResponseLine(`✅ **Content Migration**: Successfully migrated ${successful.length} element(s) into tab panels`);
+          successful.forEach(result => {
+            response.appendResponseLine(`   - Panel ${result.panelIndex}: \`${result.selector}\``);
+          });
+        }
+
+        if (failed.length > 0) {
+          response.appendResponseLine('');
+          response.appendResponseLine(`⚠️ **Migration Warnings**: ${failed.length} element(s) could not be migrated`);
+          failed.forEach(result => {
+            const reasonMsg = result.reason === 'panel_not_found' 
+              ? 'Target panel not found'
+              : result.reason === 'source_not_found'
+              ? 'Source element not found'
+              : 'Unknown error';
+            response.appendResponseLine(`   - Panel ${result.panelIndex}: \`${result.selector}\` - ${reasonMsg}`);
+          });
+        }
+
+        if (migrationResults.warnings && migrationResults.warnings.length > 0) {
+          response.appendResponseLine('');
+          response.appendResponseLine('⚠️ **Migration Warnings**:');
+          migrationResults.warnings.forEach(warning => {
+            response.appendResponseLine(`   - ${warning}`);
+          });
+        }
+
+        response.appendResponseLine('');
+      } else {
+        response.appendResponseLine('');
+        response.appendResponseLine(`⚠️ **Content Migration Failed**: ${migrationResults.reason ?? 'unknown error'}`);
+        response.appendResponseLine('');
       }
     }
 

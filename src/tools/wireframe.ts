@@ -1639,9 +1639,8 @@ export const wireframeSnapshot = defineTool({
       .number()
       .int()
       .positive()
-      .default(50)
       .optional()
-      .describe('Maximum number of elements to return (after filtering).'),
+      .describe('Maximum number of elements to return (after filtering). If not specified, all matching elements are included.'),
     maxElements: zod
       .number()
       .int()
@@ -2214,9 +2213,8 @@ export const svgSnapshot = defineTool({
       .number()
       .int()
       .positive()
-      .default(50)
       .optional()
-      .describe('Maximum number of elements to render (after filtering).'),
+      .describe('Maximum number of elements to render (after filtering). If not specified, all matching elements are included.'),
     maxElements: zod
       .number()
       .int()
