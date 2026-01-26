@@ -34,10 +34,8 @@ Provide either a `recipe` or an explicit `composition`.
 ```json
 {
   "recipe": "selectable_view",
-  "items": [
-    { "label": "Home", "content": "<div>Home</div>" },
-    { "label": "About", "content": "<div>About</div>" }
-  ],
+  "labels": ["Home", "About"],
+  "contents": ["<div>Home</div>", "<div>About</div>"],
   "orientation": "horizontal",
   "target": {
     "selector": "#app",

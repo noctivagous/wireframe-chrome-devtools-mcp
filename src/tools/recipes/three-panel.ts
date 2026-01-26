@@ -21,9 +21,10 @@ export const threePanelRecipe: {
     minHeight: lengthSchema.optional(),
   }),
   execute: (params: zod.infer<typeof threePanelRecipe.schema>, prefix: string) => {
-    const navWidth = params.navWidth ?? '220px';
-    const inspectorWidth = params.inspectorWidth ?? '280px';
-    const minHeight = params.minHeight ?? '360px';
+    const navWidth = normalizeLength(params.navWidth) ?? '220px';
+    const inspectorWidth = normalizeLength(params.inspectorWidth) ?? '280px';
+    // Use viewport-filling height for better testing defaults
+    const minHeight = normalizeLength(params.minHeight) ?? '100vh';
     return {
       composition: {
         type: 'layout_parametric_stack',
@@ -35,7 +36,7 @@ export const threePanelRecipe: {
               direction: 'column',
               items: ['Nav'],
             },
-            style: {width: normalizeLength(navWidth) ?? '220px'},
+            style: {width: navWidth},
             className: `${prefix}-util-panel`,
           },
           {
@@ -44,7 +45,7 @@ export const threePanelRecipe: {
               direction: 'column',
               items: ['Content'],
             },
-            style: {minHeight: normalizeLength(minHeight) ?? '360px'},
+            style: {minHeight: minHeight, flex: '1 1 auto'},
             className: `${prefix}-util-panel`,
           },
           {
@@ -53,7 +54,7 @@ export const threePanelRecipe: {
               direction: 'column',
               items: ['Inspector'],
             },
-            style: {width: normalizeLength(inspectorWidth) ?? '280px'},
+            style: {width: inspectorWidth},
             className: `${prefix}-util-panel`,
           },
         ],

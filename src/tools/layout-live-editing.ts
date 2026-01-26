@@ -1522,9 +1522,11 @@ function buildStackLayout(
       let flexBasisFromStyle: string | undefined;
       if (!fixedSize) {
         if (direction === 'row' && style.width) {
-          flexBasisFromStyle = normalizeLength(style.width);
+          const normalized = normalizeLength(style.width);
+          flexBasisFromStyle = normalized || (typeof style.width === 'string' ? style.width : undefined);
         } else if (direction === 'column' && style.height) {
-          flexBasisFromStyle = normalizeLength(style.height);
+          const normalized = normalizeLength(style.height);
+          flexBasisFromStyle = normalized || (typeof style.height === 'string' ? style.height : undefined);
         }
       }
       
@@ -2266,33 +2268,40 @@ export const layoutLiveEditing = defineTool({
       .describe('List layout_live_editing recipes and summarize their parameter schemas.'),
     recipe: recipeNameSchema.optional().describe('Named recipe/preset to use. When using a recipe, pass its parameters directly at the top level (not nested in recipeParams).'),
     // Recipe parameters are flattened to top level - all optional
-    rows: zod.any().optional().describe('Recipe parameter: rows array (for parametric_grid, overlay_grid, grid_canvas).'),
-    itemsForAllRows: zod.any().optional().describe('Recipe parameter: flat array of items for all rows (for parametric_grid, requires columnCount).'),
-    columnCount: zod.any().optional().describe('Recipe parameter: column count (for parametric_grid, overlay_grid).'),
-    unit: zod.any().optional().describe('Recipe parameter: unit (for parametric_grid, overlay_grid).'),
-    gap: zod.any().optional().describe('Recipe parameter: gap shorthand - sets both columnGap and rowGap (for parametric_grid, overlay_grid).'),
-    columnGap: zod.any().optional().describe('Recipe parameter: column gap (for parametric_grid, overlay_grid).'),
-    rowGap: zod.any().optional().describe('Recipe parameter: row gap (for parametric_grid, overlay_grid).'),
-    rowHeight: zod.any().optional().describe('Recipe parameter: row height (for parametric_grid, overlay_grid).'),
-    rowMinHeight: zod.any().optional().describe('Recipe parameter: row min height (for parametric_grid, overlay_grid).'),
-    rowLayout: zod.any().optional().describe('Recipe parameter: row layout (for parametric_grid, overlay_grid).'),
-    layers: zod.any().optional().describe('Recipe parameter: overlay layers (for overlay_grid).'),
-    items: zod.any().optional().describe('Recipe parameter: items array (for selectable_view).'),
-    orientation: zod.any().optional().describe('Recipe parameter: orientation (for selectable_view).'),
-    variant: zod.any().optional().describe('Recipe parameter: variant (for selectable_view).'),
-    showControls: zod.any().optional().describe('Recipe parameter: show controls (for selectable_view).'),
-    showIndicators: zod.any().optional().describe('Recipe parameter: show indicators (for selectable_view).'),
-    headerHeight: zod.any().optional().describe('Recipe parameter: header height (for app_shell).'),
-    sidebarWidth: zod.any().optional().describe('Recipe parameter: sidebar width (for app_shell, two_column).'),
-    showFooter: zod.any().optional().describe('Recipe parameter: show footer (for app_shell).'),
-    footerHeight: zod.any().optional().describe('Recipe parameter: footer height (for app_shell).'),
-    minHeight: zod.any().optional().describe('Recipe parameter: min height (for app_shell, two_column, three_panel).'),
-    navWidth: zod.any().optional().describe('Recipe parameter: nav width (for three_panel).'),
-    inspectorWidth: zod.any().optional().describe('Recipe parameter: inspector width (for three_panel).'),
-    groups: zod.any().optional().describe('Recipe parameter: groups array (for toolbar).'),
-    columns: zod.any().optional().describe('Recipe parameter: columns (for grid_canvas).'),
-    cellSize: zod.any().optional().describe('Recipe parameter: cell size (for grid_canvas).'),
-    showGrid: zod.any().optional().describe('Recipe parameter: show grid (for grid_canvas).'),
+    rows: zod.union([
+      zod.array(gridRowSchema).min(1),
+      zod.number().int().positive(),
+    ]).optional().describe('Recipe parameter: For parametric_grid/overlay_grid: Array of grid row objects. For grid_canvas: Number of rows (positive integer).'),
+    itemsForAllRows: zod.array(contentItemSchema).min(1).optional().describe('Recipe parameter for parametric_grid: Flat array of items for all rows (requires columnCount). Alternative to rows parameter.'),
+    columnCount: zod.number().int().positive().optional().describe('Recipe parameter for parametric_grid, overlay_grid: Number of columns in the grid. Required when using itemsForAllRows.'),
+    unit: lengthSchema.optional().describe('Recipe parameter for parametric_grid, overlay_grid: Base unit size (e.g., "1fr", "240px").'),
+    gap: lengthSchema.optional().describe('Recipe parameter for parametric_grid, overlay_grid: Gap shorthand - sets both columnGap and rowGap to the same value.'),
+    columnGap: lengthSchema.optional().describe('Recipe parameter for parametric_grid, overlay_grid: Gap between columns.'),
+    rowGap: lengthSchema.optional().describe('Recipe parameter for parametric_grid, overlay_grid: Gap between rows.'),
+    rowHeight: lengthSchema.optional().describe('Recipe parameter for parametric_grid, overlay_grid: Fixed row height for all rows.'),
+    rowMinHeight: lengthSchema.optional().describe('Recipe parameter for parametric_grid, overlay_grid: Minimum row height for all rows.'),
+    rowLayout: zod.enum(['grid', 'flex']).optional().describe('Recipe parameter for parametric_grid, overlay_grid: Row layout mode ("grid" for CSS grid, "flex" for flex row).'),
+    layers: zod.array(gridOverlayLayerSchema).min(1).optional().describe('Recipe parameter for overlay_grid: Array of overlay layer objects with items and optional offset/zIndex.'),
+    labels: zod.array(zod.string()).min(1).optional().describe('Recipe parameter for selectable_view: Array of tab/panel labels. REQUIRED when recipe="selectable_view". Must match length of contents array.'),
+    contents: zod.array(zod.string()).min(1).optional().describe('Recipe parameter for selectable_view: Array of panel content strings. REQUIRED when recipe="selectable_view". Must match length of labels array.'),
+    orientation: zod.enum(['horizontal', 'vertical']).optional().describe('Recipe parameter for selectable_view: Orientation of the trigger list ("horizontal" or "vertical").'),
+    variant: zod.enum(['tabs', 'carousel']).optional().describe('Recipe parameter for selectable_view: Presentation variant ("tabs" or "carousel", defaults to "tabs").'),
+    showControls: zod.coerce.boolean().optional().describe('Recipe parameter for selectable_view: Whether carousel prev/next controls are shown (carousel variant only).'),
+    showIndicators: zod.coerce.boolean().optional().describe('Recipe parameter for selectable_view: Whether carousel indicators are shown (carousel variant only).'),
+    headerHeight: lengthSchema.optional().describe('Recipe parameter for app_shell: Header height (number interpreted as px, or CSS length string).'),
+    sidebarWidth: lengthSchema.optional().describe('Recipe parameter for app_shell, two_column: Sidebar width (number interpreted as px, or CSS length string).'),
+    showFooter: zod.coerce.boolean().optional().describe('Recipe parameter for app_shell: Whether to show the footer.'),
+    footerHeight: lengthSchema.optional().describe('Recipe parameter for app_shell: Footer height (number interpreted as px, or CSS length string).'),
+    minHeight: lengthSchema.optional().describe('Recipe parameter for app_shell, two_column, three_panel: Minimum height (number interpreted as px, or CSS length string).'),
+    navWidth: lengthSchema.optional().describe('Recipe parameter for three_panel: Navigation panel width (number interpreted as px, or CSS length string).'),
+    inspectorWidth: lengthSchema.optional().describe('Recipe parameter for three_panel: Inspector panel width (number interpreted as px, or CSS length string).'),
+    groups: zod.array(zod.object({
+      label: zod.string().optional(),
+      items: zod.array(zod.string()).min(1),
+    })).min(1).optional().describe('Recipe parameter for toolbar: Array of toolbar group objects, each with optional label and items array.'),
+    columns: zod.number().int().positive().optional().describe('Recipe parameter for grid_canvas: Number of columns in the grid canvas.'),
+    cellSize: lengthSchema.optional().describe('Recipe parameter for grid_canvas: Size of each grid cell (number interpreted as px, or CSS length string).'),
+    showGrid: zod.coerce.boolean().optional().describe('Recipe parameter for grid_canvas: Whether to show grid lines.'),
     parametric_grid: layoutParametricGridSchema
       .optional()
       .describe(
@@ -2681,7 +2690,7 @@ export const layoutLiveEditing = defineTool({
     `;
 
     const scopedCss = `
-      ${scopeSelector}{${rootVars}font-family:var(--${prefix}-font);}
+      ${scopeSelector}{${rootVars}font-family:var(--${prefix}-font);height:100vh;display:flex;flex-direction:column;}
       ${scopeSelector}, ${scopeSelector} *{box-sizing:border-box;}
       ${scopeCss(layoutCss + baseCss, scopeSelector)}
     `;

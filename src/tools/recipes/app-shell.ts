@@ -23,11 +23,15 @@ export const appShellRecipe: {
     minHeight: lengthSchema.optional(),
   }),
   execute: (params: zod.infer<typeof appShellRecipe.schema>, prefix: string) => {
-    const headerHeight = params.headerHeight ?? '56px';
-    const sidebarWidth = params.sidebarWidth ?? '240px';
+    const headerHeight = normalizeLength(params.headerHeight) ?? '56px';
+    const sidebarWidth = normalizeLength(params.sidebarWidth) ?? '240px';
     const showFooter = params.showFooter ?? false;
-    const footerHeight = params.footerHeight ?? '48px';
-    const minHeight = params.minHeight ?? '420px';
+    const footerHeight = normalizeLength(params.footerHeight) ?? '48px';
+    // Use viewport-filling height for better testing defaults
+    const contentHeight = showFooter
+      ? `calc(100vh - ${headerHeight} - ${footerHeight})`
+      : `calc(100vh - ${headerHeight})`;
+    const minHeight = normalizeLength(params.minHeight) ?? contentHeight;
     const footer = showFooter
       ? {
           composition: {
@@ -35,7 +39,7 @@ export const appShellRecipe: {
             direction: 'row',
             items: ['Footer'],
           },
-          style: {height: normalizeLength(footerHeight) ?? '48px'},
+          style: {height: footerHeight},
           className: `${prefix}-util-panel`,
         }
       : null;
@@ -50,7 +54,7 @@ export const appShellRecipe: {
               direction: 'row',
               items: ['Header'],
             },
-            style: {height: normalizeLength(headerHeight) ?? '56px'},
+            style: {height: headerHeight},
             className: `${prefix}-util-panel`,
           },
           {
@@ -64,7 +68,7 @@ export const appShellRecipe: {
                     direction: 'column',
                     items: ['Sidebar'],
                   },
-                  style: {width: normalizeLength(sidebarWidth) ?? '240px'},
+                  style: {width: sidebarWidth},
                   className: `${prefix}-util-panel`,
                 },
                 {
@@ -77,7 +81,7 @@ export const appShellRecipe: {
                 },
               ],
             },
-            style: {minHeight: normalizeLength(minHeight) ?? '420px'},
+            style: {minHeight: minHeight, flex: '1 1 auto'},
           },
           ...(footer ? [footer] : []),
         ],

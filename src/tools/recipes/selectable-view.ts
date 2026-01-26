@@ -15,24 +15,27 @@ export const selectableViewRecipe: {
   name: 'selectable_view' as const,
   description: 'Generic selectable view (tabs/carousel-like) with accessibility behaviors.',
   schema: zod.object({
-    items: zod
-      .array(
-        zod.object({
-          label: zod.string(),
-          content: zod.string(),
-        }),
-      )
-      .min(1),
+    labels: zod.array(zod.string()).min(1),
+    contents: zod.array(zod.string()).min(1),
     orientation: zod.enum(['horizontal', 'vertical']).optional(),
     variant: zod.enum(['tabs', 'carousel']).optional(),
     showControls: zod.coerce.boolean().optional(),
     showIndicators: zod.coerce.boolean().optional(),
-  }),
+  }).refine(
+    (data) => data.labels.length === data.contents.length,
+    { message: 'labels and contents arrays must have the same length' }
+  ),
   execute: (params: zod.infer<typeof selectableViewRecipe.schema>, prefix: string) => {
+    // Reconstruct items array from flattened structure
+    const items = params.labels.map((label: string, index: number) => ({
+      label,
+      content: params.contents[index] ?? '',
+    }));
+
     return {
       composition: {
         type: 'component_parametric_viewer',
-        items: params.items ?? [],
+        items,
         orientation: params.orientation,
         variant: params.variant,
         showControls: params.showControls,

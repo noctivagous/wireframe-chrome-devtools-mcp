@@ -20,8 +20,9 @@ export const twoColumnRecipe: {
     minHeight: lengthSchema.optional(),
   }),
   execute: (params: zod.infer<typeof twoColumnRecipe.schema>, prefix: string) => {
-    const sidebarWidth = params.sidebarWidth ?? '280px';
-    const minHeight = params.minHeight ?? '360px';
+    const sidebarWidth = normalizeLength(params.sidebarWidth) ?? '280px';
+    // Use viewport-filling height for better testing defaults
+    const minHeight = normalizeLength(params.minHeight) ?? '100vh';
     return {
       composition: {
         type: 'layout_parametric_stack',
@@ -33,7 +34,7 @@ export const twoColumnRecipe: {
               direction: 'column',
               items: ['Sidebar'],
             },
-            style: {width: normalizeLength(sidebarWidth) ?? '280px'},
+            style: {width: sidebarWidth},
             className: `${prefix}-util-panel`,
           },
           {
@@ -42,7 +43,7 @@ export const twoColumnRecipe: {
               direction: 'column',
               items: ['Main'],
             },
-            style: {minHeight: normalizeLength(minHeight) ?? '360px'},
+            style: {minHeight: minHeight, flex: '1 1 auto'},
             className: `${prefix}-util-panel`,
           },
         ],
