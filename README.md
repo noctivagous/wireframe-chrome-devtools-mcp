@@ -1,12 +1,24 @@
 # Wireframe Chrome DevTools MCP (Noctivagous)
 
+## How to Use
 
-`wireframe-chrome-devtools-mcp` is a branch of Google's `chrome-devtools-mcp` that lets your coding agent (such as Gemini, Claude, Cursor or Copilot) control and inspect a live Chrome browser. It acts as a Model-Context-Protocol
+After installing the MCP server, open up an agentic IDE like Cursor/Windsurf.
+
+1. Type "begin live editing" with or without a file URL. If you do it without a file URL, you will be editing `about:blank` from scratch.
+2. Ask for what you want. ("Build me an online storefront").
+
+After the page is built, you can refine th:
+
+1. Ask for changes in the AI agent chat.
+2. Add notes to various elements with the element picker describing what you want. Then say "update from changes" and it will pull your notes from the page and implement them. This lets you isolate specific elements to change without having to describe them and do multiple on the page in one run.
+
+
+`wireframe-chrome-devtools-mcp` is a forked branch of Google's `chrome-devtools-mcp` that lets your coding agent (such as Gemini, Claude, Cursor or Copilot) control and inspect a live Chrome browser. It acts as a Model-Context-Protocol
 (MCP) server, giving your AI coding assistant access to the full power of Chrome DevTools for reliable automation, in-depth debugging, and performance analysis.
 
-## Beginning Branch Focus: Wireframe Debugging Tools
+## Beginning Forked Branch Focus: Wireframe Debugging Tools
 
-First, this branch specializes in advanced layout debugging capabilities through dedicated wireframe tools. Unlike traditional raster image screenshots, which require complex image processing to detect overlaps, gaps, and layout issues, the included wireframe tools provide structural analysis directly from the browser's rendering engine.
+First, this branch specializes in layout debugging capabilities through dedicated wireframe tools. Unlike traditional raster image screenshots, which require complex image processing to detect overlaps, gaps, and layout issues, the included wireframe tools provide structural analysis directly from the browser's rendering engine.
 
 
 ### Key Wireframe Features
