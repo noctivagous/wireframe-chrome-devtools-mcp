@@ -6,23 +6,27 @@ A custom set of tools for Chrome DevTools MCP to allow
 
 - Debugging layouts (like overlaps and errors).  
 
-  Normally it doesn't work to debug layouts with Chrome DevTools MCP
+  Normally Chrome DevTools MCP doesn't work for debugging layouts with 
   because the snapshot tool returns raster information rather
   than vector and computed styling data.
 
-  This is made possible by svg_snapshot and wireframe_snapshot,
-  giving the AI structured layout information that it can process, 
-  returning responses overlap analysis so it can fix errors.
+  Wireframe includes svg_snapshot and wireframe_snapshot,
+  giving the AI structured layout information so that it 
+  can process the location, computed styles, and sizes
+  of elements, returning responses overlap analysis so 
+  it can fix errors.
 
 
 - Making live edits that add layouts and styling.
 
   Since you can now debug layouts, why not add some
-  tools to make them?  That's what is also provided.
+  tools to make layouts?  That's what is also provided.
 
   There are several tools like layout_live_editing,
   insert_js, insert_css, and manipulate_dom, that
-  are part of this workflow.
+  are part of this workflow.  They are woven together
+  to return snapshots so that the number of tool calls
+  is small.
 
 
 
@@ -30,33 +34,45 @@ A custom set of tools for Chrome DevTools MCP to allow
 
 After installing the MCP server, open up an agentic IDE like Cursor/Windsurf.
 
-1. Type "begin live editing" with or without a file URL. If you do it without a file URL, you will be editing `about:blank` from scratch.
+1. Type "begin live editing" with or without a file URL.
+If you submit this prompt without a file URL, 
+you will be editing `about:blank` from scratch.
 2. Ask for what you want. ("Build me an online storefront").
 
-After the page is built, you can refine the page by either
+After the page is built, you can refine the page by either:
 
 1. Asking for changes in the AI agent chat.
-2. Add notes to various elements with the element picker describing what you want. Then say "update from changes" and it will pull your notes from the page and implement them. This lets you isolate specific elements to change without having to describe them and do multiple on the page in one run.
+2. Attaching notes to various elements with the element picker 
+describing what you want. Then say "update from changes" in the AI
+chat and it will pull your notes from the page and implement them. 
+This lets you isolate specific elements to change without having 
+to describe them and do multiple tasks on the page in one run.
+You can add a note that says "this element is off" or "this
+needs to be put to the right," and so on.
 
+## About
 
 `wireframe-chrome-devtools-mcp` is a forked branch of Google's `chrome-devtools-mcp` that lets your coding agent (such as Gemini, Claude, Cursor or Copilot) control and inspect a live Chrome browser. It acts as a Model-Context-Protocol
 (MCP) server, giving your AI coding assistant access to the full power of Chrome DevTools for reliable automation, in-depth debugging, and performance analysis.
 
+
 ## Beginning Forked Branch Focus: Wireframe Debugging Tools
 
-First, this branch specializes in layout debugging capabilities through dedicated wireframe tools. Unlike traditional raster image screenshots, which require complex image processing to detect overlaps, gaps, and layout issues, the included wireframe tools provide structural analysis directly from the browser's rendering engine.
+First, this branch specialized in layout debugging capabilities through dedicated wireframe tools. Unlike traditional raster image screenshots, which require complex image processing to detect overlaps, gaps, and layout issues, the included wireframe tools provide structural analysis directly from the browser's rendering engine.
 
 
 ### Key Wireframe Features
 
-- **`wireframe_snapshot`**: Captures compact, deterministic wireframe data for overlap/gap analysis
+- **`wireframe_snapshot`**: Captures wireframe data for overlap/gap analysis
 - **`svg_snapshot`**: Generates visual SVG wireframes with layout debugging overlays
 
 - **Example prompt:**
   - “Use `svg_snapshot` and `wireframe_snapshot` for the main content area and fix what’s overlapping or overflowing.”
 
 
-These tools excel at detecting layout problems that are difficult to identify through image processing of regular screenshots.
+These tools allow the AI to immediately detect layout problems that are difficult or impossible for
+it to identify through image processing of regular screenshots.
+
 
 
 The Noctivagous Wireframe branch
