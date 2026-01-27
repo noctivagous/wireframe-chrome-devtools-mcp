@@ -2549,6 +2549,11 @@ export const manipulateDom = defineTool({
       ),
     );
     response.appendResponseLine('```');
+
+    // Include snapshot after DOM modifications (not for query-only or dry-run)
+    if (!isQueryOnly && !dryRun && result.success && successfulOps > 0) {
+      response.includeSnapshot();
+    }
   },
 });
 

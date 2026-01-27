@@ -54,7 +54,7 @@ describing what you want.
 When you are done making annotations, say "update from changes" in the AI
 chat and it will pull your notes from the page and implement them. 
 This lets you isolate specific elements to change without having 
-to describe them and do multiple tasks on the page in one run.
+to describe them. It also lets you do multiple tasks on the page in one run.
 You can add a note that says "this element is off" or "this
 needs to be put to the right," and so on.
 

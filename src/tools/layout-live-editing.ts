@@ -666,6 +666,14 @@ const recipeNameSchema = zod.enum([
   'three_panel',
   'toolbar',
   'grid_canvas',
+  'classic_5_section',
+  'masonry',
+  'centered_hero',
+  'sticky_header_footer',
+  'mobile_bottom_nav',
+  'master_detail',
+  'dashboard',
+  'split_screen',
 ]);
 
 const compositionTypeValues = [
@@ -819,6 +827,10 @@ const verifySchema = zod.object({
     .default(true)
     .optional()
     .describe('If true, capture an SVG wireframe snapshot after applying. Defaults to true for visual confirmation of layout changes.'),
+  textSnapshot: zod
+    .boolean()
+    .optional()
+    .describe('If true, capture a text snapshot (a11y tree) after applying. Provides element UIDs and semantic structure. Defaults to false since visual snapshots are already included.'),
 });
 
 // escapeHtml is imported from ./recipes/utils.js
@@ -2282,12 +2294,74 @@ export async function layoutLiveEditingRecipeCatalogHandler(
   response.appendResponseLine('```');
 }
 
+/**
+ * Builds a merged schema that includes all recipe parameters flattened to the top level.
+ * This allows recipes to be used with their parameters at the top level alongside the recipe name.
+ * Parameters that already exist in the base schema are skipped (they're already defined).
+ */
+function buildMergedRecipeSchema(): Record<string, zod.ZodTypeAny> {
+  const merged: Record<string, zod.ZodTypeAny> = {};
+  
+  // Known parameters that are already in the base schema - don't override these
+  const existingParams = new Set([
+    'target', 'root', 'mode', 'catalog', 'recipe',
+    'rows', 'itemsForAllRows', 'columnCount', 'unit', 'gap', 'columnGap', 'rowGap',
+    'rowHeight', 'rowMinHeight', 'rowLayout', 'layers',
+    'labels', 'contents', 'orientation', 'variant', 'showControls', 'showIndicators',
+    'headerHeight', 'sidebarWidth', 'showFooter', 'footerHeight', 'minHeight',
+    'navWidth', 'inspectorWidth', 'groups', 'columns', 'cellSize', 'showGrid',
+    'parametric_grid', 'parametric_stack', 'component_parametric_viewer',
+    'ariaPattern', 'selectable', 'rovingFocus', 'dragResize', 'behaviors',
+    'theme', 'patch', 'verify', 'componentMapMode',
+  ]);
+  
+  // Collect all recipe schemas and merge their properties
+  for (const [recipeName, recipe] of Object.entries(recipeRegistry)) {
+    if (recipe.schema instanceof zod.ZodObject) {
+      const shape = recipe.schema.shape;
+      for (const [paramName, paramSchema] of Object.entries(shape)) {
+        // Skip if already defined in base schema
+        if (existingParams.has(paramName)) {
+          continue;
+        }
+        
+        // Add new parameter from recipe
+        if (!merged[paramName]) {
+          const unwrapped = unwrapSchema(paramSchema as zod.ZodTypeAny);
+          let enhancedSchema = unwrapped.schema.optional();
+          
+          // Preserve original description if it exists
+          const originalDesc = (paramSchema as any).description;
+          const recipeDesc = originalDesc 
+            ? `Recipe parameter for ${recipeName}: ${originalDesc}`
+            : `Recipe parameter for ${recipeName}`;
+          
+          merged[paramName] = enhancedSchema.describe(recipeDesc);
+        } else {
+          // Parameter already exists from another recipe - append recipe name to description
+          const existing = merged[paramName];
+          const existingDesc = (existing as any).description || '';
+          if (!existingDesc.includes(recipeName)) {
+            const newDesc = existingDesc 
+              ? `${existingDesc} Also used by ${recipeName}.`
+              : `Recipe parameter used by ${recipeName}.`;
+            merged[paramName] = existing.describe(newDesc);
+          }
+        }
+      }
+    }
+  }
+  
+  return merged;
+}
+
 export const layoutLiveEditing = defineTool({
   name: 'layout_live_editing',
   description:
     'Generate a parametric layout in the live browser using layout atoms, behavior modules, and component compositions. Use either a recipe (preset) or one of the flattened composition parameters: parametric_grid, parametric_stack, or component_parametric_viewer.\n\n' +
     '**Content Migration:** When using the `selectable_view` recipe, the `contents` parameter supports both static HTML strings and selector objects to migrate existing DOM elements into tab panels. Use `{selector: "css-selector", preserveEvents: true, hideOriginal: true}` to move existing content atomically.\n\n' +
-    '**SVG Snapshots:** By default, this tool includes an SVG wireframe snapshot after applying layout changes (via `verify.svgSnapshot`, which defaults to `true`) to provide visual confirmation of the created or modified layout. Set `verify: { svgSnapshot: false }` to disable.',
+    '**SVG Snapshots:** By default, this tool includes an SVG wireframe snapshot after applying layout changes (via `verify.svgSnapshot`, which defaults to `true`) to provide visual confirmation of the created or modified layout. Set `verify: { svgSnapshot: false }` to disable.\n\n' +
+    '**Text Snapshots:** Optionally include a text snapshot (a11y tree) via `verify.textSnapshot: true` to get element UIDs and semantic structure. This complements the visual snapshots and is useful for targeting elements in subsequent operations.',
   annotations: {
     category: ToolCategory.PATCH,
     readOnlyHint: false,
@@ -2451,6 +2525,8 @@ export const layoutLiveEditing = defineTool({
       .default('full')
       .optional()
       .describe('Component map output mode: "summary" shows only key elements overview, "full" shows detailed component listing with all properties.'),
+    // Merge all recipe parameters flattened to top level
+    ...buildMergedRecipeSchema(),
   },
   handler: async (request, response, context) => {
     const catalog = (request.params as any).catalog;
@@ -3631,6 +3707,11 @@ export const layoutLiveEditing = defineTool({
           maxTotal: undefined, // Unlimited for complete verification
         }
       }, response, context);
+    }
+
+    // Include text snapshot if requested (opt-in)
+    if (request.params.verify?.textSnapshot) {
+      response.includeSnapshot();
     }
 
     if (mode === 'preview') {
