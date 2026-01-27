@@ -38,12 +38,20 @@ After installing the MCP server, open up an agentic IDE like Cursor/Windsurf.
 If you submit this prompt without a file URL, 
 you will be editing `about:blank` from scratch.
 2. Ask for what you want. ("Build me an online storefront").
+and refine the outcome in the chat.
 
-After the page is built, you can refine the page by either:
+3. When you are done, say "export the page to a file."
 
-1. Asking for changes in the AI agent chat.
-2. Attaching notes to various elements with the element picker 
-describing what you want. Then say "update from changes" in the AI
+
+# In-page notes
+
+When you are working on the page, you have another
+option besides telling the AI what to do in the chat. 
+Some buttons are inserted into the page for attaching notes.
+You can refine the page by attaching notes to various elements 
+describing what you want. 
+
+When you are done making annotations, say "update from changes" in the AI
 chat and it will pull your notes from the page and implement them. 
 This lets you isolate specific elements to change without having 
 to describe them and do multiple tasks on the page in one run.
