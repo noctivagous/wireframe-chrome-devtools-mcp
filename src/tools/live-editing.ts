@@ -47,7 +47,10 @@ const maxBytesInlineSchema = zod
   .describe('Maximum inline payload size (bytes) before falling back to an artifact file.');
 
 export const beginLiveEditingSessionSchema = {
-  url: zod.string().describe('URL to open for the live editing session.'),
+  url: zod
+    .string()
+    .optional()
+    .describe('URL to open for the live editing session. If omitted and the selected page is about:blank, editing will begin on that page without navigation.'),
   openMode: zod
     .enum(['new_page', 'navigate_selected'])
     .default('navigate_selected')
@@ -94,13 +97,23 @@ export async function beginLiveEditingSessionHandler(
     context.selectPage(page);
 
     let navigationError: string | undefined;
-    try {
-      await context.waitForEventsAfterAction(async () => {
-        await page.goto(request.params.url, {timeout: request.params.timeout});
-      });
-    } catch (error) {
-      navigationError = (error as Error).message ?? String(error);
+    const currentUrl = page.url();
+    const isAboutBlank = currentUrl === 'about:blank' || currentUrl.startsWith('about:');
+    
+    // Only navigate if URL is provided, or if page is not already about:blank
+    if (request.params.url) {
+      try {
+        await context.waitForEventsAfterAction(async () => {
+          await page.goto(request.params.url!, {timeout: request.params.timeout});
+        });
+      } catch (error) {
+        navigationError = (error as Error).message ?? String(error);
+      }
+    } else if (!isAboutBlank) {
+      // If no URL provided and page is not about:blank, we need a URL
+      throw new Error('URL is required when the selected page is not about:blank. Either provide a URL or select an about:blank page.');
     }
+    // If no URL provided and page is about:blank, skip navigation and proceed
 
     const title = await page.title().catch(() => undefined);
     const finalUrl = page.url();
@@ -1485,7 +1498,7 @@ export async function beginLiveEditingSessionHandler(
       version: LIVE_EDITING_SCHEMA_VERSION,
       data: {
         page: {
-          requestedUrl: request.params.url,
+          requestedUrl: request.params.url ?? finalUrl,
           finalUrl,
           title,
           openMode,

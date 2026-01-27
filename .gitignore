@@ -156,3 +156,6 @@ log.txt
 docs/recipes/
 
 reports-workingarea/
+
+# Tool toggles config (user-specific, auto-generated)
+.chrome-devtools-mcp-tools.json

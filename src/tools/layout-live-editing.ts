@@ -680,8 +680,30 @@ function isCompositionType(value: string): value is CompositionType {
   return compositionTypeValues.includes(value as CompositionType);
 }
 
+/**
+ * Parses a selector that may contain array index notation (e.g., ".class[6]")
+ * and returns a function that can find the target element.
+ * 
+ * Array index notation is converted to: find all matching elements, then select by index.
+ * Regular CSS selectors are used as-is.
+ */
+function parseSelectorWithIndex(selector: string): {
+  baseSelector: string;
+  index?: number;
+} {
+  // Match pattern like ".class[6]" or "#id[0]"
+  const indexMatch = selector.match(/^(.+)\[(\d+)\]$/);
+  if (indexMatch) {
+    return {
+      baseSelector: indexMatch[1],
+      index: Number.parseInt(indexMatch[2], 10),
+    };
+  }
+  return {baseSelector: selector};
+}
+
 const targetSchema = zod.object({
-  selector: zod.string().describe('CSS selector to insert into (default: body).'),
+  selector: zod.string().describe('CSS selector to insert into (default: body). Supports array index notation like ".class[6]" to select the 6th matching element (0-based).'),
   position: zod
     .enum(['beforebegin', 'afterbegin', 'beforeend', 'afterend'])
     .optional()
@@ -1437,10 +1459,16 @@ function buildGridLayout(params: LayoutGridParams, prefix: string, componentMap?
     ? `display:grid;align-items:stretch;`
     : `display:flex;align-items:stretch;`;
   
+  // Add default grid-template-columns when columnCount is provided
+  // This ensures grid works even if per-row rules don't apply (prevents overlapping items)
+  const defaultGridTemplateColumns = rowLayout === 'grid' && layoutColumnCount && layoutColumnCount > 0
+    ? `grid-template-columns: repeat(${layoutColumnCount}, minmax(0, ${unit}));`
+    : '';
+  
   const css = `
     .${prefix}-grid{position:relative;display:block;}
     .${prefix}-grid-base{display:flex;flex-direction:column;gap:${rowGap};}
-    .${prefix}-grid-row{${baseGridRowCss}}
+    .${prefix}-grid-row{${baseGridRowCss}${defaultGridTemplateColumns}}
     .${prefix}-grid-item,.${prefix}-grid-overlay-item{display:flex;align-items:center;justify-content:center;}
     .${prefix}-grid-overlay{position:absolute;inset:0;display:grid;pointer-events:none;align-items:stretch;}
     .${prefix}-grid-overlay-item{pointer-events:auto;align-self:stretch;min-height:100%;}
@@ -2959,11 +2987,30 @@ export const layoutLiveEditing = defineTool({
       return;
     }
 
+    // Parse selector for array index notation support
+    const selectorInfo = parseSelectorWithIndex(target.selector ?? 'body');
+    
     const domResult = await page.evaluate(
-      ({selector, position, html, patchId, replaceExisting, PATCH_ID_ATTR}) => {
-        const target = document.querySelector(selector);
+      ({baseSelector, index, position, html, patchId, replaceExisting, PATCH_ID_ATTR}) => {
+        // Support array index notation: find all matches and select by index
+        let target: Element | null;
+        if (index !== undefined) {
+          const allMatches = Array.from(document.querySelectorAll(baseSelector));
+          if (index < 0 || index >= allMatches.length) {
+            return {
+              success: false,
+              reason: 'target_not_found',
+              selector: `${baseSelector}[${index}]`,
+              message: `Index ${index} out of range. Found ${allMatches.length} matching element(s).`,
+            };
+          }
+          target = allMatches[index];
+        } else {
+          target = document.querySelector(baseSelector);
+        }
+        
         if (!target) {
-          return {success: false, reason: 'target_not_found', selector};
+          return {success: false, reason: 'target_not_found', selector: baseSelector};
         }
         if (!position) {
           position = 'beforeend';
@@ -2974,16 +3021,17 @@ export const layoutLiveEditing = defineTool({
             return {success: false, reason: 'patch_exists', patchId};
           }
           existing.outerHTML = html;
-          return {success: true, selector, replaced: true};
+          return {success: true, selector: baseSelector, replaced: true};
         }
         if (document.querySelector(`[${PATCH_ID_ATTR}="${patchId}"]`)) {
           return {success: false, reason: 'patch_exists', patchId};
         }
         target.insertAdjacentHTML(position, html);
-        return {success: true, selector};
+        return {success: true, selector: baseSelector};
       },
       {
-        selector: target.selector ?? 'body',
+        baseSelector: selectorInfo.baseSelector,
+        index: selectorInfo.index,
         position: target.position ?? 'beforeend',
         html: rootHtml,
         patchId: domPatchId,
@@ -3014,7 +3062,10 @@ export const layoutLiveEditing = defineTool({
         `   - The existing patch will remain unchanged and the operation was skipped`,
       );
     } else if (!domResult.success) {
-      throw new Error(`Failed to insert DOM: ${domResult.reason ?? 'unknown error'}`);
+      const errorMessage = (domResult as any).message 
+        ? `${domResult.reason ?? 'unknown error'}: ${(domResult as any).message}`
+        : domResult.reason ?? 'unknown error';
+      throw new Error(`Failed to insert DOM: ${errorMessage}`);
     } else {
       context.registerPatch({
         patchId: domPatchId,
@@ -3046,11 +3097,30 @@ export const layoutLiveEditing = defineTool({
 
     // Perform content migration if needed (for selectable_view recipe with selector-based contents)
     if (contentMigration && contentMigration.length > 0 && resolvedComposition?.type === 'component_parametric_viewer') {
+      // Parse target selector for array index notation support
+      const targetSelectorInfo = parseSelectorWithIndex(target.selector ?? 'body');
+      
       // Pre-validate migrations before executing
       const preValidation = await page.evaluate(
-        ({rootId, prefix, migrations, targetSelector}) => {
+        ({rootId, prefix, migrations, baseSelector, index}) => {
           const root = document.getElementById(rootId);
-          const target = document.querySelector(targetSelector);
+          
+          // Support array index notation for target selector
+          let target: Element | null;
+          if (index !== undefined) {
+            const allMatches = Array.from(document.querySelectorAll(baseSelector));
+            if (index < 0 || index >= allMatches.length) {
+              return {
+                valid: false,
+                errors: [`Target selector "${baseSelector}[${index}]" index out of range. Found ${allMatches.length} matching element(s).`],
+                warnings: [],
+              };
+            }
+            target = allMatches[index];
+          } else {
+            target = document.querySelector(baseSelector);
+          }
+          
           const warnings: string[] = [];
           const errors: string[] = [];
 
@@ -3062,7 +3132,7 @@ export const layoutLiveEditing = defineTool({
 
           // Check if target exists
           if (!target) {
-            errors.push(`Target element "${targetSelector}" not found.`);
+            errors.push(`Target element "${baseSelector}${index !== undefined ? `[${index}]` : ''}" not found.`);
             return {valid: false, errors, warnings: []};
           }
 
@@ -3114,7 +3184,8 @@ export const layoutLiveEditing = defineTool({
           rootId,
           prefix,
           migrations: contentMigration,
-          targetSelector: target.selector ?? 'body',
+          baseSelector: targetSelectorInfo.baseSelector,
+          index: targetSelectorInfo.index,
         },
       );
 

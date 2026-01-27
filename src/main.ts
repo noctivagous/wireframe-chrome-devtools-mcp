@@ -57,6 +57,7 @@ import {setBatchOpsExecutor} from './tools/batch-ops.js';
 import {ToolCategory} from './tools/categories.js';
 import type {ToolDefinition} from './tools/ToolDefinition.js';
 import {tools} from './tools/tools.js';
+import {WORKFLOW_GROUPS} from './web-ui-settings.js';
 import {startWebUi, type ToolToggleView, type ParameterInfo} from './web-ui.js';
 
 // If moved update release-please config
@@ -228,6 +229,49 @@ const projectRoot = findProjectRoot();
 registerResources(server, projectRoot);
 registerPrompts(server);
 
+/**
+ * Calculates the default list of disabled tools based on the live editing workflow.
+ * By default, only tools in the live-editing-minimal workflow are enabled.
+ * All other tools are disabled.
+ */
+function calculateDefaultDisabledTools(): string[] {
+  // Find the live-editing-minimal workflow
+  const liveEditingWorkflow = WORKFLOW_GROUPS.find(w => w.id === 'live-editing-minimal');
+  if (!liveEditingWorkflow) {
+    // If workflow not found, default to all tools enabled (empty disabled list)
+    return [];
+  }
+
+  // Get all tool names that should be enabled (from the live editing workflow)
+  const enabledToolNames = new Set(liveEditingWorkflow.tools);
+
+  // Also include tools from toolCategories if specified
+  if (liveEditingWorkflow.toolCategories.length > 0) {
+    for (const tool of tools) {
+      // Map tool categories to workflow categories
+      const categoryMap: Record<string, string> = {
+        [ToolCategory.INPUT]: 'input',
+        [ToolCategory.NAVIGATION]: 'navigation',
+        [ToolCategory.SNAPSHOT]: 'snapshot',
+        [ToolCategory.EMULATION]: 'emulation',
+        [ToolCategory.NETWORK]: 'network',
+        [ToolCategory.PERFORMANCE]: 'performance',
+        [ToolCategory.DEBUGGING]: 'debugging',
+        [ToolCategory.EXTENSIONS]: 'extensions',
+      };
+      const categoryName = categoryMap[tool.annotations.category];
+      if (categoryName && liveEditingWorkflow.toolCategories.includes(categoryName)) {
+        enabledToolNames.add(tool.name);
+      }
+    }
+  }
+
+  // Return all tools that are NOT in the enabled set
+  return tools
+    .map(tool => tool.name)
+    .filter(toolName => !enabledToolNames.has(toolName));
+}
+
 const toolConfigPath = path.resolve(
   (args as any).toolConfig ?? path.join(projectRoot, '.chrome-devtools-mcp-tools.json'),
 );
@@ -236,7 +280,8 @@ let toolToggles: ToolTogglesConfigV1 = loadedConfig;
 
 // Create default config file in project root if it doesn't exist (so it can be tracked in git)
 if (!existed && !(args as any).toolConfig) {
-  await saveToolTogglesConfig(toolConfigPath, []);
+  const defaultDisabledTools = calculateDefaultDisabledTools();
+  await saveToolTogglesConfig(toolConfigPath, defaultDisabledTools);
   toolToggles = (await loadToolTogglesConfig(toolConfigPath)).config;
 }
 
