@@ -1,5 +1,31 @@
 # Wireframe Chrome DevTools MCP (Noctivagous)
 
+## What It Is
+
+A custom set of tools for Chrome DevTools MCP to allow
+
+- Debugging layouts (like overlaps and errors).  
+
+  Normally it doesn't work to debug layouts with Chrome DevTools MCP
+  because the snapshot tool returns raster information rather
+  than vector and computed styling data.
+
+  This is made possible by svg_snapshot and wireframe_snapshot,
+  giving the AI structured layout information that it can process, 
+  returning responses overlap analysis so it can fix errors.
+
+
+- Making live edits that add layouts and styling.
+
+  Since you can now debug layouts, why not add some
+  tools to make them?  That's what is also provided.
+
+  There are several tools like layout_live_editing,
+  insert_js, insert_css, and manipulate_dom, that
+  are part of this workflow.
+
+
+
 ## How to Use
 
 After installing the MCP server, open up an agentic IDE like Cursor/Windsurf.
@@ -7,9 +33,9 @@ After installing the MCP server, open up an agentic IDE like Cursor/Windsurf.
 1. Type "begin live editing" with or without a file URL. If you do it without a file URL, you will be editing `about:blank` from scratch.
 2. Ask for what you want. ("Build me an online storefront").
 
-After the page is built, you can refine th:
+After the page is built, you can refine the page by either
 
-1. Ask for changes in the AI agent chat.
+1. Asking for changes in the AI agent chat.
 2. Add notes to various elements with the element picker describing what you want. Then say "update from changes" and it will pull your notes from the page and implement them. This lets you isolate specific elements to change without having to describe them and do multiple on the page in one run.
 
 
