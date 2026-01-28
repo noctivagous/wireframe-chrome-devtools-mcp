@@ -815,6 +815,35 @@ const themeSchema = zod.object({
       fontFamily: zod.string().optional(),
     })
     .optional(),
+  baselineGrid: zod
+    .object({
+      unit: zod
+        .union([zod.number(), zod.string()])
+        .optional()
+        .describe('Baseline grid unit size in pixels (e.g., 8, "8px"). Defaults to spacing value if not provided.'),
+      fontSize: zod
+        .union([zod.number(), zod.string()])
+        .optional()
+        .describe('Base font size for calculating line-height. Defaults to 16px.'),
+      lineHeightRatio: zod
+        .number()
+        .positive()
+        .optional()
+        .default(1.5)
+        .describe('Base line-height ratio (e.g., 1.5 = 150% of font-size).'),
+      enabled: zod
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Enable baseline grid alignment for typography and spacing.'),
+      showGrid: zod
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Show visual baseline grid overlay (for debugging).'),
+    })
+    .optional()
+    .describe('Unit-based baseline grid system for vertical rhythm. Uses a base unit (e.g., 8px) to align line-heights and spacing.'),
 });
 
 const verifySchema = zod.object({
@@ -855,6 +884,43 @@ function extractCssVariables(cssText: string, selector: string, prefix: string):
 }
 
 // normalizeLength is imported from ./recipes/utils.js
+
+/**
+ * Calculate line-height that aligns to baseline grid unit
+ * Rounds up to nearest multiple of baseline unit
+ */
+function calculateBaselineLineHeight(
+  fontSize: number,
+  baselineUnit: number,
+  lineHeightRatio: number = 1.5,
+): number {
+  const baseLineHeight = fontSize * lineHeightRatio;
+  // Round up to nearest baseline unit
+  const baselineMultiplier = Math.ceil(baseLineHeight / baselineUnit);
+  return baselineMultiplier * baselineUnit;
+}
+
+/**
+ * Align a value to the nearest multiple of baseline unit (rounds up)
+ */
+function alignToBaseline(value: number, baselineUnit: number): number {
+  return Math.ceil(value / baselineUnit) * baselineUnit;
+}
+
+/**
+ * Calculate font-size and line-height pair that aligns to baseline grid
+ */
+function calculateBaselineTypography(
+  fontSize: number,
+  baselineUnit: number,
+  lineHeightRatio: number = 1.5,
+): {fontSize: string; lineHeight: string} {
+  const lineHeight = calculateBaselineLineHeight(fontSize, baselineUnit, lineHeightRatio);
+  return {
+    fontSize: `${fontSize}px`,
+    lineHeight: `${lineHeight}px`, // Use px for precise alignment
+  };
+}
 
 function parseUnitOffset(offset: number | string | undefined): number | null {
   if (offset === undefined) {return null;}
@@ -2748,6 +2814,26 @@ export const layoutLiveEditing = defineTool({
     const weightDefaults = visualWeightDefaults(theme.visualWeight);
     const interaction = interactionDefaults(theme.interactionModel);
 
+    // Baseline grid configuration
+    const baselineGrid = theme.baselineGrid;
+    const baselineEnabled = baselineGrid?.enabled ?? false;
+    const spacingPx = typeof spacing === 'string' 
+      ? parseFloat(spacing.replace('px', '').replace('rem', '')) || 8
+      : spacing;
+    const baselineUnitPx = baselineGrid?.unit 
+      ? (typeof baselineGrid.unit === 'number' ? baselineGrid.unit : parseFloat(String(baselineGrid.unit).replace('px', '')) || spacingPx)
+      : spacingPx;
+    const baseFontSizePx = baselineGrid?.fontSize 
+      ? (typeof baselineGrid.fontSize === 'number' ? baselineGrid.fontSize : parseFloat(String(baselineGrid.fontSize).replace('px', '')) || 16)
+      : 16;
+    const lineHeightRatio = baselineGrid?.lineHeightRatio ?? 1.5;
+    const showBaselineGrid = baselineGrid?.showGrid ?? false;
+    
+    // Calculate baseline-aligned line-height
+    const baseLineHeightPx = baselineEnabled 
+      ? calculateBaselineLineHeight(baseFontSizePx, baselineUnitPx, lineHeightRatio)
+      : baseFontSizePx * lineHeightRatio;
+
     let sampled: {
       background?: string | null;
       text?: string | null;
@@ -2845,9 +2931,21 @@ export const layoutLiveEditing = defineTool({
       `--${prefix}-control-size:${interaction.controlSize};`,
       `--${prefix}-control-padding:${interaction.controlPadding};`,
       `--${prefix}-accent-contrast:${accentContrast};`,
-    ].join(' ');
+    ];
+    
+    // Add baseline grid variables if enabled
+    if (baselineEnabled) {
+      rootVars.push(
+        `--${prefix}-baseline-unit:${baselineUnitPx}px;`,
+        `--${prefix}-baseline-font-size:${baseFontSizePx}px;`,
+        `--${prefix}-baseline-line-height:${baseLineHeightPx}px;`,
+        `--${prefix}-baseline-line-height-ratio:${lineHeightRatio};`
+      );
+    }
+    
+    const rootVarsString = rootVars.join(' ');
 
-    const baseCss = `
+    let baseCss = `
       .${prefix}-selected{outline:2px solid var(--${prefix}-accent);outline-offset:2px;}
       .${prefix}-root{color:var(--${prefix}-text);}
       .${prefix}-nested{display:contents;}
@@ -2860,19 +2958,68 @@ export const layoutLiveEditing = defineTool({
       .${prefix}-util-separator{border-bottom:1px solid var(--${prefix}-separator);}
       .${prefix}-util-separator-vertical{border-right:1px solid var(--${prefix}-separator);}
     `;
+    
+    // Add baseline grid utilities if enabled
+    if (baselineEnabled) {
+      // Calculate typography scale values aligned to baseline
+      const typographySm = calculateBaselineTypography(baseFontSizePx * 0.875, baselineUnitPx, lineHeightRatio);
+      const typographyLg = calculateBaselineTypography(baseFontSizePx * 1.25, baselineUnitPx, lineHeightRatio);
+      const typographyXl = calculateBaselineTypography(baseFontSizePx * 1.5, baselineUnitPx, lineHeightRatio);
+      const typography2xl = calculateBaselineTypography(baseFontSizePx * 2, baselineUnitPx, lineHeightRatio);
+      
+      baseCss += `
+        /* Baseline grid typography utilities */
+        .${prefix}-util-text-base{font-size:var(--${prefix}-baseline-font-size);line-height:var(--${prefix}-baseline-line-height);}
+        .${prefix}-util-text-sm{font-size:${typographySm.fontSize};line-height:${typographySm.lineHeight};}
+        .${prefix}-util-text-lg{font-size:${typographyLg.fontSize};line-height:${typographyLg.lineHeight};}
+        .${prefix}-util-text-xl{font-size:${typographyXl.fontSize};line-height:${typographyXl.lineHeight};}
+        .${prefix}-util-text-2xl{font-size:${typography2xl.fontSize};line-height:${typography2xl.lineHeight};}
+        /* Baseline-aligned spacing utilities */
+        .${prefix}-util-spacing-baseline{margin-top:var(--${prefix}-baseline-unit);margin-bottom:var(--${prefix}-baseline-unit);}
+        .${prefix}-util-spacing-baseline-2{margin-top:calc(2 * var(--${prefix}-baseline-unit));margin-bottom:calc(2 * var(--${prefix}-baseline-unit));}
+        .${prefix}-util-spacing-baseline-3{margin-top:calc(3 * var(--${prefix}-baseline-unit));margin-bottom:calc(3 * var(--${prefix}-baseline-unit));}
+        .${prefix}-util-margin-baseline{margin-bottom:var(--${prefix}-baseline-unit);}
+        .${prefix}-util-margin-baseline-2{margin-bottom:calc(2 * var(--${prefix}-baseline-unit));}
+        .${prefix}-util-margin-baseline-3{margin-bottom:calc(3 * var(--${prefix}-baseline-unit));}
+        .${prefix}-util-padding-baseline{padding-top:var(--${prefix}-baseline-unit);padding-bottom:var(--${prefix}-baseline-unit);}
+        .${prefix}-util-padding-baseline-2{padding-top:calc(2 * var(--${prefix}-baseline-unit));padding-bottom:calc(2 * var(--${prefix}-baseline-unit));}
+      `;
+      
+      // Add visual grid overlay if requested
+      if (showBaselineGrid) {
+        baseCss += `
+          ${scopeSelector}::before{content:'';position:absolute;inset:0;background-image:repeating-linear-gradient(to bottom,transparent,transparent calc(var(--${prefix}-baseline-unit) - 1px),rgba(0,0,0,0.05) calc(var(--${prefix}-baseline-unit) - 1px),rgba(0,0,0,0.05) var(--${prefix}-baseline-unit));pointer-events:none;z-index:9999;}
+        `;
+      }
+    }
 
     const scopedCss = `
-      ${scopeSelector}{${rootVars}font-family:var(--${prefix}-font);height:100vh;display:flex;flex-direction:column;}
+      ${scopeSelector}{${rootVarsString}font-family:var(--${prefix}-font);height:100vh;display:flex;flex-direction:column;}
       ${scopeSelector}, ${scopeSelector} *{box-sizing:border-box;}
       ${scopeCss(layoutCss + baseCss, scopeSelector)}
     `;
 
     // Add root element to component map
+    const rootCssVariables = extractCssVariables(scopedCss, `#${rootId}`, prefix);
+    if (baselineEnabled) {
+      // Ensure baseline grid variables are included
+      const baselineVars = [
+        'baseline-unit',
+        'baseline-font-size',
+        'baseline-line-height',
+        'baseline-line-height-ratio',
+      ];
+      baselineVars.forEach(v => {
+        if (!rootCssVariables.includes(v)) {
+          rootCssVariables.push(v);
+        }
+      });
+    }
     componentMap.unshift({
       elementName: 'root',
       id: rootId,
       classes: [`${prefix}-root`],
-      cssVariables: extractCssVariables(scopedCss, `#${rootId}`, prefix),
+      cssVariables: rootCssVariables,
       selector: `#${rootId}`,
     });
 
@@ -3722,6 +3869,25 @@ export const layoutLiveEditing = defineTool({
       }
     }
 
+    // Add baseline grid info if enabled
+    if (baselineEnabled) {
+      response.appendResponseLine('');
+      response.appendResponseLine('✅ **Baseline Grid Enabled**');
+      response.appendResponseLine(`- Baseline unit: ${baselineUnitPx}px`);
+      response.appendResponseLine(`- Base font size: ${baseFontSizePx}px`);
+      response.appendResponseLine(`- Base line height: ${baseLineHeightPx}px (aligned to ${baselineUnitPx}px grid)`);
+      response.appendResponseLine(`- Line height ratio: ${lineHeightRatio}`);
+      if (showBaselineGrid) {
+        response.appendResponseLine(`- Visual grid overlay: enabled (for debugging)`);
+      }
+      response.appendResponseLine('');
+      response.appendResponseLine('**Available utilities:**');
+      response.appendResponseLine(`- Typography: \`.${prefix}-util-text-base\`, \`.${prefix}-util-text-sm\`, \`.${prefix}-util-text-lg\`, \`.${prefix}-util-text-xl\`, \`.${prefix}-util-text-2xl\``);
+      response.appendResponseLine(`- Spacing: \`.${prefix}-util-spacing-baseline\`, \`.${prefix}-util-margin-baseline\`, \`.${prefix}-util-padding-baseline\` (with -2, -3 variants)`);
+      response.appendResponseLine(`- CSS variables: \`--${prefix}-baseline-unit\`, \`--${prefix}-baseline-font-size\`, \`--${prefix}-baseline-line-height\``);
+      response.appendResponseLine('');
+    }
+    
     // Add prominent Component Map summary for AI
     response.appendResponseLine('');
     response.appendResponseLine('# 📋 Component Map');

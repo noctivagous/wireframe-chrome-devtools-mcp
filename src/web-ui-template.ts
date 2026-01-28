@@ -441,6 +441,10 @@ function generateStyles(): string {
       min-height: 0;
     }
 
+    .workflow-tab-panel #content-area #tools-grid.table-mode {
+      overflow: hidden;
+    }
+
     .controls-bar {
       padding: 16px 24px;
       border-bottom: 1px solid var(--border);
@@ -534,6 +538,206 @@ function generateStyles(): string {
       gap: 20px;
       align-content: start;
       min-height: 0;
+    }
+
+    #tools-grid.table-mode {
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .tools-table-wrapper {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 0;
+    }
+
+    .tools-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card-bg);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--card-shadow);
+    }
+
+    .tools-table thead {
+      background: var(--bg-secondary);
+      border-bottom: 2px solid var(--border);
+    }
+
+    .tools-table th {
+      padding: 16px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tools-table th:first-child {
+      padding-left: 24px;
+    }
+
+    .tools-table th:last-child {
+      padding-right: 24px;
+      text-align: center;
+      width: 100px;
+    }
+
+    .tools-table tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background-color 0.2s;
+    }
+
+    .tools-table tbody tr:hover {
+      background: var(--bg-secondary);
+    }
+
+    .tools-table tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    .tools-table td {
+      padding: 16px;
+      font-size: 14px;
+      color: var(--text-primary);
+      vertical-align: top;
+    }
+
+    .tools-table td:first-child {
+      padding-left: 24px;
+    }
+
+    .tools-table td:last-child {
+      padding-right: 24px;
+      text-align: center;
+    }
+
+    .table-tool-name {
+      font-family: ui-monospace, monospace;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .table-tool-category {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: capitalize;
+      padding: 4px 8px;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      display: inline-block;
+    }
+
+    .table-tool-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-top: 4px;
+    }
+
+    .table-tool-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .table-tool-status.enabled {
+      color: #10b981;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .table-tool-status.disabled {
+      color: var(--text-secondary);
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    .tools-table-section {
+      margin-bottom: 32px;
+    }
+
+    .tools-table-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .tools-table-section-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .tools-table-section-title::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .workflow-card-extra-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 2px 8px;
+      border-radius: 12px;
+      margin-left: 8px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .workflow-card-extra-badge {
+        color: #34d399;
+        background: rgba(16, 185, 129, 0.2);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .tools-table-wrapper {
+        padding: 12px;
+        overflow-x: auto;
+      }
+
+      .tools-table {
+        font-size: 12px;
+      }
+
+      .tools-table th,
+      .tools-table td {
+        padding: 12px 8px;
+      }
+
+      .tools-table th:first-child,
+      .tools-table td:first-child {
+        padding-left: 12px;
+      }
+
+      .tools-table th:last-child,
+      .tools-table td:last-child {
+        padding-right: 12px;
+      }
+
+      .table-tool-desc {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
     }
 
     .tool-card {
@@ -972,6 +1176,82 @@ function generateStyles(): string {
       transform: scaleX(1);
     }
 
+    .workflow-card.active {
+      border-color: #10b981;
+      border-width: 3px;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.4), 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      background: linear-gradient(to bottom, rgba(16, 185, 129, 0.08), var(--card-bg));
+    }
+
+    .workflow-card.active::before {
+      background: #10b981;
+      transform: scaleX(1);
+      height: 5px;
+    }
+
+    .workflow-card-active-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.15);
+      padding: 2px 8px;
+      border-radius: 12px;
+      margin-left: 8px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .workflow-card-active-badge {
+        color: #34d399;
+        background: rgba(16, 185, 129, 0.25);
+        border-color: rgba(16, 185, 129, 0.4);
+      }
+    }
+
+    .workflow-active-indicator {
+      font-size: 12px;
+      font-weight: 600;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.15);
+      padding: 4px 10px;
+      border-radius: 12px;
+      margin-left: 8px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .workflow-active-indicator {
+        color: #34d399;
+        background: rgba(16, 185, 129, 0.25);
+        border-color: rgba(16, 185, 129, 0.4);
+      }
+    }
+
+    .activate-workflow-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    }
+
+    .activate-workflow-btn:hover {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .activate-workflow-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    }
+
     .workflow-card-header {
       display: flex;
       justify-content: space-between;
@@ -1042,6 +1322,13 @@ function generateStyles(): string {
 
     .tool-selection-view.hidden {
       display: none;
+    }
+
+    #workflow-tab-wrapper {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 0;
     }
 
     .workflow-context-bar {
@@ -1308,6 +1595,7 @@ function generateScript(route: PageRoute): string {
         selectedCategory: 'all',
         currentView: 'workflows',
         selectedWorkflow: 'all',
+        activeWorkflow: null, // ID of the currently active workflow
         guidanceLoaded: false
       };
       
@@ -1479,13 +1767,65 @@ function generateScript(route: PageRoute): string {
           if (state.currentView === 'tools') {
             matchesSelection = state.selectedCategory === 'all' || t.category === state.selectedCategory;
           } else {
-            matchesSelection = state.selectedWorkflow === 'all' ||
-              allowedCategories.includes(t.category) ||
-              allowedTools.includes(t.name);
+            // In workflow mode, show all tools (they'll be split into workflow/other tables)
+            if (state.selectedWorkflow !== 'all' && state.currentView === 'workflows') {
+              matchesSelection = true; // Show all tools in workflow mode
+            } else {
+              matchesSelection = state.selectedWorkflow === 'all' ||
+                allowedCategories.includes(t.category) ||
+                allowedTools.includes(t.name);
+            }
           }
           
           return matchesQuery && matchesSelection;
         });
+        
+        // Activate workflow function
+        function activateWorkflow(workflowId) {
+          const workflow = WORKFLOW_GROUPS.find(w => w.id === workflowId);
+          if (!workflow) return;
+          
+          // Set as active workflow
+          state.activeWorkflow = workflowId;
+          
+          // Get workflow tool names
+          const workflowToolNames = getWorkflowToolNames(workflowId);
+          
+          // Get currently enabled tools (user's modifications)
+          const currentlyEnabled = new Set(
+            state.tools.filter(t => t.enabled).map(t => t.name)
+          );
+          
+          // Activate workflow: enable all workflow tools, keep extra enabled tools, disable rest
+          state.tools.forEach(t => {
+            if (workflowToolNames.has(t.name)) {
+              // Tool is in workflow - always enable it
+              t.enabled = true;
+            } else if (currentlyEnabled.has(t.name)) {
+              // Tool is not in workflow but was enabled (user added it) - keep it enabled
+              t.enabled = true;
+            } else {
+              // Tool is not in workflow and wasn't enabled - disable it
+              t.enabled = false;
+            }
+          });
+          
+          // Re-render to show updated state
+          render();
+          
+          // Update workflow selection view if visible
+          if (workflowUI && typeof workflowUI.updateWorkflowSelectionView === 'function') {
+            workflowUI.updateWorkflowSelectionView();
+          }
+          
+          // Update tool selection view if visible
+          const toolView = $('tool-selection-view');
+          if (toolView) {
+            workflowUI.updateToolSelectionView(toolView, workflowId, workflow.name);
+          }
+          
+          setStatus('Workflow activated: ' + workflow.name);
+        }
         
         // Render sidebar
         if (state.currentView === 'workflows' && workflowGroups) {
@@ -1496,6 +1836,14 @@ function generateScript(route: PageRoute): string {
         
         // Render grid
         renderToolsGrid(grid, filtered);
+        
+        // Update workflow selection view if visible
+        if (workflowUI && typeof workflowUI.updateWorkflowSelectionView === 'function') {
+          const workflowView = $('workflow-selection-view');
+          if (workflowView && !workflowView.classList.contains('hidden')) {
+            workflowUI.updateWorkflowSelectionView();
+          }
+        }
       }
       
       // Render workflow groups sidebar
@@ -1538,26 +1886,7 @@ function generateScript(route: PageRoute): string {
         container.querySelectorAll('input[name="workflow-group"]').forEach(radio => {
           radio.addEventListener('change', (e) => {
             state.selectedWorkflow = e.target.value;
-            
-            // When a workflow group is selected (not "all"), enable only its tools
-            if (state.selectedWorkflow !== 'all') {
-              const workflow = WORKFLOW_GROUPS.find(w => w.id === state.selectedWorkflow);
-              if (workflow) {
-                const workflowToolNames = new Set([
-                  ...workflow.tools,
-                  ...(workflow.toolCategories && workflow.toolCategories.length > 0
-                    ? state.tools
-                        .filter(t => workflow.toolCategories.includes(t.category))
-                        .map(t => t.name)
-                    : [])
-                ]);
-                
-                state.tools.forEach(t => {
-                  t.enabled = workflowToolNames.has(t.name);
-                });
-              }
-            }
-            
+            // Don't automatically activate tools - user must click "Activate" button
             render();
           });
         });
@@ -1607,11 +1936,126 @@ function generateScript(route: PageRoute): string {
       function renderToolsGrid(grid, filtered) {
         grid.innerHTML = '';
         
+        // Check if we're in workflow mode (workflow selected and in workflows view)
+        const isWorkflowMode = state.selectedWorkflow !== 'all' && state.currentView === 'workflows';
+        
         if (filtered.length === 0) {
-          grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; opacity: 0.5;">No tools found matching your criteria</div>';
+          const emptyMsg = document.createElement('div');
+          if (isWorkflowMode) {
+            emptyMsg.style.cssText = 'text-align: center; padding: 40px; opacity: 0.5; width: 100%;';
+          } else {
+            emptyMsg.style.cssText = 'grid-column: 1/-1; text-align: center; padding: 40px; opacity: 0.5;';
+          }
+          emptyMsg.textContent = 'No tools found matching your criteria';
+          grid.appendChild(emptyMsg);
           return;
         }
         
+        if (isWorkflowMode) {
+          // Render as table
+          grid.classList.add('table-mode');
+          renderToolsTable(grid, filtered);
+        } else {
+          // Render as grid (cards)
+          grid.classList.remove('table-mode');
+          renderToolsGridCards(grid, filtered);
+        }
+      }
+      
+      // Get workflow tool names as a Set
+      function getWorkflowToolNames(workflowId) {
+        if (workflowId === 'all') return new Set();
+        const workflow = WORKFLOW_GROUPS.find(w => w.id === workflowId);
+        if (!workflow) return new Set();
+        
+        return new Set([
+          ...workflow.tools,
+          ...(workflow.toolCategories && workflow.toolCategories.length > 0
+            ? state.tools
+                .filter(t => workflow.toolCategories.includes(t.category))
+                .map(t => t.name)
+            : [])
+        ]);
+      }
+      
+      // Render tools as table (for workflow mode)
+      function renderToolsTable(grid, filtered) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'tools-table-wrapper';
+        
+        if (state.selectedWorkflow === 'all') {
+          // If no workflow selected, just show all tools in one table
+          const section = createToolsTableSection('All Tools', filtered);
+          wrapper.appendChild(section);
+        } else {
+          // Split tools into workflow tools and other tools
+          const workflowToolNames = getWorkflowToolNames(state.selectedWorkflow);
+          const workflowTools = filtered.filter(t => workflowToolNames.has(t.name));
+          const otherTools = filtered.filter(t => !workflowToolNames.has(t.name));
+          
+          // Render workflow tools table
+          if (workflowTools.length > 0) {
+            const workflow = WORKFLOW_GROUPS.find(w => w.id === state.selectedWorkflow);
+            const sectionTitle = workflow ? workflow.name + ' Tools' : 'Workflow Tools';
+            const section = createToolsTableSection(sectionTitle, workflowTools);
+            wrapper.appendChild(section);
+          }
+          
+          // Render other tools table
+          if (otherTools.length > 0) {
+            const section = createToolsTableSection('Other Tools (Add to workflow)', otherTools);
+            wrapper.appendChild(section);
+          }
+        }
+        
+        grid.appendChild(wrapper);
+      }
+      
+      // Create a table section with title
+      function createToolsTableSection(title, tools) {
+        const section = document.createElement('div');
+        section.className = 'tools-table-section';
+        
+        const titleEl = document.createElement('div');
+        titleEl.className = 'tools-table-section-title';
+        titleEl.textContent = title;
+        section.appendChild(titleEl);
+        
+        const table = document.createElement('table');
+        table.className = 'tools-table';
+        
+        // Table header
+        const thead = document.createElement('thead');
+        thead.innerHTML = \`
+          <tr>
+            <th>Tool Name</th>
+            <th>Category</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th>Toggle</th>
+          </tr>
+        \`;
+        table.appendChild(thead);
+        
+        // Table body
+        const tbody = document.createElement('tbody');
+        
+        // Sort tools by name
+        const sorted = [...tools].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        
+        sorted.forEach(t => {
+          const row = createToolTableRow(t);
+          tbody.appendChild(row);
+        });
+        
+        table.appendChild(tbody);
+        section.appendChild(table);
+        
+        return section;
+      }
+      
+      // Render tools as grid cards (for non-workflow mode)
+      function renderToolsGridCards(grid, filtered) {
         const byCategory = new Map();
         for (const t of filtered) {
           const cat = t.category || 'unknown';
@@ -1641,6 +2085,57 @@ function generateScript(route: PageRoute): string {
             grid.appendChild(card);
           });
         });
+      }
+      
+      // Create table row for a tool
+      function createToolTableRow(t) {
+        const row = document.createElement('tr');
+        
+        const badgeHtml = t.isOriginal 
+          ? '<span class="badge original-badge" title="From original chrome-devtools-mcp repo">Original</span>'
+          : '<span class="badge branch-badge" title="Added in this branch">Branch</span>';
+        
+        const statusClass = t.enabled ? 'enabled' : 'disabled';
+        const statusText = t.enabled ? 'Enabled' : 'Disabled';
+        const checkedAttr = t.enabled ? 'checked' : '';
+        
+        row.innerHTML = \`
+          <td>
+            <div class="table-tool-name">
+              \${(t.name || '').replace(/</g, '&lt;')}
+              \${badgeHtml}
+            </div>
+          </td>
+          <td>
+            <span class="table-tool-category">\${(t.category || 'unknown').replace(/</g, '&lt;')}</span>
+          </td>
+          <td>
+            <div class="table-tool-desc">\${(t.description || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+          </td>
+          <td>
+            <div class="table-tool-status \${statusClass}">\${statusText}</div>
+          </td>
+          <td>
+            <label class="switch">
+              <input type="checkbox" \${checkedAttr} data-tool="\${(t.name || '').replace(/"/g, '&quot;')}">
+              <span class="slider"></span>
+            </label>
+          </td>
+        \`;
+        
+        // Add checkbox handler
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (cb) {
+          cb.onchange = (e) => {
+            const tool = state.tools.find(tool => tool.name === t.name);
+            if (tool) {
+              tool.enabled = e.target.checked;
+              render();
+            }
+          };
+        }
+        
+        return row;
       }
       
       // Create tool card
@@ -1727,7 +2222,12 @@ function generateScript(route: PageRoute): string {
       // Workflow-first UI management
       const workflowUI = {
         init() {
-          if (document.getElementById('workflow-selection-view')) return;
+          const existingView = document.getElementById('workflow-selection-view');
+          if (existingView) {
+            // Update existing view with current tool counts
+            this.updateWorkflowSelectionView();
+            return;
+          }
           
           const toolsView = $('tools-view');
           if (!toolsView) return;
@@ -1747,6 +2247,74 @@ function generateScript(route: PageRoute): string {
           // Create workflow selection view
           const workflowView = this.createWorkflowSelectionView();
           toolsView.insertBefore(workflowView, toolsView.firstChild);
+        },
+        
+        updateWorkflowSelectionView() {
+          const workflowView = $('workflow-selection-view');
+          if (!workflowView) return;
+          
+          const grid = workflowView.querySelector('.workflows-grid');
+          if (!grid) return;
+          
+          // Update each workflow card
+          WORKFLOW_GROUPS.forEach(workflow => {
+            const card = grid.querySelector(\`[data-workflow-id="\${workflow.id}"]\`);
+            if (!card) return;
+            
+            const workflowTools = state.tools.filter(t =>
+              workflow.toolCategories.includes(t.category) ||
+              workflow.tools.includes(t.name)
+            );
+            const total = workflowTools.length;
+            const enabled = workflowTools.filter(t => t.enabled).length;
+            
+            // Count extra tools (enabled tools not in workflow's default set)
+            const workflowToolNames = getWorkflowToolNames(workflow.id);
+            const extraTools = state.tools.filter(t => 
+              t.enabled && !workflowToolNames.has(t.name)
+            );
+            const extraCount = extraTools.length;
+            
+            // Count disabled workflow tools (workflow tools that are disabled)
+            const disabledWorkflowTools = workflowTools.filter(t => !t.enabled);
+            const disabledCount = disabledWorkflowTools.length;
+            
+            // Build badge string
+            let badgeParts = [];
+            if (extraCount > 0) {
+              badgeParts.push(\`+\${extraCount}\`);
+            }
+            if (disabledCount > 0) {
+              badgeParts.push(\`-\${disabledCount}\`);
+            }
+            const extraBadge = badgeParts.length > 0
+              ? \`<span class="workflow-card-extra-badge">\${badgeParts.join(' ')}</span>\`
+              : '';
+            
+            // Update count
+            const countEl = card.querySelector('.workflow-card-count');
+            if (countEl) {
+              countEl.textContent = enabled + ' / ' + total;
+            }
+            
+            // Update title with extra badge and active badge
+            const titleEl = card.querySelector('.workflow-card-title');
+            if (titleEl) {
+              const isActive = state.activeWorkflow === workflow.id;
+              const activeBadge = isActive
+                ? '<span class="workflow-card-active-badge">✓ Active</span>'
+                : '';
+              titleEl.innerHTML = (workflow.name || '').replace(/</g, '&lt;') + extraBadge + activeBadge;
+            }
+            
+            // Update active class
+            const isActive = state.activeWorkflow === workflow.id;
+            if (isActive) {
+              card.classList.add('active');
+            } else {
+              card.classList.remove('active');
+            }
+          });
         },
         
         createWorkflowSelectionView() {
@@ -1775,6 +2343,12 @@ function generateScript(route: PageRoute): string {
               card.classList.add('selected');
             }
             
+            // Check if this workflow is active
+            const isActive = state.activeWorkflow === workflow.id;
+            if (isActive) {
+              card.classList.add('active');
+            }
+            
             const workflowTools = state.tools.filter(t =>
               workflow.toolCategories.includes(t.category) ||
               workflow.tools.includes(t.name)
@@ -1782,9 +2356,36 @@ function generateScript(route: PageRoute): string {
             const total = workflowTools.length;
             const enabled = workflowTools.filter(t => t.enabled).length;
             
+            // Count extra tools (enabled tools not in workflow's default set)
+            const workflowToolNames = getWorkflowToolNames(workflow.id);
+            const extraTools = state.tools.filter(t => 
+              t.enabled && !workflowToolNames.has(t.name)
+            );
+            const extraCount = extraTools.length;
+            
+            // Count disabled workflow tools (workflow tools that are disabled)
+            const disabledWorkflowTools = workflowTools.filter(t => !t.enabled);
+            const disabledCount = disabledWorkflowTools.length;
+            
+            // Build badge string
+            let badgeParts = [];
+            if (extraCount > 0) {
+              badgeParts.push(\`+\${extraCount}\`);
+            }
+            if (disabledCount > 0) {
+              badgeParts.push(\`-\${disabledCount}\`);
+            }
+            const extraBadge = badgeParts.length > 0
+              ? \`<span class="workflow-card-extra-badge">\${badgeParts.join(' ')}</span>\`
+              : '';
+            
+            const activeBadge = isActive
+              ? '<span class="workflow-card-active-badge">✓ Active</span>'
+              : '';
+            
             card.innerHTML = \`
               <div class="workflow-card-header">
-                <h3 class="workflow-card-title">\${(workflow.name || '').replace(/</g, '&lt;')}</h3>
+                <h3 class="workflow-card-title">\${(workflow.name || '').replace(/</g, '&lt;')}\${extraBadge}\${activeBadge}</h3>
                 <span class="workflow-card-count">\${enabled} / \${total}</span>
               </div>
               \${workflow.description ? \`<p class="workflow-card-desc">\${(workflow.description || '').replace(/</g, '&lt;')}</p>\` : ''}
@@ -1840,9 +2441,6 @@ function generateScript(route: PageRoute): string {
             render();
           }
           
-          // Populate other workflows
-          this.populateOtherWorkflows(workflowId);
-          
           // Ensure tools tab is visible after render completes
           // This ensures tools are shown when workflow is selected
           setTimeout(() => {
@@ -1858,19 +2456,33 @@ function generateScript(route: PageRoute): string {
           // Context bar
           const contextBar = document.createElement('div');
           contextBar.className = 'workflow-context-bar';
+          const isActive = state.activeWorkflow === workflowId;
+          const activeIndicator = isActive 
+            ? '<span class="workflow-active-indicator">✓ Active</span>'
+            : '';
           contextBar.innerHTML = \`
             <div class="workflow-context-bar-top">
               <div class="workflow-context-info">
                 <button class="back-to-workflows">Back</button>
                 <h3>\${(workflowName || '').replace(/</g, '&lt;')}</h3>
                 <span class="workflow-badge">\${(workflowId || '').replace(/</g, '&lt;')}</span>
+                \${activeIndicator}
               </div>
+              <button class="activate-workflow-btn" id="activate-workflow-\${workflowId}">Activate</button>
             </div>
             <div class="workflow-context-bar-tabs workflow-tab-triggers" role="tablist" id="workflow-tab-triggers-\${workflowId}">
               <button class="workflow-tab-trigger active" role="tab" aria-selected="true" aria-controls="tab-panel-howto-\${workflowId}" data-tab="howto">How to use</button>
               <button class="workflow-tab-trigger" role="tab" aria-selected="false" aria-controls="tab-panel-tools-\${workflowId}" data-tab="tools">Tools</button>
             </div>
           \`;
+          
+          // Add activate button handler
+          const activateBtn = contextBar.querySelector('.activate-workflow-btn');
+          if (activateBtn) {
+            activateBtn.addEventListener('click', () => {
+              activateWorkflow(workflowId);
+            });
+          }
           
           contextBar.querySelector('.back-to-workflows')?.addEventListener('click', () => {
             // Navigate back to workflows page, preserving the selected workflow
@@ -1879,6 +2491,7 @@ function generateScript(route: PageRoute): string {
           
           // Tab view
           const explainerWrapper = document.createElement('div');
+          explainerWrapper.id = 'workflow-tab-wrapper';
           explainerWrapper.innerHTML = renderWorkflowGuidance(workflowId) || '';
           
           const tabView = explainerWrapper.querySelector('.workflow-tab-view');
@@ -1904,30 +2517,10 @@ function generateScript(route: PageRoute): string {
             contentArea.style.display = 'flex';
           }
           
-          // Add tools section
-          const addToolsSection = document.createElement('div');
-          addToolsSection.className = 'add-tools-section';
-          addToolsSection.innerHTML = \`
-            <button class="add-tools-toggle">
-              <span>+ Add tools from other workflows</span>
-            </button>
-            <div class="add-tools-panel">
-              <h4>Other Workflows</h4>
-              <div class="other-workflows-list" id="other-workflows-list"></div>
-            </div>
-          \`;
-          
-          const toggle = addToolsSection.querySelector('.add-tools-toggle');
-          const panel = addToolsSection.querySelector('.add-tools-panel');
-          toggle?.addEventListener('click', () => {
-            panel?.classList.toggle('visible');
-          });
-          
           container.appendChild(contextBar);
           if (explainerWrapper.innerHTML) {
             container.appendChild(explainerWrapper);
           }
-          container.appendChild(addToolsSection);
           
           return container;
         },
@@ -1935,8 +2528,30 @@ function generateScript(route: PageRoute): string {
         updateToolSelectionView(toolView, workflowId, workflowName) {
           const contextInfo = toolView.querySelector('.workflow-context-info h3');
           const badge = toolView.querySelector('.workflow-badge');
+          const activeIndicator = toolView.querySelector('.workflow-active-indicator');
+          const activateBtn = toolView.querySelector('.activate-workflow-btn');
+          
           if (contextInfo) contextInfo.textContent = workflowName || '';
           if (badge) badge.textContent = workflowId || '';
+          
+          // Update active indicator
+          const isActive = state.activeWorkflow === workflowId;
+          if (isActive) {
+            if (!activeIndicator) {
+              const indicator = document.createElement('span');
+              indicator.className = 'workflow-active-indicator';
+              indicator.textContent = '✓ Active';
+              badge?.parentNode?.insertBefore(indicator, badge.nextSibling);
+            }
+          } else {
+            activeIndicator?.remove();
+          }
+          
+          // Update activate button
+          if (activateBtn) {
+            activateBtn.id = 'activate-workflow-' + workflowId;
+            activateBtn.onclick = () => activateWorkflow(workflowId);
+          }
           
           // Update tab triggers
           const tabTriggers = toolView.querySelector('.workflow-tab-triggers');
@@ -1954,6 +2569,7 @@ function generateScript(route: PageRoute): string {
           }
           
           const updatedExplainer = document.createElement('div');
+          updatedExplainer.id = 'workflow-tab-wrapper';
           updatedExplainer.innerHTML = renderWorkflowGuidance(workflowId) || '';
           if (updatedExplainer.innerHTML) {
             const tabView = updatedExplainer.querySelector('.workflow-tab-view');
@@ -2067,64 +2683,6 @@ function generateScript(route: PageRoute): string {
         showWorkflowSelection() {
           // Navigate to workflows page
           window.location.href = '/workflows';
-        },
-        
-        populateOtherWorkflows(currentWorkflowId) {
-          const list = $('other-workflows-list');
-          if (!list) return;
-          
-          list.innerHTML = '';
-          
-          WORKFLOW_GROUPS.forEach(workflow => {
-            if (workflow.id === 'all' || workflow.id === currentWorkflowId) return;
-            
-            const workflowTools = state.tools.filter(t =>
-              workflow.toolCategories.includes(t.category) ||
-              workflow.tools.includes(t.name)
-            );
-            const total = workflowTools.length;
-            const enabled = workflowTools.filter(t => t.enabled).length;
-            
-            const item = document.createElement('div');
-            item.className = 'other-workflow-item';
-            item.innerHTML = \`
-              <span class="other-workflow-item-name">\${(workflow.name || '').replace(/</g, '&lt;')}</span>
-              <span class="other-workflow-item-count">\${enabled} / \${total}</span>
-            \`;
-            
-            item.addEventListener('click', () => {
-              // Enable all tools from this workflow
-              const workflowToolNames = new Set([
-                ...workflow.tools,
-                ...(workflow.toolCategories && workflow.toolCategories.length > 0
-                  ? state.tools
-                      .filter(t => workflow.toolCategories.includes(t.category))
-                      .map(t => t.name)
-                  : [])
-              ]);
-              
-              // Enable tools from this workflow
-              state.tools.forEach(t => {
-                if (workflowToolNames.has(t.name)) {
-                  t.enabled = true;
-                }
-              });
-              
-              // Re-render to show updated state
-              render();
-              
-              // Update the count for this item
-              const updatedEnabled = state.tools.filter(t => 
-                workflowToolNames.has(t.name) && t.enabled
-              ).length;
-              const countEl = item.querySelector('.other-workflow-item-count');
-              if (countEl) {
-                countEl.textContent = updatedEnabled + ' / ' + total;
-              }
-            });
-            
-            list.appendChild(item);
-          });
         }
       };
       
